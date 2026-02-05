@@ -102,6 +102,44 @@ export type InvoiceStatus =
   | 'Received'
   | 'Paid';
 
+/**
+ * Invoice attribute types as returned by Fiber RPC.
+ * Each attribute is an object with a single key indicating the type.
+ */
+export type InvoiceAttribute =
+  | { FinalHtlcTimeout: HexString }
+  | { FinalHtlcMinimumExpiryDelta: HexString }
+  | { ExpiryTime: HexString }
+  | { Description: string }
+  | { FallbackAddr: string }
+  | { UdtScript: Script }
+  | { PayeePublicKey: HexString }  // The payee's node public key!
+  | { HashAlgorithm: 'CkbHash' | 'Sha256' }
+  | { Feature: string[] }
+  | { PaymentSecret: HexString };
+
+/**
+ * Invoice data structure containing payment details and attributes
+ */
+export interface InvoiceData {
+  timestamp: HexString;
+  payment_hash: PaymentHash;
+  attrs: InvoiceAttribute[];
+}
+
+/**
+ * Full CKB Invoice structure as returned by parse_invoice
+ */
+export interface CkbInvoice {
+  currency: string;
+  amount?: HexString;
+  signature?: HexString;
+  data: InvoiceData;
+}
+
+/**
+ * Simplified invoice info (flattened for convenience)
+ */
 export interface InvoiceInfo {
   currency: string;
   amount?: HexString;
@@ -112,6 +150,8 @@ export interface InvoiceInfo {
   created_at: HexString;
   expiry?: HexString;
   invoice_address: string;
+  /** Full invoice data with attributes (when available from parse_invoice) */
+  data?: InvoiceData;
 }
 
 // =============================================================================

@@ -11,6 +11,9 @@ import { PolicyEngine } from '../security/policy-engine.js';
 import { KeyManager, createKeyManager } from '../security/key-manager.js';
 import { ProcessManager, FiberNodeConfig } from '../process/index.js';
 import { ensureFiberBinary, getDefaultBinaryPath, type DownloadProgress } from '../binary/index.js';
+import { InvoiceVerifier, type InvoiceVerificationResult } from '../verification/invoice-verifier.js';
+import { PaymentProofManager, type PaymentProof, type PaymentProofSummary } from '../verification/payment-proof.js';
+import { LiquidityAnalyzer, type LiquidityReport } from '../funds/liquidity-analyzer.js';
 import type {
   SecurityPolicy,
   DEFAULT_SECURITY_POLICY,
@@ -111,6 +114,16 @@ export interface ChannelSummary {
   isPublic: boolean;
 }
 
+/**
+ * Verification result for invoices
+ */
+export type InvoiceValidationResult = InvoiceVerificationResult;
+
+/**
+ * Liquidity analysis result
+ */
+export type LiquidityAnalysisResult = LiquidityReport;
+
 // =============================================================================
 // FiberPay Agent Interface
 // =============================================================================
@@ -176,6 +189,9 @@ export class FiberPay {
   private policy: PolicyEngine;
   private keys: KeyManager;
   private initialized = false;
+  private invoiceVerifier: InvoiceVerifier | null = null;
+  private paymentProofManager: PaymentProofManager | null = null;
+  private liquidityAnalyzer: LiquidityAnalyzer | null = null;
 
   constructor(config: FiberPayConfig) {
     this.config = {
@@ -283,6 +299,12 @@ export class FiberPay {
         await this.rpc.waitForReady({ timeout: 60000 });
       }
 
+      // Initialize verification and analysis systems
+      this.invoiceVerifier = new InvoiceVerifier(this.rpc);
+      this.paymentProofManager = new PaymentProofManager(this.config.dataDir);
+      await this.paymentProofManager.load();
+      this.liquidityAnalyzer = new LiquidityAnalyzer(this.rpc);
+
       this.initialized = true;
 
       // Get node info
@@ -311,6 +333,11 @@ export class FiberPay {
    */
   async shutdown(): Promise<AgentResult<void>> {
     try {
+      // Save payment proofs before shutdown
+      if (this.paymentProofManager) {
+        await this.paymentProofManager.save();
+      }
+
       if (this.process?.isRunning()) {
         await this.process.stop();
       }
@@ -413,6 +440,33 @@ export class FiberPay {
         feeCkb: shannonsToCkb(result.fee),
         failureReason: result.failed_error,
       };
+
+      // Record payment proof
+      if (this.paymentProofManager && result.status === 'Success') {
+        this.paymentProofManager.recordPaymentProof(
+          result.payment_hash,
+          params.invoice || '',
+          {
+            paymentHash: result.payment_hash,
+            amountCkb: paymentResult.amountCkb,
+            description: '',
+          },
+          {
+            amountCkb: paymentResult.amountCkb,
+            feeCkb: paymentResult.feeCkb,
+            actualTimestamp: Date.now(),
+            requestTimestamp: Date.now(),
+          },
+          result.status,
+          {
+            preimage: undefined, // Would need to get from RPC if available
+          }
+        );
+        // Save asynchronously (don't wait)
+        this.paymentProofManager.save().catch(() => {
+          // Ignore save errors
+        });
+      }
 
       this.policy.addAuditEntry('PAYMENT_SENT', result.status === 'Success', {
         ...paymentResult,
@@ -751,6 +805,220 @@ export class FiberPay {
       };
     } catch (error) {
       return this.errorResult(error, 'NODE_INFO_FAILED', true);
+    }
+  }
+
+  // ===========================================================================
+  // Verification & Validation Methods
+  // ===========================================================================
+
+  /**
+   * Validate an invoice before payment
+   * Checks format, expiry, amount, cryptographic correctness, and peer connectivity
+   * 
+   * @example
+   * ```typescript
+   * const validation = await fiber.validateInvoice('fibt1...');
+   * if (validation.data?.recommendation === 'reject') {
+   *   console.log('Do not pay:', validation.data.reason);
+   * }
+   * ```
+   */
+  async validateInvoice(invoice: string): Promise<AgentResult<InvoiceValidationResult>> {
+    this.ensureInitialized();
+
+    try {
+      if (!this.invoiceVerifier) {
+        throw new Error('Invoice verifier not initialized');
+      }
+
+      const result = await this.invoiceVerifier.verifyInvoice(invoice);
+
+      this.policy.addAuditEntry('INVOICE_VALIDATED', true, {
+        paymentHash: result.details.paymentHash,
+        amountCkb: result.details.amountCkb,
+        valid: result.valid,
+      });
+
+      return {
+        success: true,
+        data: result,
+        metadata: {
+          timestamp: Date.now(),
+        },
+      };
+    } catch (error) {
+      return this.errorResult(error, 'INVOICE_VALIDATION_FAILED', true);
+    }
+  }
+
+  /**
+   * Get payment proof (cryptographic evidence of payment)
+   * Returns stored proof if available, or creates one from RPC status
+   */
+  async getPaymentProof(paymentHash: string): Promise<AgentResult<{
+    proof: PaymentProof | null;
+    verified: boolean;
+    status: string;
+  }>> {
+    this.ensureInitialized();
+
+    try {
+      if (!this.paymentProofManager) {
+        throw new Error('Payment proof manager not initialized');
+      }
+
+      const storedProof = this.paymentProofManager.getProof(paymentHash);
+
+      if (storedProof) {
+        const verification = this.paymentProofManager.verifyProof(storedProof);
+        await this.paymentProofManager.save();
+
+        return {
+          success: true,
+          data: {
+            proof: storedProof,
+            verified: verification.valid,
+            status: verification.reason,
+          },
+          metadata: { timestamp: Date.now() },
+        };
+      }
+
+      // Try to fetch from RPC
+      const paymentStatus = await this.rpc!.getPayment({ payment_hash: paymentHash as HexString });
+
+      return {
+        success: true,
+        data: {
+          proof: null,
+          verified: paymentStatus.status === 'Success',
+          status: `Payment status: ${paymentStatus.status}`,
+        },
+        metadata: { timestamp: Date.now() },
+      };
+    } catch (error) {
+      return this.errorResult(error, 'PROOF_FETCH_FAILED', true);
+    }
+  }
+
+  /**
+   * Get payment proof summary for audit trail
+   */
+  async getPaymentProofSummary(): Promise<AgentResult<PaymentProofSummary>> {
+    this.ensureInitialized();
+
+    try {
+      if (!this.paymentProofManager) {
+        throw new Error('Payment proof manager not initialized');
+      }
+
+      const summary = this.paymentProofManager.getSummary();
+
+      return {
+        success: true,
+        data: summary,
+        metadata: { timestamp: Date.now() },
+      };
+    } catch (error) {
+      return this.errorResult(error, 'PROOF_SUMMARY_FAILED', true);
+    }
+  }
+
+  /**
+   * Export payment audit report
+   */
+  async getPaymentAuditReport(options?: {
+    startTime?: number;
+    endTime?: number;
+  }): Promise<AgentResult<string>> {
+    this.ensureInitialized();
+
+    try {
+      if (!this.paymentProofManager) {
+        throw new Error('Payment proof manager not initialized');
+      }
+
+      const report = this.paymentProofManager.exportAuditReport(options?.startTime, options?.endTime);
+
+      return {
+        success: true,
+        data: report,
+        metadata: { timestamp: Date.now() },
+      };
+    } catch (error) {
+      return this.errorResult(error, 'AUDIT_REPORT_FAILED', true);
+    }
+  }
+
+  // ===========================================================================
+  // Liquidity & Fund Management Methods
+  // ===========================================================================
+
+  /**
+   * Analyze liquidity across all channels
+   * Provides detailed health metrics and recommendations
+   * 
+   * @example
+   * ```typescript
+   * const analysis = await fiber.analyzeLiquidity();
+   * console.log(`Health score: ${analysis.data?.channels.averageHealthScore}`);
+   * console.log(analysis.data?.summary);
+   * ```
+   */
+  async analyzeLiquidity(): Promise<AgentResult<LiquidityAnalysisResult>> {
+    this.ensureInitialized();
+
+    try {
+      if (!this.liquidityAnalyzer) {
+        throw new Error('Liquidity analyzer not initialized');
+      }
+
+      const report = await this.liquidityAnalyzer.analyzeLiquidity();
+
+      return {
+        success: true,
+        data: report,
+        metadata: { timestamp: Date.now() },
+      };
+    } catch (error) {
+      return this.errorResult(error, 'LIQUIDITY_ANALYSIS_FAILED', true);
+    }
+  }
+
+  /**
+   * Check if you have enough liquidity to send a specific amount
+   */
+  async canSend(amountCkb: number): Promise<AgentResult<{
+    canSend: boolean;
+    shortfallCkb: number;
+    availableCkb: number;
+    recommendation: string;
+  }>> {
+    this.ensureInitialized();
+
+    try {
+      if (!this.liquidityAnalyzer) {
+        throw new Error('Liquidity analyzer not initialized');
+      }
+
+      const result = await this.liquidityAnalyzer.getMissingLiquidityForAmount(amountCkb);
+
+      const balance = await this.getBalance();
+      const availableCkb = balance.data?.availableToSend || 0;
+
+      return {
+        success: true,
+        data: {
+          canSend: result.canSend,
+          shortfallCkb: result.shortfallCkb,
+          availableCkb,
+          recommendation: result.recommendation,
+        },
+        metadata: { timestamp: Date.now() },
+      };
+    } catch (error) {
+      return this.errorResult(error, 'LIQUIDITY_CHECK_FAILED', true);
     }
   }
 

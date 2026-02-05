@@ -507,6 +507,21 @@ async function handleStandaloneCommand(command: string, args: string[], config: 
 // RPC-only Commands (connect to running node)
 // =============================================================================
 
+/**
+ * Create a FiberPay instance for agent commands
+ */
+async function createFiberPayInstance(config: CliConfig): Promise<FiberPay> {
+  const fiber = createFiberPay({
+    dataDir: config.dataDir,
+    network: config.network,
+    autoDownload: false,
+    keyPassword: config.keyPassword,
+  });
+
+  await fiber.initialize();
+  return fiber;
+}
+
 async function handleRpcCommand(command: string, args: string[], config: CliConfig): Promise<boolean> {
   const rpc = new FiberRpcClient({ url: config.rpcUrl! });
   
@@ -785,6 +800,75 @@ async function handleRpcCommand(command: string, args: string[], config: CliConf
       return true;
     }
 
+    case 'verify-invoice':
+    case 'validate-invoice': {
+      const invoice = args.find(arg => !arg.startsWith('--'));
+      
+      if (!invoice) {
+        console.error('Error: Invoice required. Usage: verify-invoice <invoice-string>');
+        process.exit(1);
+      }
+
+      // Create FiberPay instance
+      const fiber = await createFiberPayInstance(config);
+      const result = await fiber.validateInvoice(invoice);
+      
+      console.log(JSON.stringify(result, null, 2));
+      return true;
+    }
+
+    case 'liquidity':
+    case 'liquidity-report':
+    case 'analyze-liquidity': {
+      // Create FiberPay instance
+      const fiber = await createFiberPayInstance(config);
+      const result = await fiber.analyzeLiquidity();
+      
+      console.log(JSON.stringify(result, null, 2));
+      return true;
+    }
+
+    case 'payment-proof':
+    case 'get-proof': {
+      const paymentHash = args.find(arg => !arg.startsWith('--'));
+      
+      if (!paymentHash) {
+        console.error('Error: Payment hash required. Usage: payment-proof <payment-hash>');
+        process.exit(1);
+      }
+
+      // Create FiberPay instance
+      const fiber = await createFiberPayInstance(config);
+      const result = await fiber.getPaymentProof(paymentHash);
+      
+      console.log(JSON.stringify(result, null, 2));
+      return true;
+    }
+
+    case 'can-send': {
+      let amountCkb = 0;
+
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === '--amount' && args[i + 1]) {
+          amountCkb = parseFloat(args[++i]);
+        } else if (!args[i].startsWith('--')) {
+          amountCkb = parseFloat(args[i]);
+        }
+      }
+
+      if (!amountCkb) {
+        console.error('Error: Amount required. Usage: can-send <CKB>');
+        process.exit(1);
+      }
+
+      // Create FiberPay instance
+      const fiber = await createFiberPayInstance(config);
+      const result = await fiber.canSend(amountCkb);
+      
+      console.log(JSON.stringify(result, null, 2));
+      return true;
+    }
+
     default:
       return false;
   }
@@ -952,6 +1036,10 @@ async function main(): Promise<void> {
     'pay',
     'open-channel',
     'close-channel',
+    'verify-invoice', 'validate-invoice',
+    'liquidity', 'liquidity-report', 'analyze-liquidity',
+    'payment-proof', 'get-proof',
+    'can-send',
   ];
   if (rpcOnlyCommands.includes(command)) {
     try {

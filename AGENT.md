@@ -37,6 +37,13 @@ src/
 │   ├── policy-engine.ts # Spending limits, rate limiting
 │   ├── key-manager.ts   # Key generation (fiber node handles encryption)
 │   └── index.ts
+├── verification/       # Payment verification systems
+│   ├── invoice-verifier.ts  # Cryptographic invoice validation
+│   ├── payment-proof.ts     # Payment proof tracking & audit
+│   └── index.ts
+├── funds/              # Fund management & liquidity
+│   ├── liquidity-analyzer.ts # Channel health & rebalancing
+│   └── index.ts
 ├── types/              # Type definitions
 │   ├── rpc.ts          # All RPC request/response types
 │   ├── policy.ts       # Policy schemas (zod)
@@ -70,7 +77,12 @@ interface AgentResult<T> {
 }
 ```
 
-**Key methods**: `initialize()`, `pay()`, `createInvoice()`, `getBalance()`, `listChannels()`
+**Key methods**: 
+- Payment: `pay()`, `createInvoice()`, `getPaymentStatus()`, `getInvoiceStatus()`
+- Balance: `getBalance()`, `canSend()`
+- Channels: `listChannels()`, `openChannel()`, `closeChannel()`
+- Verification: `validateInvoice()`, `getPaymentProof()`
+- Liquidity: `analyzeLiquidity()`, `canSend()`
 
 ### 2. `src/rpc/client.ts` - RPC Client
 Type-safe JSON-RPC client for all Fiber Network API methods. Uses hex encoding for amounts (shannons).
@@ -85,6 +97,15 @@ Auto-downloads `fnn` binary from GitHub releases. Handles platform detection and
 
 ### 5. `src/types/rpc.ts` - Type Definitions
 All JSON-RPC types. Reference when adding new RPC methods.
+
+### 6. `src/verification/invoice-verifier.ts` - Invoice Validation
+Cryptographically validates invoices before payment. Checks format, expiry, amount, preimage, and peer connectivity. Returns detailed verification results with trust scores and recommendations.
+
+### 7. `src/verification/payment-proof.ts` - Payment Proof Tracking
+Records and stores payment proofs for audit trail. Validates preimage hashes, maintains payment history, and exports audit reports. Proofs stored in JSON at `<dataDir>/payment-proofs.json`.
+
+### 8. `src/funds/liquidity-analyzer.ts` - Liquidity Management
+Analyzes channel health, identifies liquidity gaps, generates rebalancing recommendations. Calculates health scores, detects imbalances, and estimates funding needs.
 
 ## Common Tasks
 

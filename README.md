@@ -12,6 +12,9 @@ fiber-pay is a TypeScript SDK that wraps the [Fiber Network Node](https://github
 - **Send payments**: Pay invoices or send directly to other nodes
 - **Receive payments**: Create invoices and track incoming payments  
 - **Manage channels**: Open and close Lightning channels
+- **Verify invoices**: Cryptographic validation before payment
+- **Track payments**: Payment proof system for audit trail
+- **Manage liquidity**: Channel health analysis and rebalancing recommendations
 - **Stay secure**: Built-in spending limits, rate limiting, and audit logging
 
 ## Architecture
@@ -23,15 +26,21 @@ fiber-pay is a TypeScript SDK that wraps the [Fiber Network Node](https://github
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │              FiberPay (Agent Interface)              │    │
 │  │   • pay() / createInvoice() / getBalance()          │    │
+│  │   • validateInvoice() / analyzeLiquidity()          │    │
 │  │   • Returns AgentResult<T> format for LLM parsing   │    │
 │  └─────────────────────────────────────────────────────┘    │
 │                         ↓                                    │
-│  ┌──────────────────┐  ┌──────────────────────────────┐    │
-│  │  PolicyEngine    │  │      KeyManager              │    │
-│  │  • Spending caps │  │  • Key generation            │    │
-│  │  • Rate limits   │  │  • AES-256-GCM encryption    │    │
-│  │  • Audit logs    │  │  • Secure storage            │    │
-│  └──────────────────┘  └──────────────────────────────┘    │
+│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐   │
+│  │PolicyEngine  │  │  KeyManager  │  │ InvoiceVerifier │   │
+│  │• Spending    │  │• Keys        │  │• Cryptographic  │   │
+│  │• Rate limits │  │• Encryption  │  │  validation     │   │
+│  └──────────────┘  └──────────────┘  └─────────────────┘   │
+│                         ↓                                    │
+│  ┌──────────────────┐  ┌─────────────────────────────┐     │
+│  │ PaymentProofMgr  │  │   LiquidityAnalyzer         │     │
+│  │• Proof tracking  │  │• Channel health scoring     │     │
+│  │• Audit reports   │  │• Rebalancing recommendations│     │
+│  └──────────────────┘  └─────────────────────────────┘     │
 │                         ↓                                    │
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │              FiberRpcClient                          │    │

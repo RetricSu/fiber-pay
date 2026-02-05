@@ -247,6 +247,109 @@ Returns the path to the installed binary.`,
       },
     },
   },
+
+  fiber_validate_invoice: {
+    name: 'fiber_validate_invoice',
+    description: `Validate an invoice before payment. Checks format, cryptographic correctness, expiry, 
+amount, and peer connectivity. Returns recommendation to proceed, warn, or reject.
+
+Use this BEFORE paying an invoice to ensure safety.
+
+Example: fiber_validate_invoice({ invoice: "fibt1..." })
+
+Returns:
+- valid: boolean (overall validity)
+- details: parsed invoice details (amount, expiry, payment hash)
+- checks: individual validation results (format, expiry, amount, preimage, peer)
+- issues: list of warnings and critical issues found
+- recommendation: 'proceed' | 'warn' | 'reject'
+- reason: human-readable recommendation reason`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        invoice: {
+          type: 'string',
+          description: 'Invoice string to validate (starts with fibt or fibb)',
+        },
+      },
+      required: ['invoice'],
+    },
+  },
+
+  fiber_get_payment_proof: {
+    name: 'fiber_get_payment_proof',
+    description: `Get cryptographic proof of payment execution. Useful for audit trail and reconciliation.
+
+Example: fiber_get_payment_proof({ paymentHash: "0x..." })
+
+Returns stored payment proof including:
+- Invoice original
+- Preimage (if available)
+- Fee breakdown
+- Verification status
+- Proof metadata`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        paymentHash: {
+          type: 'string',
+          description: 'Payment hash to retrieve proof for',
+        },
+      },
+      required: ['paymentHash'],
+    },
+  },
+
+  fiber_analyze_liquidity: {
+    name: 'fiber_analyze_liquidity',
+    description: `Comprehensive liquidity analysis across all channels. Provides health metrics,
+identifies issues, and generates recommendations for rebalancing and funding.
+
+Use this to:
+- Understand current channel health
+- Identify liquidity gaps
+- Get rebalancing recommendations
+- Estimate available runway
+
+No parameters required.
+
+Returns:
+- balance: total, available to send/receive
+- channels: health metrics for each channel
+- liquidity: gaps and runway estimation
+- recommendations: rebalance suggestions and funding needs
+- summary: human-readable status`,
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+
+  fiber_can_send: {
+    name: 'fiber_can_send',
+    description: `Check if you have enough liquidity to send a specific amount. Returns shortfall 
+if insufficient and recommendations.
+
+Use this BEFORE attempting a payment to verify you have enough liquidity.
+
+Example: fiber_can_send({ amountCkb: 100 })
+
+Returns:
+- canSend: boolean
+- shortfallCkb: missing amount (0 if can send)
+- availableCkb: current available balance
+- recommendation: what to do if insufficient`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        amountCkb: {
+          type: 'number',
+          description: 'Amount in CKB to check',
+        },
+      },
+      required: ['amountCkb'],
+    },
+  },
 } as const;
 
 // =============================================================================
@@ -277,6 +380,14 @@ export type McpToolInput<T extends McpToolName> = T extends 'fiber_pay'
   ? {}
   : T extends 'fiber_download_binary'
   ? { version?: string; force?: boolean }
+  : T extends 'fiber_validate_invoice'
+  ? { invoice: string }
+  : T extends 'fiber_get_payment_proof'
+  ? { paymentHash: string }
+  : T extends 'fiber_analyze_liquidity'
+  ? {}
+  : T extends 'fiber_can_send'
+  ? { amountCkb: number }
   : never;
 
 export type McpToolResult<T extends McpToolName> = T extends 'fiber_pay'
@@ -301,4 +412,12 @@ export type McpToolResult<T extends McpToolName> = T extends 'fiber_pay'
   ? { perTransactionCkb: number; perWindowCkb: number }
   : T extends 'fiber_download_binary'
   ? AgentResult<{ path: string; version: string; platform: string; arch: string }>
+  : T extends 'fiber_validate_invoice'
+  ? AgentResult<import('./fiber-pay.js').InvoiceValidationResult>
+  : T extends 'fiber_get_payment_proof'
+  ? AgentResult<{ proof: import('../verification/payment-proof.js').PaymentProof | null; verified: boolean; status: string }>
+  : T extends 'fiber_analyze_liquidity'
+  ? AgentResult<import('./fiber-pay.js').LiquidityAnalysisResult>
+  : T extends 'fiber_can_send'
+  ? AgentResult<{ canSend: boolean; shortfallCkb: number; availableCkb: number; recommendation: string }>
   : never;
