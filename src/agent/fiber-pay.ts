@@ -153,6 +153,8 @@ export interface FiberPayConfig {
   p2pPort?: number;
   /** Auto-download binary if not found */
   autoDownload?: boolean;
+  /** RPC URL for connecting to an existing node (when autoStart is false) */
+  rpcUrl?: string;
 }
 
 /**
@@ -288,9 +290,10 @@ export class FiberPay {
         bootnodeAddrs: this.config.bootnodes,
       });
 
-      // Create RPC client
+      // Create RPC client - use provided rpcUrl or construct from rpcPort
+      const rpcUrl = this.config.rpcUrl || `http://127.0.0.1:${this.config.rpcPort}`;
       this.rpc = new FiberRpcClient({
-        url: `http://127.0.0.1:${this.config.rpcPort}`,
+        url: rpcUrl,
       });
 
       // Start node if autoStart
@@ -1093,6 +1096,10 @@ export function createFiberPay(options?: {
   chain?: 'testnet' | 'mainnet';
   /** Auto-download binary if not found (default: true) */
   autoDownload?: boolean;
+  /** Auto-start the Fiber node on initialize (default: true) */
+  autoStart?: boolean;
+  /** RPC URL to connect to an existing node (overrides autoStart) */
+  rpcUrl?: string;
   /** Key encryption password */
   keyPassword?: string;
 }): FiberPay {
@@ -1104,6 +1111,8 @@ export function createFiberPay(options?: {
     configFilePath: options?.configFilePath,
     chain: options?.chain || options?.network || 'testnet',
     autoDownload: options?.autoDownload ?? true,
+    autoStart: options?.autoStart ?? true,
+    rpcUrl: options?.rpcUrl,
     keyPassword: options?.keyPassword,
   });
 }

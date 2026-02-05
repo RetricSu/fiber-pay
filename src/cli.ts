@@ -509,12 +509,15 @@ async function handleStandaloneCommand(command: string, args: string[], config: 
 
 /**
  * Create a FiberPay instance for agent commands
+ * Uses autoStart: false to connect to an already-running node via RPC
  */
 async function createFiberPayInstance(config: CliConfig): Promise<FiberPay> {
   const fiber = createFiberPay({
     dataDir: config.dataDir,
     network: config.network,
     autoDownload: false,
+    autoStart: false,  // Connect to existing node, don't start a new one
+    rpcUrl: config.rpcUrl,
     keyPassword: config.keyPassword,
   });
 
