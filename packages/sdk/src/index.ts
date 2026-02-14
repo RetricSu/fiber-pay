@@ -22,7 +22,16 @@ export type * from './types/index.js';
 // Types - Re-export all types from types module
 export { ChannelState } from './types/index.js';
 // Utility functions
-export { ckbToShannons, fromHex, randomBytes32, shannonsToCkb, toHex } from './utils.js';
+export {
+  buildMultiaddr,
+  buildMultiaddrFromNodeId,
+  ckbToShannons,
+  fromHex,
+  nodeIdToPeerId,
+  randomBytes32,
+  shannonsToCkb,
+  toHex,
+} from './utils.js';
 export type { InvoiceVerificationResult } from './verification/invoice-verifier.js';
 // Verification
 export { InvoiceVerifier } from './verification/invoice-verifier.js';

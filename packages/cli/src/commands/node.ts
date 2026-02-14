@@ -5,7 +5,13 @@ import {
   getDefaultBinaryPath,
   ProcessManager,
 } from '@fiber-pay/node';
-import { CorsProxy, createKeyManager, scriptToAddress } from '@fiber-pay/sdk';
+import {
+  buildMultiaddrFromNodeId,
+  CorsProxy,
+  createKeyManager,
+  nodeIdToPeerId,
+  scriptToAddress,
+} from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import { autoConnectBootnodes, extractBootnodeAddrs } from '../lib/bootnode.js';
 import { type CliConfig, ensureNodeConfigFile } from '../lib/config.js';
@@ -236,7 +242,30 @@ export function createNodeCommand(config: CliConfig): Command {
         const rpc = await createReadyRpcClient(config);
         const nodeInfo = await rpc.nodeInfo();
         console.log(`   Node ID: ${nodeInfo.node_id}`);
+        let peerId: string | undefined;
+        try {
+          peerId = await nodeIdToPeerId(nodeInfo.node_id);
+          console.log(`   Peer ID: ${peerId}`);
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          console.log(`   Peer ID: unavailable (${reason})`);
+        }
         console.log(`   RPC: ${config.rpcUrl}`);
+
+        const baseAddress = nodeInfo.addresses[0];
+        if (baseAddress) {
+          try {
+            const multiaddr = await buildMultiaddrFromNodeId(baseAddress, nodeInfo.node_id);
+            console.log(`   Multiaddr: ${multiaddr}`);
+          } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            console.log(`   Multiaddr: unavailable (${reason})`);
+          }
+        } else if (peerId) {
+          console.log('   Multiaddr: unavailable (no advertised addresses)');
+        } else {
+          console.log('   Multiaddr: unavailable');
+        }
       } catch {
         console.log('   ⚠️  RPC not responding');
       }
@@ -257,8 +286,10 @@ export function createNodeCommand(config: CliConfig): Command {
       const rpc = await createReadyRpcClient(config);
       const nodeInfo = await rpc.nodeInfo();
       const fundingAddress = scriptToAddress(nodeInfo.default_funding_lock_script, config.network);
+      const peerId = await nodeIdToPeerId(nodeInfo.node_id);
       const output = {
         nodeId: nodeInfo.node_id,
+        peerId,
         addresses: nodeInfo.addresses,
         chainHash: nodeInfo.chain_hash,
         fundingAddress,

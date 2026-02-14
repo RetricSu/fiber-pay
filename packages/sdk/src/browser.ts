@@ -14,4 +14,13 @@ export { FiberRpcClient, FiberRpcError } from './rpc/index.js';
 // Types — all types are compile-time only, always safe
 export type * from './types/index.js';
 // Utility functions (pure JS — browser-compatible)
-export { ckbToShannons, fromHex, randomBytes32, shannonsToCkb, toHex } from './utils.js';
+export {
+  buildMultiaddr,
+  buildMultiaddrFromNodeId,
+  ckbToShannons,
+  fromHex,
+  nodeIdToPeerId,
+  randomBytes32,
+  shannonsToCkb,
+  toHex,
+} from './utils.js';

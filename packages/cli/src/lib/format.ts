@@ -314,18 +314,34 @@ export function printChannelListHuman(channels: Channel[]): void {
 
 export function printBalanceHuman(data: {
   totalCkb: number;
+  channelLocalCkb?: number;
+  fundingAddress?: string;
+  fundingAddressTotalCkb?: number;
   availableToSend: number;
   availableToReceive: number;
   channelCount: number;
   activeChannelCount: number;
+  fundingBalanceError?: string;
 }): void {
   console.log('Balance');
   console.log(`  Total:                ${data.totalCkb} CKB`);
+  if (data.channelLocalCkb !== undefined) {
+    console.log(`  In Channels (Local):  ${data.channelLocalCkb} CKB`);
+  }
   console.log(`  Available To Send:    ${data.availableToSend} CKB`);
   console.log(`  Available To Receive: ${data.availableToReceive} CKB`);
   console.log(
     `  Channels:             ${data.channelCount} total (${data.activeChannelCount} active)`,
   );
+  if (data.fundingAddressTotalCkb !== undefined) {
+    console.log(`  Funding Address:      ${data.fundingAddressTotalCkb} CKB`);
+  }
+  if (data.fundingAddress) {
+    console.log(`  Funding Lock Addr:    ${data.fundingAddress}`);
+  }
+  if (data.fundingBalanceError) {
+    console.log(`  Funding Balance Note: ${data.fundingBalanceError}`);
+  }
 }
 
 export function printPeerListHuman(

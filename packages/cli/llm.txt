@@ -152,7 +152,7 @@ Peer:
 - fiber-pay peer disconnect <peerId> [--json]
 
 Binary:
-- fiber-pay binary download [--version <vX.Y.Z>] [--force] [--json]
+- fiber-pay binary download [--version <vX.Y.Z>] [--force] [--json] (default version: v0.6.1)
 - fiber-pay binary info [--json]
 
 Convenience:
@@ -173,6 +173,7 @@ Environment Variables
 - FIBER_RPC_PORT (used by `config init` when `--rpc-port` is not provided)
 - FIBER_P2P_PORT (used by `config init` when `--p2p-port` is not provided)
 - FIBER_KEY_PASSWORD
+- FIBER_CKB_RPC_URL (optional override for on-chain queries)
 
 Config init precedence:
 - `--data-dir` > `FIBER_DATA_DIR` > default (`$HOME/.fiber-pay`)

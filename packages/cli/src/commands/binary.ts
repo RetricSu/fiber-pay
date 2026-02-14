@@ -16,7 +16,7 @@ export function createBinaryCommand(config: CliConfig): Command {
 
   binary
     .command('download')
-    .option('--version <version>')
+    .option('--version <version>', 'Fiber binary version', 'v0.6.1')
     .option('--force', 'Force re-download')
     .option('--json')
     .action(async (options) => {

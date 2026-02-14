@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { toHex, fromHex, ckbToShannons, shannonsToCkb, randomBytes32 } from '@fiber-pay/sdk';
+import {
+  buildMultiaddr,
+  buildMultiaddrFromNodeId,
+  toHex,
+  fromHex,
+  ckbToShannons,
+  shannonsToCkb,
+  randomBytes32,
+  nodeIdToPeerId,
+} from '../src/utils.js';
 
 describe('RPC Utilities', () => {
   describe('toHex', () => {
@@ -45,7 +54,7 @@ describe('RPC Utilities', () => {
   describe('randomBytes32', () => {
     it('should generate valid 32-byte hex string', () => {
       const result = randomBytes32();
-      
+
       expect(result).toMatch(/^0x[0-9a-f]{64}$/);
     });
 
@@ -55,6 +64,48 @@ describe('RPC Utilities', () => {
         values.add(randomBytes32());
       }
       expect(values.size).toBe(100);
+    });
+  });
+
+  describe('nodeIdToPeerId', () => {
+    it('should convert compressed pubkey hex to libp2p peer id', async () => {
+      const nodeId =
+        '0x03f56f0e6f2aa14f04f3b8e4b6e8028f8e4668fe24d6aeb67d9387f6a92f1a0f9a';
+      const peerIdA = await nodeIdToPeerId(nodeId);
+      const peerIdB = await nodeIdToPeerId(nodeId);
+
+      expect(peerIdA).toBe(peerIdB);
+      expect(peerIdA).toMatch(/^Qm[1-9A-HJ-NP-Za-km-z]{44}$/);
+    });
+
+    it('should reject invalid node id format', async () => {
+      await expect(nodeIdToPeerId('not-hex')).rejects.toThrow('Invalid node id');
+      await expect(nodeIdToPeerId('0x1234')).rejects.toThrow('expected 33-byte compressed pubkey');
+    });
+  });
+
+  describe('buildMultiaddr helpers', () => {
+    it('should build canonical multiaddr from address + peer id', () => {
+      const addr = '/ip4/127.0.0.1/tcp/8228';
+      const peerId = 'QmNT9LSP5TBkD7Zbazg3gHby495awqeMeEqUgvdz4tNU9M';
+      expect(buildMultiaddr(addr, peerId)).toBe(
+        '/ip4/127.0.0.1/tcp/8228/p2p/QmNT9LSP5TBkD7Zbazg3gHby495awqeMeEqUgvdz4tNU9M',
+      );
+    });
+
+    it('should replace existing p2p suffix', () => {
+      const addr = '/ip4/127.0.0.1/tcp/8228/p2p/QmOldPeer';
+      const peerId = 'QmNewPeer';
+      expect(buildMultiaddr(addr, peerId)).toBe('/ip4/127.0.0.1/tcp/8228/p2p/QmNewPeer');
+    });
+
+    it('should build multiaddr directly from node id', async () => {
+      const nodeId =
+        '0x03f56f0e6f2aa14f04f3b8e4b6e8028f8e4668fe24d6aeb67d9387f6a92f1a0f9a';
+      const addr = '/ip4/127.0.0.1/tcp/8228';
+      const multiaddr = await buildMultiaddrFromNodeId(addr, nodeId);
+
+      expect(multiaddr).toMatch(/^\/ip4\/127\.0\.0\.1\/tcp\/8228\/p2p\/Qm[1-9A-HJ-NP-Za-km-z]{44}$/);
     });
   });
 });
