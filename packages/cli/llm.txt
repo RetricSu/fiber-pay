@@ -166,14 +166,14 @@ Command Style Policy
 
 Environment Variables
 ---------------------
-- FIBER_BINARY_PATH
-- FIBER_DATA_DIR
-- FIBER_NETWORK (`testnet` | `mainnet`)
-- FIBER_RPC_URL
-- FIBER_RPC_PORT (used by `config init` when `--rpc-port` is not provided)
-- FIBER_P2P_PORT (used by `config init` when `--p2p-port` is not provided)
-- FIBER_KEY_PASSWORD
-- FIBER_CKB_RPC_URL (optional override for on-chain queries)
+- FIBER_BINARY_PATH (default: unset; runtime uses default install path under `$HOME/.fiber-pay/bin/fnn`)
+- FIBER_DATA_DIR (default: `$HOME/.fiber-pay`)
+- FIBER_NETWORK (`testnet` | `mainnet`) (default: value from `config.yml` if present, otherwise `testnet`)
+- FIBER_RPC_URL (default: value from `config.yml` if present, otherwise `http://127.0.0.1:8227`)
+- FIBER_RPC_PORT (used by `config init` when `--rpc-port` is not provided; default: unset env, template fallback `8227`)
+- FIBER_P2P_PORT (used by `config init` when `--p2p-port` is not provided; default: unset env, template fallback `8228`)
+- FIBER_KEY_PASSWORD (optional; default: unset env, `node start` fallback password is `fiber-pay-default-key`)
+- FIBER_CKB_RPC_URL (optional override for on-chain queries; default: unset, falls back to `ckb.rpc_url` in `config.yml`)
 
 Config init precedence:
 - `--data-dir` > `FIBER_DATA_DIR` > default (`$HOME/.fiber-pay`)
