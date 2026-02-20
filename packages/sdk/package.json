@@ -1,6 +1,6 @@
 {
   "name": "@fiber-pay/sdk",
-  "version": "0.1.0-rc.1",
+  "version": "0.1.0-rc.2",
   "description": "Core SDK for building Fiber Network applications on CKB Lightning",
   "type": "module",
   "main": "./dist/index.js",
