@@ -10,17 +10,18 @@ Protocol target: Fiber `v0.6.1`.
 
 Primary layers in active scope:
 
-- `@fiber-pay/sdk`: typed Fiber RPC/domain layer
-- `@fiber-pay/cli`: operator and automation interface
-- `@fiber-pay/node`: local binary/process lifecycle support
+- `@fiber-pay/sdk`: typed building blocks for Fiber RPC, verification, and policy logic
+- `@fiber-pay/cli`: stable operator + automation interface with machine-readable output
+- `@fiber-pay/runtime`: orchestration runtime for jobs, monitoring, retries, and proxy-facing automation loops
+- `@fiber-pay/node`: easy handling for the local `fnn` binary lifecycle
 
 ## Source-of-truth order
 
 When executing real tasks, follow this order:
 
-1. `skills/fiber-pay/SKILL.md` and `skills/fiber-pay/references/**` (canonical workflow, architecture, and contracts)
-2. code in `packages/cli/src/**` and `packages/sdk/src/**` (authoritative command and behavior details)
-3. intent docs in `docs/plans/**`
+1. Read `docs/develop.md` for overall developing guidance on this project
+2. `skills/fiber-pay/SKILL.md` and `skills/fiber-pay/references/**` (canonical workflow, architecture, and contracts)
+3. code in `packages/cli/src/**` and `packages/sdk/src/**` (authoritative command and behavior details)
 
 If docs and code disagree, treat current code as authoritative and update skills docs accordingly.
 
@@ -33,36 +34,9 @@ If docs and code disagree, treat current code as authoritative and update skills
 5. For exact syntax and flags, use progressive CLI help (`fiber-pay -h`, subgroup `-h`) and command source code.
 6. Do not invent undocumented flags, command aliases, or response schemas.
 
-## Copy-paste bootstrap prompt (for external agents)
-
-```text
-Use this Fiber skill source-of-truth document:
-https://raw.githubusercontent.com/RetricSu/fiber-pay/main/skills/fiber-pay/SKILL.md
-
-Read that URL first and treat it as workflow/architecture source of truth.
-
-For exact command syntax and flags, learn progressively with CLI help:
-- fiber-pay -h
-- fiber-pay <group> -h
-- fiber-pay <group> <cmd> -h
-
-Then equip yourself with fiber-pay behavior:
-- obey the readiness gates and contracts in SKILL references,
-- use grouped commands only (node/channel/invoice/payment/peer/binary/config/graph/runtime/job),
-- prefer --json for automation,
-- use single-node quick start by default unless I ask otherwise.
-
-Before executing actions, summarize:
-1) startup defaults,
-2) required env vars (if any),
-3) exact commands you will run.
-
-Then execute the requested task.
-```
-
 ## Contribution focus
 
-Prioritize improvements that strengthen SDK + CLI reliability and AI usability:
+Prioritize improvements that strengthen(in order) SDK -> runtime -> CLI reliability and AI usability:
 
 - stable command semantics
 - clear machine-readable outputs
