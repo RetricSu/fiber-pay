@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { runChannelJob } from '../src/jobs/executors/channel-executor.js';
 import { defaultPaymentRetryPolicy } from '../src/jobs/retry-policy.js';
 import type { FiberRpcClient } from '@fiber-pay/sdk';
@@ -133,6 +133,72 @@ describe('runChannelJob', () => {
     expect(openCallCount).toBe(0);
     expect(states).toContain('channel_opening');
     expect(states[states.length - 1]).toBe('succeeded');
+  });
+
+  it('waits for nextRetryAt before retrying waiting_retry jobs', async () => {
+    vi.useFakeTimers();
+    try {
+      let openCallCount = 0;
+      const rpc = {
+        openChannel: async () => {
+          openCallCount++;
+          return { temporary_channel_id: '0xtmp' };
+        },
+        listChannels: async () => ({
+          channels: [
+            {
+              channel_id: '0xchan1',
+              is_public: false,
+              channel_outpoint: null,
+              peer_id: 'peer-1',
+              funding_udt_type_script: null,
+              state: { state_name: 'CHANNEL_READY' },
+              local_balance: '0x0',
+              offered_tlc_balance: '0x0',
+              remote_balance: '0x0',
+              received_tlc_balance: '0x0',
+              pending_tlcs: [],
+              latest_commitment_transaction_hash: null,
+              created_at: '0x0',
+              enabled: true,
+              tlc_expiry_delta: '0x0',
+              tlc_fee_proportional_millionths: '0x0',
+              shutdown_transaction_hash: null,
+            },
+          ],
+        }),
+      } as unknown as FiberRpcClient;
+
+      const updates: ChannelJob[] = [];
+      const consume = (async () => {
+        for await (const updated of runChannelJob(
+          baseJob({
+            state: 'waiting_retry',
+            retryCount: 1,
+            nextRetryAt: Date.now() + 1_000,
+          }),
+          rpc,
+          defaultPaymentRetryPolicy,
+          new AbortController().signal,
+        )) {
+          updates.push(updated);
+        }
+      })();
+
+      await vi.advanceTimersByTimeAsync(999);
+      expect(updates).toHaveLength(0);
+      expect(openCallCount).toBe(0);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await Promise.resolve();
+      expect(updates[0]?.state).toBe('executing');
+
+      await consume;
+      expect(updates[updates.length - 1].state).toBe('succeeded');
+      expect(openCallCount).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not treat shutting_down channel as reusable existing open target', async () => {

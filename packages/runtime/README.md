@@ -9,6 +9,31 @@ fiber-pay runtime start --daemon --json
 fiber-pay runtime status --json
 ```
 
+## Single-instance low-CPU defaults
+
+Runtime defaults are tuned for lower idle CPU on one node:
+
+- `channelPollIntervalMs=5000`
+- `invoicePollIntervalMs=3000`
+- `paymentPollIntervalMs=2000`
+- `peerPollIntervalMs=15000`
+- `healthPollIntervalMs=10000`
+- `includeClosedChannels=false`
+- `jobs.schedulerIntervalMs=1000`
+
+If your machine is still busy when idle, start with slower polling explicitly:
+
+```bash
+fiber-pay runtime start \
+  --channel-poll-ms 8000 \
+  --invoice-poll-ms 5000 \
+  --payment-poll-ms 3000 \
+  --peer-poll-ms 20000 \
+  --health-poll-ms 15000 \
+  --include-closed false \
+  --json
+```
+
 ## Manual payment flow (runtime jobs)
 
 前置：`jq`、`curl`、两边 profile 已有资金（示例 `rt-a` / `rt-b`）。

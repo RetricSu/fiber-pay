@@ -37,6 +37,10 @@ export class InvoiceTracker extends BaseMonitor {
     const tracked = this.store.listTrackedInvoices();
 
     for (const invoice of tracked) {
+      if (isTerminalInvoiceStatusString(invoice.status)) {
+        continue;
+      }
+
       try {
         const next = await this.client.getInvoice({ payment_hash: invoice.paymentHash });
         const previousStatus = invoice.status;
@@ -100,5 +104,9 @@ export class InvoiceTracker extends BaseMonitor {
 }
 
 export function isTerminalInvoiceStatus(status: CkbInvoiceStatus): boolean {
+  return status === 'Cancelled' || status === 'Expired' || status === 'Paid';
+}
+
+function isTerminalInvoiceStatusString(status: string): boolean {
   return status === 'Cancelled' || status === 'Expired' || status === 'Paid';
 }

@@ -22,6 +22,17 @@ export async function* runChannelJob(
   }
 
   if (current.state === 'waiting_retry') {
+    const delay = current.nextRetryAt
+      ? Math.max(0, current.nextRetryAt - Date.now())
+      : 0;
+    if (delay > 0) {
+      await sleep(delay, signal);
+      if (signal.aborted) {
+        current = transitionJobState(current, channelStateMachine, 'cancel');
+        yield current;
+        return;
+      }
+    }
     current = transitionJobState(current, channelStateMachine, 'retry_delay_elapsed', {
       patch: { nextRetryAt: undefined },
     });

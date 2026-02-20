@@ -156,4 +156,30 @@ describe('RpcMonitorProxy jobs endpoints', () => {
       { idempotencyKey: 'open:peer:peer-1', reuseTerminal: false },
     );
   });
+
+  it('rejects startup when targetUrl points to proxy listen address', async () => {
+    const deps: RpcMonitorProxyDeps = {
+      onInvoiceTracked: vi.fn(),
+      onPaymentTracked: vi.fn(),
+      listTrackedInvoices: vi.fn(() => []),
+      listTrackedPayments: vi.fn(() => []),
+      listAlerts: vi.fn(() => []),
+      getStatus: vi.fn(() => ({
+        startedAt: new Date().toISOString(),
+        proxyListen: '127.0.0.1:18390',
+        targetUrl: 'http://127.0.0.1:18390',
+        running: false,
+      })),
+    };
+
+    const proxy = new RpcMonitorProxy(
+      {
+        listen: '127.0.0.1:18390',
+        targetUrl: 'http://127.0.0.1:18390',
+      },
+      deps,
+    );
+
+    await expect(proxy.start()).rejects.toThrow(/targetUrl .*points to proxy listen address/i);
+  });
 });

@@ -26,6 +26,8 @@ export class RpcMonitorProxy {
       return;
     }
 
+    assertNoProxySelfLoop(this.config.listen, this.config.targetUrl);
+
     this.server = http.createServer((req, res) => {
       void this.handleRequest(req, res);
     });
@@ -132,4 +134,32 @@ export class RpcMonitorProxy {
     });
     res.end(responseText);
   }
+}
+
+function assertNoProxySelfLoop(listen: string, targetUrl: string): void {
+  const { host, port } = parseListenAddress(listen);
+
+  let parsed: URL;
+  try {
+    parsed = new URL(targetUrl);
+  } catch {
+    throw new Error(`Invalid proxy targetUrl: ${targetUrl}`);
+  }
+
+  const targetHost = normalizeHost(parsed.hostname);
+  const listenHost = normalizeHost(host);
+  const targetPort = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+
+  if (targetHost === listenHost && targetPort === String(port)) {
+    throw new Error(
+      `Invalid proxy configuration: targetUrl (${targetUrl}) points to proxy listen address (${listen})`,
+    );
+  }
+}
+
+function normalizeHost(host: string): string {
+  if (host === 'localhost' || host === '::1') {
+    return '127.0.0.1';
+  }
+  return host;
 }

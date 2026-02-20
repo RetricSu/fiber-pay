@@ -68,12 +68,12 @@ export type RuntimeConfigInput = Omit<Partial<RuntimeConfig>, 'proxy' | 'storage
 
 export const defaultRuntimeConfig: RuntimeConfig = {
   fiberRpcUrl: 'http://127.0.0.1:8227',
-  channelPollIntervalMs: 3000,
-  invoicePollIntervalMs: 2000,
-  paymentPollIntervalMs: 1000,
-  peerPollIntervalMs: 10000,
-  healthPollIntervalMs: 5000,
-  includeClosedChannels: true,
+  channelPollIntervalMs: 5000,
+  invoicePollIntervalMs: 3000,
+  paymentPollIntervalMs: 2000,
+  peerPollIntervalMs: 15000,
+  healthPollIntervalMs: 10000,
+  includeClosedChannels: false,
   completedItemTtlSeconds: 86400,
   requestTimeoutMs: 10000,
   alerts: [{ type: 'stdout' }],
@@ -90,29 +90,50 @@ export const defaultRuntimeConfig: RuntimeConfig = {
     enabled: true,
     dbPath: resolve(process.cwd(), '.fiber-pay-jobs.db'),
     maxConcurrentJobs: 5,
-    schedulerIntervalMs: 500,
+    schedulerIntervalMs: 1000,
     retryPolicy: defaultPaymentRetryPolicy,
   },
 };
 
 export function createRuntimeConfig(input: RuntimeConfigInput = {}): RuntimeConfig {
   const config: RuntimeConfig = {
-    ...defaultRuntimeConfig,
-    ...input,
+    fiberRpcUrl: input.fiberRpcUrl ?? defaultRuntimeConfig.fiberRpcUrl,
+    channelPollIntervalMs: input.channelPollIntervalMs ?? defaultRuntimeConfig.channelPollIntervalMs,
+    invoicePollIntervalMs: input.invoicePollIntervalMs ?? defaultRuntimeConfig.invoicePollIntervalMs,
+    paymentPollIntervalMs: input.paymentPollIntervalMs ?? defaultRuntimeConfig.paymentPollIntervalMs,
+    peerPollIntervalMs: input.peerPollIntervalMs ?? defaultRuntimeConfig.peerPollIntervalMs,
+    healthPollIntervalMs: input.healthPollIntervalMs ?? defaultRuntimeConfig.healthPollIntervalMs,
+    includeClosedChannels: input.includeClosedChannels ?? defaultRuntimeConfig.includeClosedChannels,
+    completedItemTtlSeconds:
+      input.completedItemTtlSeconds ?? defaultRuntimeConfig.completedItemTtlSeconds,
+    requestTimeoutMs: input.requestTimeoutMs ?? defaultRuntimeConfig.requestTimeoutMs,
     proxy: {
-      ...defaultRuntimeConfig.proxy,
-      ...input.proxy,
+      enabled: input.proxy?.enabled ?? defaultRuntimeConfig.proxy.enabled,
+      listen: input.proxy?.listen ?? defaultRuntimeConfig.proxy.listen,
     },
     storage: {
-      ...defaultRuntimeConfig.storage,
-      ...input.storage,
+      stateFilePath: input.storage?.stateFilePath ?? defaultRuntimeConfig.storage.stateFilePath,
+      flushIntervalMs: input.storage?.flushIntervalMs ?? defaultRuntimeConfig.storage.flushIntervalMs,
+      maxAlertHistory: input.storage?.maxAlertHistory ?? defaultRuntimeConfig.storage.maxAlertHistory,
     },
     jobs: {
-      ...defaultRuntimeConfig.jobs,
-      ...input.jobs,
+      enabled: input.jobs?.enabled ?? defaultRuntimeConfig.jobs.enabled,
+      dbPath: input.jobs?.dbPath ?? defaultRuntimeConfig.jobs.dbPath,
+      maxConcurrentJobs: input.jobs?.maxConcurrentJobs ?? defaultRuntimeConfig.jobs.maxConcurrentJobs,
+      schedulerIntervalMs:
+        input.jobs?.schedulerIntervalMs ?? defaultRuntimeConfig.jobs.schedulerIntervalMs,
       retryPolicy: {
-        ...defaultRuntimeConfig.jobs.retryPolicy,
-        ...input.jobs?.retryPolicy,
+        maxRetries:
+          input.jobs?.retryPolicy?.maxRetries ?? defaultRuntimeConfig.jobs.retryPolicy.maxRetries,
+        baseDelayMs:
+          input.jobs?.retryPolicy?.baseDelayMs ?? defaultRuntimeConfig.jobs.retryPolicy.baseDelayMs,
+        maxDelayMs:
+          input.jobs?.retryPolicy?.maxDelayMs ?? defaultRuntimeConfig.jobs.retryPolicy.maxDelayMs,
+        backoffMultiplier:
+          input.jobs?.retryPolicy?.backoffMultiplier ??
+          defaultRuntimeConfig.jobs.retryPolicy.backoffMultiplier,
+        jitterMs:
+          input.jobs?.retryPolicy?.jitterMs ?? defaultRuntimeConfig.jobs.retryPolicy.jitterMs,
       },
     },
     alerts: input.alerts ?? defaultRuntimeConfig.alerts,

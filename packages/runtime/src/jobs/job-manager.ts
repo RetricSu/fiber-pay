@@ -72,7 +72,7 @@ export class JobManager extends EventEmitter<JobManagerEvents> {
     this.rpc = rpc;
     this.store = store;
     this.retryPolicy = config.retryPolicy ?? defaultPaymentRetryPolicy;
-    this.schedulerIntervalMs = config.schedulerIntervalMs ?? 500;
+    this.schedulerIntervalMs = config.schedulerIntervalMs ?? 1000;
     this.maxConcurrentJobs = config.maxConcurrentJobs ?? 5;
   }
 

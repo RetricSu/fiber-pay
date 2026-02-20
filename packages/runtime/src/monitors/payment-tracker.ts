@@ -37,6 +37,10 @@ export class PaymentTracker extends BaseMonitor {
     const tracked = this.store.listTrackedPayments();
 
     for (const payment of tracked) {
+      if (isTerminalPaymentStatus(payment.status)) {
+        continue;
+      }
+
       try {
         const next = await this.client.getPayment({ payment_hash: payment.paymentHash });
         const previousStatus = payment.status;
@@ -83,4 +87,8 @@ export class PaymentTracker extends BaseMonitor {
 
     this.store.pruneCompleted(this.config.completedItemTtlSeconds * 1000);
   }
+}
+
+function isTerminalPaymentStatus(status: string): boolean {
+  return status === 'Success' || status === 'Failed';
 }

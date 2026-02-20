@@ -43,6 +43,46 @@ function makeInvoiceResult(status: 'Open' | 'Received' | 'Paid' | 'Expired' | 'C
 }
 
 describe('InvoiceTracker', () => {
+  it('does not poll terminal tracked invoices', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'fiber-invoice-tracker-'));
+    const store = new MemoryStore({
+      stateFilePath: join(dir, 'runtime-state.json'),
+      flushIntervalMs: 1000,
+      maxAlertHistory: 100,
+    });
+    store.addTrackedInvoice('0xinv-terminal', 'Paid');
+
+    const emitted: Alert[] = [];
+    const alerts = new AlertManager({
+      backends: [new CaptureAlertBackend(emitted)],
+      store,
+    });
+
+    let getInvoiceCalls = 0;
+    const client = {
+      getInvoice: async () => {
+        getInvoiceCalls++;
+        return makeInvoiceResult('Paid');
+      },
+    };
+
+    const tracker = new InvoiceTracker({
+      client: client as unknown as FiberRpcClient,
+      store,
+      alerts,
+      config: {
+        intervalMs: 1000,
+        completedItemTtlSeconds: 60,
+      },
+    });
+
+    await (tracker as unknown as { poll: () => Promise<void> }).poll();
+
+    expect(getInvoiceCalls).toBe(0);
+    expect(emitted).toHaveLength(0);
+    await rm(dir, { recursive: true, force: true });
+  });
+
   it('emits invoice_expired when tracked invoice becomes Expired', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'fiber-invoice-tracker-'));
     const store = new MemoryStore({
