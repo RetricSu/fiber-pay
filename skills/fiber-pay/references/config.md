@@ -1,7 +1,8 @@
 # FNN Config Reference (v0.6.1)
 
-Structured reference for `config.yml` used by the Fiber Network Node (`fnn`).
-All values are set via `fiber-pay config set <path> <value>`.
+- Structured reference for `config.yml` used by the Fiber Network Node (`fnn`). 
+- All values are set via `fiber-pay config set <path> <value>`.
+- Full commented fnn config.yml artifact: [references/fnn.reference.yml](references/fnn.reference.yml)
 
 ## Top-level
 

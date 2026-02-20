@@ -93,10 +93,6 @@ Use this prompt in Cursor/Claude/Copilot/other agents:
 
 ```text
 Follow this document https://raw.githubusercontent.com/RetricSu/fiber-pay/main/skills/fiber-pay/SKILL.md to equip yourself with a p2p payment system.
-For exact command syntax and flags, use:
-- fiber-pay -h
-- fiber-pay <group> -h
-- fiber-pay <group> <cmd> -h
 ```
 
 ## Source of truth

@@ -5,26 +5,19 @@ You can install from npm (recommended for consumers) or from source (recommended
 ## Prerequisites
 
 - Node.js `>=20`
-- `pnpm`
-- `git`
 
 ## Install from npm
 
 ```bash
-pnpm add @fiber-pay/sdk
-pnpm add @fiber-pay/runtime
-pnpm add @fiber-pay/node
-pnpm add @fiber-pay/agent
-pnpm add @fiber-pay/cli
-```
-
-For CLI usage via package execution:
-
-```bash
-pnpm dlx @fiber-pay/cli --help
+npm install -g @fiber-pay/cli
 ```
 
 ## Install from source
+
+Make sure you have:
+
+- `pnpm`
+- `git`
 
 ```bash
 git clone https://github.com/RetricSu/fiber-pay.git && cd fiber-pay
@@ -33,21 +26,20 @@ pnpm build
 cd packages/cli && pnpm link --global
 ```
 
-## Verify CLI is available
-
-```bash
-command -v fiber-pay
-fiber-pay --version
-fiber-pay -h
-```
-
-## Update after pulling new changes
+### Update after pulling new changes
 
 ```bash
 git pull
 pnpm install
 pnpm build
 cd packages/cli && pnpm link --global
+```
+
+## Verify CLI is available
+
+```bash
+fiber-pay --version
+fiber-pay -h
 ```
 
 ## Notes
