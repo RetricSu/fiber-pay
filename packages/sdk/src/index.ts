@@ -11,11 +11,23 @@ export { scriptToAddress } from './address.js';
 export type { LiquidityReport } from './funds/liquidity-analyzer.js';
 // Funds management
 export { LiquidityAnalyzer } from './funds/liquidity-analyzer.js';
-// Proxy
-export { CorsProxy } from './proxy/cors-proxy.js';
 // RPC client
 export { FiberRpcClient, FiberRpcError } from './rpc/index.js';
-export { createKeyManager, KeyManager } from './security/key-manager.js';
+// Crypto utilities
+export {
+  AUTH_TAG_LENGTH,
+  decryptKey,
+  derivePublicKey,
+  ENCRYPTED_MAGIC,
+  generatePrivateKey,
+  IV_LENGTH,
+  isEncryptedKey,
+  KEY_LENGTH,
+  SALT_LENGTH,
+  SCRYPT_N,
+  SCRYPT_P,
+  SCRYPT_R,
+} from './security/crypto.js';
 // Security components
 export { PolicyEngine } from './security/policy-engine.js';
 export type * from './types/index.js';
@@ -36,5 +48,3 @@ export {
 export type { InvoiceVerificationResult } from './verification/invoice-verifier.js';
 // Verification
 export { InvoiceVerifier } from './verification/invoice-verifier.js';
-export type { PaymentProof, PaymentProofSummary } from './verification/payment-proof.js';
-export { PaymentProofManager } from './verification/payment-proof.js';

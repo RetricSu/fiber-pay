@@ -15,13 +15,7 @@
  * Run: npx tsx examples/watch-incoming.ts
  */
 
-import {
-  FiberRpcClient,
-  ckbToShannons,
-  shannonsToCkb,
-  randomBytes32,
-  toHex,
-} from '@fiber-pay/sdk';
+import { ckbToShannons, FiberRpcClient, randomBytes32, shannonsToCkb, toHex } from '@fiber-pay/sdk';
 
 const RPC_URL = process.env.FIBER_RPC_URL || 'http://127.0.0.1:8227';
 
@@ -82,10 +76,13 @@ async function main() {
   });
 
   // 4. Optional: Auto-stop after 5 minutes
-  const timeoutId = setTimeout(() => {
-    console.log('\nTimeout reached (5 minutes). Stopping watcher...');
-    controller.abort();
-  }, 5 * 60 * 1000);
+  const timeoutId = setTimeout(
+    () => {
+      console.log('\nTimeout reached (5 minutes). Stopping watcher...');
+      controller.abort();
+    },
+    5 * 60 * 1000,
+  );
 
   // Wait for watcher to complete (either by abort or timeout)
   await watchPromise;

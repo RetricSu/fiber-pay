@@ -100,7 +100,8 @@ export function handleMonitorEndpoint(
       return;
     }
 
-    const minPriority = minPriorityRaw && isAlertPriority(minPriorityRaw) ? minPriorityRaw : undefined;
+    const minPriority =
+      minPriorityRaw && isAlertPriority(minPriorityRaw) ? minPriorityRaw : undefined;
     const type = typeRaw && isAlertType(typeRaw) ? typeRaw : undefined;
 
     writeJson(res, 200, {

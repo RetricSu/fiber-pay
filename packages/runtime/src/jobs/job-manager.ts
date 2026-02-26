@@ -1,8 +1,11 @@
-import type { FiberRpcClient } from '@fiber-pay/sdk';
-import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
+import type { FiberRpcClient } from '@fiber-pay/sdk';
+import type { SqliteJobStore } from '../storage/sqlite-store.js';
+import { runChannelJob } from './executors/channel-executor.js';
+import { runInvoiceJob } from './executors/invoice-executor.js';
+import { runPaymentJob } from './executors/payment-executor.js';
 import { defaultPaymentRetryPolicy } from './retry-policy.js';
-import { TERMINAL_JOB_STATES } from './types.js';
 import type {
   ChannelJob,
   ChannelJobParams,
@@ -15,10 +18,7 @@ import type {
   RetryPolicy,
   RuntimeJob,
 } from './types.js';
-import { runPaymentJob } from './executors/payment-executor.js';
-import { runInvoiceJob } from './executors/invoice-executor.js';
-import { runChannelJob } from './executors/channel-executor.js';
-import type { SqliteJobStore } from '../storage/sqlite-store.js';
+import { TERMINAL_JOB_STATES } from './types.js';
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') {
@@ -88,7 +88,9 @@ export class JobManager extends EventEmitter<JobManagerEvents> {
       (params.sendPaymentParams.payment_hash as string | undefined) ??
       randomUUID();
 
-    const existing = this.store.getJobByIdempotencyKey<PaymentJobParams, PaymentJob['result']>(idempotencyKey);
+    const existing = this.store.getJobByIdempotencyKey<PaymentJobParams, PaymentJob['result']>(
+      idempotencyKey,
+    );
     if (existing?.type === 'payment') {
       if (!haveSameParams(existing.params, params)) {
         throw new Error(
@@ -136,7 +138,13 @@ export class JobManager extends EventEmitter<JobManagerEvents> {
     options: { idempotencyKey?: string; maxRetries?: number; reuseTerminal?: boolean } = {},
   ): Promise<InvoiceJob> {
     const idempotencyKey = options.idempotencyKey ?? deriveInvoiceKey(params) ?? randomUUID();
-    return this.createOrReuseJob<InvoiceJobParams, InvoiceJob['result']>('invoice', params, idempotencyKey, options.maxRetries, options.reuseTerminal) as Promise<InvoiceJob>;
+    return this.createOrReuseJob<InvoiceJobParams, InvoiceJob['result']>(
+      'invoice',
+      params,
+      idempotencyKey,
+      options.maxRetries,
+      options.reuseTerminal,
+    ) as Promise<InvoiceJob>;
   }
 
   async manageChannel(
@@ -144,7 +152,13 @@ export class JobManager extends EventEmitter<JobManagerEvents> {
     options: { idempotencyKey?: string; maxRetries?: number; reuseTerminal?: boolean } = {},
   ): Promise<ChannelJob> {
     const idempotencyKey = options.idempotencyKey ?? deriveChannelKey(params) ?? randomUUID();
-    return this.createOrReuseJob<ChannelJobParams, ChannelJob['result']>('channel', params, idempotencyKey, options.maxRetries, options.reuseTerminal) as Promise<ChannelJob>;
+    return this.createOrReuseJob<ChannelJobParams, ChannelJob['result']>(
+      'channel',
+      params,
+      idempotencyKey,
+      options.maxRetries,
+      options.reuseTerminal,
+    ) as Promise<ChannelJob>;
   }
 
   getJob(id: string): RuntimeJob | undefined {
@@ -216,7 +230,13 @@ export class JobManager extends EventEmitter<JobManagerEvents> {
             nextRetryAt: undefined,
             completedAt: undefined,
           } as unknown as Partial<import('./types.js').Job<P, R>>);
-          this.store.addJobEvent(existing.id, 'created', existing.state, 'queued', this.buildEventData(reset as RuntimeJob));
+          this.store.addJobEvent(
+            existing.id,
+            'created',
+            existing.state,
+            'queued',
+            this.buildEventData(reset as RuntimeJob),
+          );
           this.emit('job:created', reset as RuntimeJob);
           this.schedule(reset as RuntimeJob);
           return reset as RuntimeJob;
@@ -295,7 +315,9 @@ export class JobManager extends EventEmitter<JobManagerEvents> {
       if (this.active.size >= this.maxConcurrentJobs) break;
       let recoveredJob = job;
       if (job.type === 'payment' && (job.state === 'executing' || job.state === 'inflight')) {
-        recoveredJob = this.store.updateJob<unknown, unknown>(job.id, { state: 'inflight' }) as RuntimeJob;
+        recoveredJob = this.store.updateJob<unknown, unknown>(job.id, {
+          state: 'inflight',
+        }) as RuntimeJob;
       }
       this.execute(recoveredJob);
     }
@@ -311,13 +333,21 @@ export class JobManager extends EventEmitter<JobManagerEvents> {
             ? runPaymentJob(job as PaymentJob, this.rpc, this.retryPolicy, abortController.signal)
             : job.type === 'invoice'
               ? runInvoiceJob(job as InvoiceJob, this.rpc, this.retryPolicy, abortController.signal)
-              : runChannelJob(job as ChannelJob, this.rpc, this.retryPolicy, abortController.signal);
+              : runChannelJob(
+                  job as ChannelJob,
+                  this.rpc,
+                  this.retryPolicy,
+                  abortController.signal,
+                );
 
         for await (const updated of generator) {
           const prev = this.getJob(updated.id);
           const fromState = prev?.state ?? job.state;
 
-          this.store.updateJob<unknown, unknown>(updated.id, updated as Partial<import('./types.js').Job>);
+          this.store.updateJob<unknown, unknown>(
+            updated.id,
+            updated as Partial<import('./types.js').Job>,
+          );
           this.store.addJobEvent(
             updated.id,
             stateToEvent(updated.state),

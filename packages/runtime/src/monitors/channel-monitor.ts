@@ -1,4 +1,4 @@
-import { ChannelState, FiberRpcClient } from '@fiber-pay/sdk';
+import { ChannelState, type FiberRpcClient } from '@fiber-pay/sdk';
 import type { AlertManager } from '../alerts/alert-manager.js';
 import type { AlertPriority } from '../alerts/types.js';
 import { diffChannels } from '../diff/channel-diff.js';
@@ -43,7 +43,10 @@ export class ChannelMonitor extends BaseMonitor {
     const changes = diffChannels(previous, current);
 
     for (const change of changes) {
-      if (change.type === 'channel_new' && change.channel.state.state_name === ChannelState.NegotiatingFunding) {
+      if (
+        change.type === 'channel_new' &&
+        change.channel.state.state_name === ChannelState.NegotiatingFunding
+      ) {
         await this.alerts.emit({
           type: 'new_inbound_channel_request',
           priority: 'high',
@@ -66,7 +69,10 @@ export class ChannelMonitor extends BaseMonitor {
         });
       }
 
-      if (change.type === 'channel_state_changed' && change.currentState === ChannelState.ChannelReady) {
+      if (
+        change.type === 'channel_state_changed' &&
+        change.currentState === ChannelState.ChannelReady
+      ) {
         await this.alerts.emit({
           type: 'channel_became_ready',
           priority: 'medium',
@@ -77,7 +83,8 @@ export class ChannelMonitor extends BaseMonitor {
 
       if (
         change.type === 'channel_state_changed' &&
-        (change.currentState === ChannelState.ShuttingDown || change.currentState === ChannelState.Closed)
+        (change.currentState === ChannelState.ShuttingDown ||
+          change.currentState === ChannelState.Closed)
       ) {
         await this.alerts.emit({
           type: 'channel_closing',

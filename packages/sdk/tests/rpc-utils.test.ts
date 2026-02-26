@@ -1,14 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   buildMultiaddr,
   buildMultiaddrFromNodeId,
   buildMultiaddrFromRpcUrl,
-  toHex,
-  fromHex,
   ckbToShannons,
-  shannonsToCkb,
-  randomBytes32,
+  fromHex,
   nodeIdToPeerId,
+  randomBytes32,
+  shannonsToCkb,
+  toHex,
 } from '../src/utils.js';
 
 describe('RPC Utilities', () => {
@@ -70,8 +70,7 @@ describe('RPC Utilities', () => {
 
   describe('nodeIdToPeerId', () => {
     it('should convert compressed pubkey hex to libp2p peer id', async () => {
-      const nodeId =
-        '0x03f56f0e6f2aa14f04f3b8e4b6e8028f8e4668fe24d6aeb67d9387f6a92f1a0f9a';
+      const nodeId = '0x03f56f0e6f2aa14f04f3b8e4b6e8028f8e4668fe24d6aeb67d9387f6a92f1a0f9a';
       const peerIdA = await nodeIdToPeerId(nodeId);
       const peerIdB = await nodeIdToPeerId(nodeId);
 
@@ -101,18 +100,21 @@ describe('RPC Utilities', () => {
     });
 
     it('should build multiaddr directly from node id', async () => {
-      const nodeId =
-        '0x03f56f0e6f2aa14f04f3b8e4b6e8028f8e4668fe24d6aeb67d9387f6a92f1a0f9a';
+      const nodeId = '0x03f56f0e6f2aa14f04f3b8e4b6e8028f8e4668fe24d6aeb67d9387f6a92f1a0f9a';
       const addr = '/ip4/127.0.0.1/tcp/8228';
       const multiaddr = await buildMultiaddrFromNodeId(addr, nodeId);
 
-      expect(multiaddr).toMatch(/^\/ip4\/127\.0\.0\.1\/tcp\/8228\/p2p\/Qm[1-9A-HJ-NP-Za-km-z]{44}$/);
+      expect(multiaddr).toMatch(
+        /^\/ip4\/127\.0\.0\.1\/tcp\/8228\/p2p\/Qm[1-9A-HJ-NP-Za-km-z]{44}$/,
+      );
     });
 
     it('should infer multiaddr from rpc url + peer id', () => {
       const peerId = 'QmNT9LSP5TBkD7Zbazg3gHby495awqeMeEqUgvdz4tNU9M';
       const multiaddr = buildMultiaddrFromRpcUrl('http://127.0.0.1:8227', peerId);
-      expect(multiaddr).toBe('/ip4/127.0.0.1/tcp/8228/p2p/QmNT9LSP5TBkD7Zbazg3gHby495awqeMeEqUgvdz4tNU9M');
+      expect(multiaddr).toBe(
+        '/ip4/127.0.0.1/tcp/8228/p2p/QmNT9LSP5TBkD7Zbazg3gHby495awqeMeEqUgvdz4tNU9M',
+      );
     });
   });
 });

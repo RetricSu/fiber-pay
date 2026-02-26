@@ -1,7 +1,7 @@
-import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import Database from 'better-sqlite3';
 import type { Job, JobEvent, JobEventType, JobFilter, JobState, JobType } from '../jobs/types.js';
 
 // ─── Migrations ───────────────────────────────────────────────────────────────
@@ -78,10 +78,9 @@ export class SqliteJobStore {
       if (!applied.has(migration.version)) {
         this.db.transaction(() => {
           this.db.exec(migration.sql);
-          this.db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
-            migration.version,
-            Date.now(),
-          );
+          this.db
+            .prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+            .run(migration.version, Date.now());
         })();
       }
     }
@@ -167,9 +166,9 @@ export class SqliteJobStore {
   }
 
   getJobByIdempotencyKey<P = unknown, R = unknown>(key: string): Job<P, R> | undefined {
-    const row = this.db
-      .prepare('SELECT * FROM jobs WHERE idempotency_key = ?')
-      .get(key) as DbRow | undefined;
+    const row = this.db.prepare('SELECT * FROM jobs WHERE idempotency_key = ?').get(key) as
+      | DbRow
+      | undefined;
     return row ? this.rowToJob<P, R>(row) : undefined;
   }
 

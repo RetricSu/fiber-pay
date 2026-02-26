@@ -1,7 +1,7 @@
+import type { FiberRpcClient } from '@fiber-pay/sdk';
 import { describe, expect, it, vi } from 'vitest';
 import { runInvoiceJob } from '../src/jobs/executors/invoice-executor.js';
 import { defaultPaymentRetryPolicy } from '../src/jobs/retry-policy.js';
-import type { FiberRpcClient } from '@fiber-pay/sdk';
 import type { InvoiceJob } from '../src/jobs/types.js';
 
 function baseJob(overrides: Partial<InvoiceJob> = {}): InvoiceJob {
@@ -51,7 +51,12 @@ describe('runInvoiceJob', () => {
     } as unknown as FiberRpcClient;
 
     const states: string[] = [];
-    for await (const updated of runInvoiceJob(baseJob(), rpc, defaultPaymentRetryPolicy, new AbortController().signal)) {
+    for await (const updated of runInvoiceJob(
+      baseJob(),
+      rpc,
+      defaultPaymentRetryPolicy,
+      new AbortController().signal,
+    )) {
       states.push(updated.state);
     }
 

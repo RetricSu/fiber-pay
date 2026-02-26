@@ -1,17 +1,17 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { FiberRpcClient, FiberRpcError } from '@fiber-pay/sdk';
 import type {
-  SettleInvoiceParams,
   BuildRouterParams,
-  SendPaymentWithRouterParams,
-  SendPaymentParams,
-  NewInvoiceParams,
-  RouterHop,
-  HopRequire,
-  HopHint,
   CkbInvoiceStatus,
   HexString,
+  HopHint,
+  HopRequire,
+  NewInvoiceParams,
+  RouterHop,
+  SendPaymentParams,
+  SendPaymentWithRouterParams,
+  SettleInvoiceParams,
 } from '@fiber-pay/sdk';
+import { FiberRpcClient } from '@fiber-pay/sdk';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // =============================================================================
 // Mock fetch helper
@@ -70,7 +70,7 @@ describe('FiberRpcClient - New Methods', () => {
       });
 
       await expect(client.call('node_info', [])).rejects.toThrow(
-        'Invalid JSON-RPC response: missing result and error'
+        'Invalid JSON-RPC response: missing result and error',
       );
     });
   });
@@ -119,9 +119,7 @@ describe('FiberRpcClient - New Methods', () => {
 
       const params: BuildRouterParams = {
         amount: '0x5f5e100' as HexString,
-        hops_info: [
-          { pubkey: '0xaabb' as HexString, channel_outpoint: outPoint },
-        ],
+        hops_info: [{ pubkey: '0xaabb' as HexString, channel_outpoint: outPoint }],
       };
 
       const result = await client.buildRouter(params);
@@ -333,8 +331,21 @@ describe('FiberRpcClient - Polling Helpers', () => {
 
     it('should resolve when payment reaches Failed', async () => {
       const fetchMock = mockFetchSequence([
-        { payment_hash: '0xaabb', status: 'Created', created_at: '0x0', last_updated_at: '0x0', fee: '0x0' },
-        { payment_hash: '0xaabb', status: 'Failed', created_at: '0x0', last_updated_at: '0x0', fee: '0x0', failed_error: 'No route' },
+        {
+          payment_hash: '0xaabb',
+          status: 'Created',
+          created_at: '0x0',
+          last_updated_at: '0x0',
+          fee: '0x0',
+        },
+        {
+          payment_hash: '0xaabb',
+          status: 'Failed',
+          created_at: '0x0',
+          last_updated_at: '0x0',
+          fee: '0x0',
+          failed_error: 'No route',
+        },
       ]);
       globalThis.fetch = fetchMock;
 
@@ -358,7 +369,7 @@ describe('FiberRpcClient - Polling Helpers', () => {
       globalThis.fetch = fetchMock;
 
       await expect(
-        client.waitForPayment('0xaabb' as HexString, { timeout: 50, interval: 10 })
+        client.waitForPayment('0xaabb' as HexString, { timeout: 50, interval: 10 }),
       ).rejects.toThrow('did not complete within');
     });
   });
@@ -483,7 +494,7 @@ describe('FiberRpcClient - Polling Helpers', () => {
       globalThis.fetch = fetchMock;
 
       await expect(
-        client.waitForChannelReady('0xch1' as HexString, { timeout: 1000, interval: 10 })
+        client.waitForChannelReady('0xch1' as HexString, { timeout: 1000, interval: 10 }),
       ).rejects.toThrow('was closed before becoming ready');
     });
   });
@@ -494,58 +505,61 @@ describe('FiberRpcClient - Polling Helpers', () => {
         // First: Open
         {
           invoice_address: 'fibt1',
-          invoice: { currency: 'Fibt', data: { timestamp: '0x0', payment_hash: '0xh1', attrs: [] } },
+          invoice: {
+            currency: 'Fibt',
+            data: { timestamp: '0x0', payment_hash: '0xh1', attrs: [] },
+          },
           status: 'Open',
         },
         // Second: Received
         {
           invoice_address: 'fibt1',
-          invoice: { currency: 'Fibt', data: { timestamp: '0x0', payment_hash: '0xh1', attrs: [] } },
+          invoice: {
+            currency: 'Fibt',
+            data: { timestamp: '0x0', payment_hash: '0xh1', attrs: [] },
+          },
           status: 'Received',
         },
       ]);
       globalThis.fetch = fetchMock;
 
-      const result = await client.waitForInvoiceStatus(
-        '0xh1' as HexString,
-        'Received',
-        { timeout: 10000, interval: 10 }
-      );
+      const result = await client.waitForInvoiceStatus('0xh1' as HexString, 'Received', {
+        timeout: 10000,
+        interval: 10,
+      });
 
       expect(result.status).toBe('Received');
     });
 
     it('should accept array of target statuses', async () => {
-      const fetchMock = mockFetch(
-        {
-          invoice_address: 'fibt1',
-          invoice: { currency: 'Fibt', data: { timestamp: '0x0', payment_hash: '0xh1', attrs: [] } },
-          status: 'Paid',
-        }
-      );
+      const fetchMock = mockFetch({
+        invoice_address: 'fibt1',
+        invoice: { currency: 'Fibt', data: { timestamp: '0x0', payment_hash: '0xh1', attrs: [] } },
+        status: 'Paid',
+      });
       globalThis.fetch = fetchMock;
 
-      const result = await client.waitForInvoiceStatus(
-        '0xh1' as HexString,
-        ['Received', 'Paid'],
-        { timeout: 10000, interval: 10 }
-      );
+      const result = await client.waitForInvoiceStatus('0xh1' as HexString, ['Received', 'Paid'], {
+        timeout: 10000,
+        interval: 10,
+      });
 
       expect(result.status).toBe('Paid');
     });
 
     it('should throw if invoice is Cancelled', async () => {
-      const fetchMock = mockFetch(
-        {
-          invoice_address: 'fibt1',
-          invoice: { currency: 'Fibt', data: { timestamp: '0x0', payment_hash: '0xh1', attrs: [] } },
-          status: 'Cancelled',
-        }
-      );
+      const fetchMock = mockFetch({
+        invoice_address: 'fibt1',
+        invoice: { currency: 'Fibt', data: { timestamp: '0x0', payment_hash: '0xh1', attrs: [] } },
+        status: 'Cancelled',
+      });
       globalThis.fetch = fetchMock;
 
       await expect(
-        client.waitForInvoiceStatus('0xh1' as HexString, 'Received', { timeout: 1000, interval: 10 })
+        client.waitForInvoiceStatus('0xh1' as HexString, 'Received', {
+          timeout: 1000,
+          interval: 10,
+        }),
       ).rejects.toThrow('was cancelled');
     });
   });

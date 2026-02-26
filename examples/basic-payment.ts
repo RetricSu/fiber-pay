@@ -10,13 +10,7 @@
  * Run: npx tsx examples/basic-payment.ts
  */
 
-import {
-  FiberRpcClient,
-  ckbToShannons,
-  shannonsToCkb,
-  randomBytes32,
-  toHex,
-} from '@fiber-pay/sdk';
+import { ckbToShannons, FiberRpcClient, randomBytes32, shannonsToCkb, toHex } from '@fiber-pay/sdk';
 
 const RPC_URL = process.env.FIBER_RPC_URL || 'http://127.0.0.1:8227';
 
@@ -38,9 +32,7 @@ async function main() {
 
   // 3. Check channel balances
   const channels = await client.listChannels({});
-  const readyChannels = channels.channels.filter(
-    (ch) => ch.state.state_name === 'ChannelReady'
-  );
+  const readyChannels = channels.channels.filter((ch) => ch.state.state_name === 'ChannelReady');
 
   if (readyChannels.length === 0) {
     console.error('No ready channels. Open a channel first.');

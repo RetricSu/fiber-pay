@@ -53,10 +53,14 @@ function randomHex32() {
 }
 
 function runFiberPay(profile, args) {
-  const output = spawnSync(FIBER_PAY_BIN, [...FIBER_PAY_PREFIX_ARGS, '--profile', profile, ...args], {
-    encoding: 'utf-8',
-    maxBuffer: 20 * 1024 * 1024,
-  });
+  const output = spawnSync(
+    FIBER_PAY_BIN,
+    [...FIBER_PAY_PREFIX_ARGS, '--profile', profile, ...args],
+    {
+      encoding: 'utf-8',
+      maxBuffer: 20 * 1024 * 1024,
+    },
+  );
 
   if (output.status !== 0) {
     const stderr = (output.stderr ?? '').trim();
@@ -193,14 +197,19 @@ async function cleanupPeerChannels(profile, peerId, timeoutSec) {
   let abandonTriggered = false;
   while (Date.now() < deadline) {
     const channels = listPeerChannels(profile, peerId);
-    const stillActive = channels.filter((channel) => isChannelActiveState(extractChannelState(channel)));
+    const stillActive = channels.filter((channel) =>
+      isChannelActiveState(extractChannelState(channel)),
+    );
     if (stillActive.length === 0) {
       return { removed: active.length, waited: true, initial: before.length };
     }
 
     if (Date.now() - lastProgressLogAt >= 10_000) {
       const states = stillActive
-        .map((channel) => `${channel?.channel_id ?? 'unknown'}:${extractChannelState(channel) ?? 'unknown'}`)
+        .map(
+          (channel) =>
+            `${channel?.channel_id ?? 'unknown'}:${extractChannelState(channel) ?? 'unknown'}`,
+        )
         .join(', ');
       log('Waiting channel cleanup', `${profile} has ${stillActive.length} active: ${states}`);
       lastProgressLogAt = Date.now();
@@ -227,7 +236,10 @@ async function cleanupPeerChannels(profile, peerId, timeoutSec) {
     channelId: channel?.channel_id,
     state: extractChannelState(channel),
   }));
-  log('Channel cleanup timeout, continue with best-effort state', `${profile} -> ${JSON.stringify(snapshot)}`);
+  log(
+    'Channel cleanup timeout, continue with best-effort state',
+    `${profile} -> ${JSON.stringify(snapshot)}`,
+  );
   return {
     removed: active.length,
     waited: true,
@@ -344,8 +356,20 @@ async function main() {
   }
 
   log('Connecting peers');
-  runFiberPayJson(PROFILE_A, ['peer', 'connect', multiaddrB, '--timeout', String(PEER_CONNECT_TIMEOUT_SEC)]);
-  runFiberPayJson(PROFILE_B, ['peer', 'connect', multiaddrA, '--timeout', String(PEER_CONNECT_TIMEOUT_SEC)]);
+  runFiberPayJson(PROFILE_A, [
+    'peer',
+    'connect',
+    multiaddrB,
+    '--timeout',
+    String(PEER_CONNECT_TIMEOUT_SEC),
+  ]);
+  runFiberPayJson(PROFILE_B, [
+    'peer',
+    'connect',
+    multiaddrA,
+    '--timeout',
+    String(PEER_CONNECT_TIMEOUT_SEC),
+  ]);
 
   log('Cleaning stale channels for deterministic run');
   const cleanupA = await cleanupPeerChannels(PROFILE_A, peerB, CHANNEL_CLEANUP_TIMEOUT_SEC);
@@ -358,7 +382,12 @@ async function main() {
   log('Submitting channel open job via runtime proxy');
   const openJob = await createChannelOpenJob(proxyAUrl, peerB);
   const openFinal = await waitForJobTerminal(proxyAUrl, openJob.id, JOB_TIMEOUT_SEC);
-  summary.jobs.open = { id: openJob.id, state: openFinal.state, result: openFinal.result, error: openFinal.error };
+  summary.jobs.open = {
+    id: openJob.id,
+    state: openFinal.state,
+    result: openFinal.result,
+    error: openFinal.error,
+  };
   if (openFinal.state !== 'succeeded') {
     throw new Error(`Channel open job did not succeed: ${JSON.stringify(openFinal)}`);
   }
@@ -414,13 +443,16 @@ async function main() {
 
   log('Collecting payment job events');
   const paymentEventsPayload = await httpJson(`${proxyAUrl}/jobs/${paymentJob.id}/events`);
-  const paymentEvents = Array.isArray(paymentEventsPayload?.events) ? paymentEventsPayload.events : [];
+  const paymentEvents = Array.isArray(paymentEventsPayload?.events)
+    ? paymentEventsPayload.events
+    : [];
   summary.jobs.paymentEvents = paymentEvents;
 
   const eventTypes = paymentEvents.map((event) => event.eventType);
   const hasExecuting = eventTypes.includes('executing');
   const hasTerminal = eventTypes.includes('succeeded');
-  const hasInflightOrRetry = eventTypes.includes('inflight') || eventTypes.includes('retry_scheduled');
+  const hasInflightOrRetry =
+    eventTypes.includes('inflight') || eventTypes.includes('retry_scheduled');
 
   summary.assertions.allTerminalSucceeded =
     openFinal.state === 'succeeded' &&
@@ -450,7 +482,12 @@ function discoverProxyUrl(profile) {
     const runtime = runFiberPayJson(profile, ['runtime', 'status']);
     const metaProxy = runtime?.meta?.proxyListen;
     const statusProxy = runtime?.proxyStatus?.proxyListen;
-    const listen = typeof metaProxy === 'string' ? metaProxy : typeof statusProxy === 'string' ? statusProxy : undefined;
+    const listen =
+      typeof metaProxy === 'string'
+        ? metaProxy
+        : typeof statusProxy === 'string'
+          ? statusProxy
+          : undefined;
     if (!listen) return undefined;
     return listen.startsWith('http://') || listen.startsWith('https://')
       ? listen

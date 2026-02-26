@@ -12,7 +12,9 @@ type RetryableJobShape = {
   completedAt?: number;
 };
 
-export function transitionJobState<T extends { state: JobState; updatedAt: number; completedAt?: number }>(
+export function transitionJobState<
+  T extends { state: JobState; updatedAt: number; completedAt?: number },
+>(
   job: T,
   machine: JobStateMachine,
   event: MachineEvent,

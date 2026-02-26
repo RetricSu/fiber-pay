@@ -7,7 +7,9 @@ export interface RuntimeBootstrap {
   waitForShutdownSignal: () => Promise<NodeJS.Signals>;
 }
 
-export async function startRuntimeService(configInput: RuntimeConfigInput = {}): Promise<RuntimeBootstrap> {
+export async function startRuntimeService(
+  configInput: RuntimeConfigInput = {},
+): Promise<RuntimeBootstrap> {
   const service = new FiberMonitorService(configInput);
   await service.start();
 

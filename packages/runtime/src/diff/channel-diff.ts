@@ -55,7 +55,9 @@ export function diffChannels(previous: Channel[], current: Channel[]): ChannelDi
     }
 
     const previousPending = new Set(previousChannel.pending_tlcs.map((tlc: Htlc) => tlc.id));
-    const newTlcCount = channel.pending_tlcs.filter((tlc: Htlc) => !previousPending.has(tlc.id)).length;
+    const newTlcCount = channel.pending_tlcs.filter(
+      (tlc: Htlc) => !previousPending.has(tlc.id),
+    ).length;
     if (newTlcCount > 0) {
       events.push({
         type: 'channel_pending_tlc_added',

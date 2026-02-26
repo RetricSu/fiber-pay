@@ -15,13 +15,7 @@
  * Run: PEER_ADDR="/ip4/x.x.x.x/tcp/8228/p2p/QmXXX" npx tsx examples/channel-lifecycle.ts
  */
 
-import {
-  FiberRpcClient,
-  ckbToShannons,
-  shannonsToCkb,
-  toHex,
-} from '@fiber-pay/sdk';
-import type { HexString } from '@fiber-pay/sdk';
+import { ckbToShannons, FiberRpcClient, shannonsToCkb } from '@fiber-pay/sdk';
 
 const RPC_URL = process.env.FIBER_RPC_URL || 'http://127.0.0.1:8227';
 
@@ -80,7 +74,7 @@ async function main() {
 
   const readyChannel = await client.waitForChannelReady(channelId, {
     timeout: 300000, // 5 minutes
-    interval: 5000,  // Check every 5 seconds
+    interval: 5000, // Check every 5 seconds
   });
 
   console.log(`✓ Channel is ready!`);
@@ -92,7 +86,9 @@ async function main() {
   const allChannels = await client.listChannels({});
   console.log(`Total channels: ${allChannels.channels.length}`);
   for (const ch of allChannels.channels) {
-    console.log(`  ${ch.channel_id.slice(0, 16)}... [${ch.state.state_name}] ${shannonsToCkb(ch.local_balance)} CKB`);
+    console.log(
+      `  ${ch.channel_id.slice(0, 16)}... [${ch.state.state_name}] ${shannonsToCkb(ch.local_balance)} CKB`,
+    );
   }
   console.log();
 

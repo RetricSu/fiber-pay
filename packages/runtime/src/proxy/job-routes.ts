@@ -71,7 +71,9 @@ export async function handleJobPostEndpoint(
       writeJson(res, 400, { error: 'Missing params for channel job' });
       return;
     }
-    const options = body.options as { idempotencyKey?: string; maxRetries?: number; reuseTerminal?: boolean } | undefined;
+    const options = body.options as
+      | { idempotencyKey?: string; maxRetries?: number; reuseTerminal?: boolean }
+      | undefined;
     const job = await deps.createChannelJob(params, options);
     writeJson(res, 200, job);
     return;

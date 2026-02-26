@@ -90,18 +90,30 @@ async function createService(): Promise<FiberMonitorService> {
 describe('FiberMonitorService job observability bridge', () => {
   it('maps payment/invoice/channel job lifecycle events to alerts', async () => {
     const service = await createService();
-    const manager = (service as unknown as {
-      jobManager: { emit: (event: string, ...args: unknown[]) => void } | null;
-    }).jobManager;
+    const manager = (
+      service as unknown as {
+        jobManager: { emit: (event: string, ...args: unknown[]) => void } | null;
+      }
+    ).jobManager;
 
     expect(manager).toBeTruthy();
 
     const jobTypes: JobType[] = ['payment', 'invoice', 'channel'];
     for (const type of jobTypes) {
       manager?.emit('job:created', makeJob(type));
-      manager?.emit('job:state_changed', makeJob(type, { state: 'waiting_retry', retryCount: 1 }), 'executing');
+      manager?.emit(
+        'job:state_changed',
+        makeJob(type, { state: 'waiting_retry', retryCount: 1 }),
+        'executing',
+      );
       manager?.emit('job:succeeded', makeJob(type, { state: 'succeeded' }));
-      manager?.emit('job:failed', makeJob(type, { state: 'failed', error: { category: 'unknown', retryable: false, message: 'boom' } }));
+      manager?.emit(
+        'job:failed',
+        makeJob(type, {
+          state: 'failed',
+          error: { category: 'unknown', retryable: false, message: 'boom' },
+        }),
+      );
     }
 
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -131,9 +143,11 @@ describe('FiberMonitorService job observability bridge', () => {
 
   it('auto-tracks payment/invoice hashes from job events', async () => {
     const service = await createService();
-    const manager = (service as unknown as {
-      jobManager: { emit: (event: string, ...args: unknown[]) => void } | null;
-    }).jobManager;
+    const manager = (
+      service as unknown as {
+        jobManager: { emit: (event: string, ...args: unknown[]) => void } | null;
+      }
+    ).jobManager;
 
     expect(manager).toBeTruthy();
 

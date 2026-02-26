@@ -18,7 +18,7 @@
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { HexString, PaymentStatus } from '../types/index.js';
+import type { HexString, PaymentStatus } from '@fiber-pay/sdk';
 
 // =============================================================================
 // Types

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RpcMonitorProxy, type RpcMonitorProxyDeps } from '../src/proxy/rpc-proxy.js';
 import type { RuntimeJob } from '../src/jobs/types.js';
+import { RpcMonitorProxy, type RpcMonitorProxyDeps } from '../src/proxy/rpc-proxy.js';
 
 function makeJob(overrides: Partial<RuntimeJob> = {}): RuntimeJob {
   return {

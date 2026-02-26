@@ -1,4 +1,4 @@
-import { FiberRpcClient } from '@fiber-pay/sdk';
+import type { FiberRpcClient } from '@fiber-pay/sdk';
 import type { AlertManager } from '../alerts/alert-manager.js';
 import { BaseMonitor, type BaseMonitorHooks } from './base-monitor.js';
 
@@ -54,7 +54,9 @@ export class HealthMonitor extends BaseMonitor {
         priority: 'critical',
         source: this.name,
         data: {
-          message: failureReason ? `Fiber node ping failed: ${failureReason}` : 'Fiber node ping returned false',
+          message: failureReason
+            ? `Fiber node ping failed: ${failureReason}`
+            : 'Fiber node ping returned false',
         },
       });
     }

@@ -1,11 +1,11 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { JobManager } from '../src/jobs/job-manager.js';
-import { SqliteJobStore } from '../src/storage/sqlite-store.js';
-import type { PaymentJobParams, ChannelJobParams } from '../src/jobs/types.js';
 import type { FiberRpcClient } from '@fiber-pay/sdk';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { JobManager } from '../src/jobs/job-manager.js';
+import type { ChannelJobParams, PaymentJobParams } from '../src/jobs/types.js';
+import { SqliteJobStore } from '../src/storage/sqlite-store.js';
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
@@ -135,7 +135,13 @@ beforeEach(() => {
   store = new SqliteJobStore(dbPath);
   manager = new JobManager(successRpc, store, {
     schedulerIntervalMs: 50,
-    retryPolicy: { maxRetries: 2, baseDelayMs: 0, maxDelayMs: 0, backoffMultiplier: 1, jitterMs: 0 },
+    retryPolicy: {
+      maxRetries: 2,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      backoffMultiplier: 1,
+      jitterMs: 0,
+    },
   });
   manager.start();
 });
@@ -146,11 +152,7 @@ afterEach(async () => {
   rmSync(dbPath, { force: true });
 });
 
-function waitFor<T extends object>(
-  emitter: T,
-  event: string,
-  timeout = 3000,
-): Promise<unknown> {
+function waitFor<T extends object>(emitter: T, event: string, timeout = 3000): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Timeout waiting for ${event}`)), timeout);
     // @ts-expect-error EventEmitter typed via generics
@@ -172,7 +174,7 @@ describe('JobManager', () => {
       expect(job.id).toBeTruthy();
       expect(job.type).toBe('payment');
 
-      const succeeded = await succeededPromise as { state: string };
+      const succeeded = (await succeededPromise) as { state: string };
       expect(succeeded.state).toBe('succeeded');
     });
 
@@ -182,7 +184,10 @@ describe('JobManager', () => {
       await new Promise<void>((resolve) => {
         const check = () => {
           const j = manager.getJob(job1.id);
-          if (j?.state === 'succeeded') { resolve(); return; }
+          if (j?.state === 'succeeded') {
+            resolve();
+            return;
+          }
           setTimeout(check, 20);
         };
         check();
@@ -306,8 +311,8 @@ describe('JobManager', () => {
     it('cancels a queued job before it executes', async () => {
       // Use a slow RPC to prevent immediate execution
       const slowRpc = {
-        sendPayment: () => new Promise(r => setTimeout(r, 10_000)),
-        getPayment: () => new Promise(r => setTimeout(r, 10_000)),
+        sendPayment: () => new Promise((r) => setTimeout(r, 10_000)),
+        getPayment: () => new Promise((r) => setTimeout(r, 10_000)),
       } as unknown as FiberRpcClient;
 
       const slowStore = new SqliteJobStore(dbPath.replace('.db', '-slow.db'));
@@ -342,7 +347,10 @@ describe('JobManager', () => {
       await new Promise<void>((resolve) => {
         const check = () => {
           const j = manager.getJob(job1.id);
-          if (j?.state === 'succeeded') { resolve(); return; }
+          if (j?.state === 'succeeded') {
+            resolve();
+            return;
+          }
           setTimeout(check, 20);
         };
         check();
@@ -366,7 +374,10 @@ describe('JobManager', () => {
       await new Promise<void>((resolve) => {
         const check = () => {
           const j = manager.getJob(job1.id);
-          if (j?.state === 'succeeded') { resolve(); return; }
+          if (j?.state === 'succeeded') {
+            resolve();
+            return;
+          }
           setTimeout(check, 20);
         };
         check();
@@ -387,7 +398,10 @@ describe('JobManager', () => {
       await new Promise<void>((resolve) => {
         const check = () => {
           const j = manager.getJob(job2.id);
-          if (j?.state === 'succeeded') { resolve(); return; }
+          if (j?.state === 'succeeded') {
+            resolve();
+            return;
+          }
           setTimeout(check, 20);
         };
         check();

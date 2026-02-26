@@ -4,9 +4,9 @@ import type { Channel, PaymentHash, PeerInfo } from '@fiber-pay/sdk';
 import {
   type Alert,
   type AlertFilter,
+  alertPriorityOrder,
   type TrackedInvoiceState,
   type TrackedPaymentState,
-  alertPriorityOrder,
 } from '../alerts/types.js';
 import type { PersistedRuntimeState, Store } from './types.js';
 
@@ -20,7 +20,9 @@ function nowMs(): number {
   return Date.now();
 }
 
-function toRecord<T extends { paymentHash: PaymentHash }>(items: Map<PaymentHash, T>): Record<PaymentHash, T> {
+function toRecord<T extends { paymentHash: PaymentHash }>(
+  items: Map<PaymentHash, T>,
+): Record<PaymentHash, T> {
   return Object.fromEntries(items.entries()) as Record<PaymentHash, T>;
 }
 

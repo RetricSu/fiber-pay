@@ -27,10 +27,17 @@
  */
 
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync, copyFileSync, createWriteStream, rmSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {
+  copyFileSync,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { platform } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -110,7 +117,10 @@ async function retry(fn, { retries = 3, delaySec = 3, label = 'operation' } = {}
 // Config
 // ---------------------------------------------------------------------------
 
-const ARTIFACT_DIR = env('ARTIFACT_DIR', join(ROOT_DIR, '.artifacts', `e2e-testnet-dual-node-${timestamp()}`));
+const ARTIFACT_DIR = env(
+  'ARTIFACT_DIR',
+  join(ROOT_DIR, '.artifacts', `e2e-testnet-dual-node-${timestamp()}`),
+);
 const WORK_ROOT = env('WORK_ROOT', join(ROOT_DIR, '.tmp', 'e2e-testnet-dual-node'));
 
 const NODE_A_DIR = env('NODE_A_DIR', join(WORK_ROOT, 'node-a'));
@@ -143,7 +153,7 @@ const FUNDING_WAIT_TIMEOUT_SEC = envInt('FUNDING_WAIT_TIMEOUT_SEC', 600);
 const CHANNEL_APPEAR_TIMEOUT_SEC = envInt('CHANNEL_APPEAR_TIMEOUT_SEC', 45);
 const CHANNEL_READY_TIMEOUT_SEC = envInt('CHANNEL_READY_TIMEOUT_SEC', 600);
 const PAYMENT_TIMEOUT_SEC = envInt('PAYMENT_TIMEOUT_SEC', 180);
-const CLOSE_TIMEOUT_SEC = envInt('CLOSE_TIMEOUT_SEC', 300);
+const _CLOSE_TIMEOUT_SEC = envInt('CLOSE_TIMEOUT_SEC', 300);
 const POLL_INTERVAL_SEC = envInt('POLL_INTERVAL_SEC', 5);
 
 const SKIP_BUILD = env('SKIP_BUILD', '0') === '1';
@@ -197,7 +207,9 @@ function run(cmd, args, opts = {}) {
       `Command failed (exit ${err.status ?? '?'}): ${cmdStr}`,
       childStderr && `  stderr: ${childStderr}`,
       childStdout && `  stdout: ${childStdout}`,
-    ].filter(Boolean).join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
     const wrapped = new Error(details);
     wrapped.exitCode = err.status;
     wrapped.childStdout = childStdout;
@@ -303,7 +315,10 @@ function jsonParse(str) {
 
 function jsonGet(obj, path) {
   if (!obj) return undefined;
-  const tokens = path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+  const tokens = path
+    .replace(/\[(\d+)\]/g, '.$1')
+    .split('.')
+    .filter(Boolean);
   let cur = obj;
   for (const t of tokens) {
     if (cur == null) return undefined;
@@ -349,7 +364,7 @@ async function fetchNodeInfoRaw(rpcUrl) {
   return payload.result;
 }
 
-function firstMultiaddr(infoObj) {
+function _firstMultiaddr(infoObj) {
   const addresses = jsonGet(infoObj, 'data.addresses');
   if (!Array.isArray(addresses) || addresses.length === 0) return undefined;
   const first = addresses[0];
@@ -367,7 +382,7 @@ import { createHash } from 'node:crypto';
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
 function base58btcEncode(buf) {
-  let num = BigInt('0x' + Buffer.from(buf).toString('hex'));
+  let num = BigInt(`0x${Buffer.from(buf).toString('hex')}`);
   let str = '';
   while (num > 0n) {
     str = BASE58_ALPHABET[Number(num % 58n)] + str;
@@ -375,7 +390,7 @@ function base58btcEncode(buf) {
   }
   // Preserve leading zeros
   for (let i = 0; i < buf.length && buf[i] === 0; i++) {
-    str = '1' + str;
+    str = `1${str}`;
   }
   return str;
 }
@@ -446,14 +461,7 @@ async function waitForChannelReady(peerSelectors, timeoutSec) {
   let lastRaw = '';
   let lastParsed;
   while (true) {
-    const { stdout } = fiberPaySafe(
-      'A',
-      'channel',
-      'list',
-      '--state',
-      'CHANNEL_READY',
-      '--json',
-    );
+    const { stdout } = fiberPaySafe('A', 'channel', 'list', '--state', 'CHANNEL_READY', '--json');
     lastRaw = stdout;
     const parsed = jsonParse(stdout);
     lastParsed = parsed;
@@ -484,13 +492,7 @@ async function waitForChannelAppear(peerSelectors, timeoutSec) {
   let lastRaw = '';
   let lastParsed;
   while (true) {
-    const { stdout } = fiberPaySafe(
-      'A',
-      'channel',
-      'list',
-      '--include-closed',
-      '--json',
-    );
+    const { stdout } = fiberPaySafe('A', 'channel', 'list', '--include-closed', '--json');
     lastRaw = stdout;
     const parsed = jsonParse(stdout);
     lastParsed = parsed;
@@ -570,7 +572,9 @@ async function waitForPaymentTerminal(paymentHash, timeoutSec) {
 async function depositWithRetry(nodeName, fundingAddr, amountCkb, logPath, sourcePrivkey) {
   ensureDir(dirname(logPath));
   let logContent = '';
-  const appendLog = (s) => { logContent += s + '\n'; };
+  const appendLog = (s) => {
+    logContent += `${s}\n`;
+  };
 
   for (let attempt = 1; attempt <= DEPOSIT_MAX_ATTEMPTS; attempt++) {
     log(`Transferring funds to Node ${nodeName} (attempt ${attempt}/${DEPOSIT_MAX_ATTEMPTS})`);
@@ -588,9 +592,15 @@ async function depositWithRetry(nodeName, fundingAddr, amountCkb, logPath, sourc
     }
 
     const { stdout, stderr, exitCode } = runSafe('offckb', [
-      'transfer', '--network', NETWORK, '--privkey', sourcePrivkey, fundingAddr, String(amountCkb),
+      'transfer',
+      '--network',
+      NETWORK,
+      '--privkey',
+      sourcePrivkey,
+      fundingAddr,
+      String(amountCkb),
     ]);
-    appendLog(stdout + '\n' + stderr);
+    appendLog(`${stdout}\n${stderr}`);
 
     if (exitCode === 0) {
       log(`Transfer submitted for Node ${nodeName}`);
@@ -599,7 +609,9 @@ async function depositWithRetry(nodeName, fundingAddr, amountCkb, logPath, sourc
     }
 
     if (attempt < DEPOSIT_MAX_ATTEMPTS) {
-      log(`Funding attempt ${attempt} failed (node=${nodeName}); retrying in ${DEPOSIT_RETRY_DELAY_SEC}s`);
+      log(
+        `Funding attempt ${attempt} failed (node=${nodeName}); retrying in ${DEPOSIT_RETRY_DELAY_SEC}s`,
+      );
       await sleep(DEPOSIT_RETRY_DELAY_SEC * 1000);
     }
   }
@@ -612,7 +624,7 @@ async function depositWithRetry(nodeName, fundingAddr, amountCkb, logPath, sourc
 
 function getBalanceCkb(address) {
   const { stdout, stderr } = runSafe('offckb', ['balance', '--network', NETWORK, address]);
-  const combined = stdout + '\n' + stderr;
+  const combined = `${stdout}\n${stderr}`;
   const match = combined.match(/Balance:\s*([0-9][0-9.]*)\s*CKB/);
   return match ? parseFloat(match[1]) : undefined;
 }
@@ -626,7 +638,9 @@ async function waitForBalanceAtLeast(nodeName, address, expectedCkb, timeoutSec)
       return;
     }
     if (nowSec() - start >= timeoutSec) {
-      fail(`Node ${nodeName} funding balance did not reach ${expectedCkb} CKB within ${timeoutSec}s`);
+      fail(
+        `Node ${nodeName} funding balance did not reach ${expectedCkb} CKB within ${timeoutSec}s`,
+      );
     }
     await sleep(POLL_INTERVAL_SEC * 1000);
   }
@@ -654,17 +668,25 @@ function stopNodes() {
   fiberPaySafe('B', 'node', 'stop');
 
   if (nodeAChild && !nodeAChild.killed) {
-    try { nodeAChild.kill(); } catch {}
+    try {
+      nodeAChild.kill();
+    } catch {}
   }
   if (nodeBChild && !nodeBChild.killed) {
-    try { nodeBChild.kill(); } catch {}
+    try {
+      nodeBChild.kill();
+    } catch {}
   }
 }
 
 function cleanup(exitCode) {
   log(`Collecting artifacts into ${ARTIFACT_DIR}`);
-  try { collectArtifacts(); } catch {}
-  try { stopNodes(); } catch {}
+  try {
+    collectArtifacts();
+  } catch {}
+  try {
+    stopNodes();
+  } catch {}
   if (exitCode !== 0) {
     log(`FAILED (exit code ${exitCode}). See artifacts: ${ARTIFACT_DIR}`);
   } else {
@@ -674,9 +696,15 @@ function cleanup(exitCode) {
 
 function clearTestWorkspace() {
   log(`Clearing previous workspace at ${WORK_ROOT}`);
-  try { fiberPaySafe('A', 'node', 'stop'); } catch {}
-  try { fiberPaySafe('B', 'node', 'stop'); } catch {}
-  try { rmSync(WORK_ROOT, { recursive: true, force: true }); } catch {}
+  try {
+    fiberPaySafe('A', 'node', 'stop');
+  } catch {}
+  try {
+    fiberPaySafe('B', 'node', 'stop');
+  } catch {}
+  try {
+    rmSync(WORK_ROOT, { recursive: true, force: true });
+  } catch {}
 }
 
 // ---------------------------------------------------------------------------
@@ -685,7 +713,11 @@ function clearTestWorkspace() {
 
 function writeArtifact(name, content) {
   const filePath = join(ARTIFACT_DIR, name);
-  writeFileSync(filePath, typeof content === 'string' ? content : JSON.stringify(content, null, 2), 'utf-8');
+  writeFileSync(
+    filePath,
+    typeof content === 'string' ? content : JSON.stringify(content, null, 2),
+    'utf-8',
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -727,25 +759,9 @@ async function main() {
 
   // ---- Config init ----
   log('Initializing configs');
-  const configInitA = fiberPay(
-    'A',
-    'config',
-    'init',
-    '--network',
-    NETWORK,
-    '--force',
-    '--json',
-  );
+  const configInitA = fiberPay('A', 'config', 'init', '--network', NETWORK, '--force', '--json');
   writeArtifact('node-a.config-init.json', configInitA);
-  const configInitB = fiberPay(
-    'B',
-    'config',
-    'init',
-    '--network',
-    NETWORK,
-    '--force',
-    '--json',
-  );
+  const configInitB = fiberPay('B', 'config', 'init', '--network', NETWORK, '--force', '--json');
   writeArtifact('node-b.config-init.json', configInitB);
 
   // ---- Binary download ----
@@ -824,7 +840,9 @@ async function main() {
 
   // ---- Deposit ----
   if (!SKIP_DEPOSIT) {
-    log(`Funding via fixed source account transfer (retries=${DEPOSIT_MAX_ATTEMPTS}, delay=${DEPOSIT_RETRY_DELAY_SEC}s)`);
+    log(
+      `Funding via fixed source account transfer (retries=${DEPOSIT_MAX_ATTEMPTS}, delay=${DEPOSIT_RETRY_DELAY_SEC}s)`,
+    );
     log(`Source account: ${SOURCE_ADDRESS}`);
 
     const sourceBalance = getBalanceCkb(SOURCE_ADDRESS);
@@ -855,8 +873,18 @@ async function main() {
     );
 
     log(`Polling funding balances (timeout=${FUNDING_WAIT_TIMEOUT_SEC}s)`);
-    await waitForBalanceAtLeast('A', nodeAFundingAddr, DEPOSIT_AMOUNT_CKB, FUNDING_WAIT_TIMEOUT_SEC);
-    await waitForBalanceAtLeast('B', nodeBFundingAddr, DEPOSIT_AMOUNT_CKB, FUNDING_WAIT_TIMEOUT_SEC);
+    await waitForBalanceAtLeast(
+      'A',
+      nodeAFundingAddr,
+      DEPOSIT_AMOUNT_CKB,
+      FUNDING_WAIT_TIMEOUT_SEC,
+    );
+    await waitForBalanceAtLeast(
+      'B',
+      nodeBFundingAddr,
+      DEPOSIT_AMOUNT_CKB,
+      FUNDING_WAIT_TIMEOUT_SEC,
+    );
   } else {
     log('Skipping deposit step (SKIP_DEPOSIT=1)');
   }
@@ -960,5 +988,11 @@ main()
   });
 
 // Handle SIGINT / SIGTERM
-process.on('SIGINT', () => { cleanup(130); process.exit(130); });
-process.on('SIGTERM', () => { cleanup(143); process.exit(143); });
+process.on('SIGINT', () => {
+  cleanup(130);
+  process.exit(130);
+});
+process.on('SIGTERM', () => {
+  cleanup(143);
+  process.exit(143);
+});

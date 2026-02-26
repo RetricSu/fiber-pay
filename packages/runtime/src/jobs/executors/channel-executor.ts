@@ -1,9 +1,9 @@
 import { ChannelState, type FiberRpcClient } from '@fiber-pay/sdk';
+import { sleep } from '../../utils/async.js';
 import { classifyRpcError } from '../error-classifier.js';
+import { applyRetryOrFail, transitionJobState } from '../executor-utils.js';
 import { channelStateMachine } from '../state-machine.js';
 import type { ChannelJob, ClassifiedError, RetryPolicy } from '../types.js';
-import { sleep } from '../../utils/async.js';
-import { applyRetryOrFail, transitionJobState } from '../executor-utils.js';
 
 const DEFAULT_POLL_INTERVAL = 2_000;
 
@@ -22,9 +22,7 @@ export async function* runChannelJob(
   }
 
   if (current.state === 'waiting_retry') {
-    const delay = current.nextRetryAt
-      ? Math.max(0, current.nextRetryAt - Date.now())
-      : 0;
+    const delay = current.nextRetryAt ? Math.max(0, current.nextRetryAt - Date.now()) : 0;
     if (delay > 0) {
       await sleep(delay, signal);
       if (signal.aborted) {
@@ -109,7 +107,8 @@ export async function* runChannelJob(
         });
 
         const candidates = channels.channels.filter((channel) => {
-          if (current.params.channelId && channel.channel_id !== current.params.channelId) return false;
+          if (current.params.channelId && channel.channel_id !== current.params.channelId)
+            return false;
           return channel.peer_id === targetPeerId;
         });
 
@@ -194,7 +193,9 @@ export async function* runChannelJob(
         }
 
         const channels = await rpc.listChannels({ include_closed: true });
-        const match = channels.channels.find((channel) => channel.channel_id === shutdownParams.channel_id);
+        const match = channels.channels.find(
+          (channel) => channel.channel_id === shutdownParams.channel_id,
+        );
 
         if (!match || isTerminalClosed(String(match.state.state_name))) {
           current = transitionJobState(current, channelStateMachine, 'channel_closed', {
@@ -279,7 +280,9 @@ export async function* runChannelJob(
       return;
     }
 
-    throw new Error(`Unsupported channel action: ${(current.params as { action?: string }).action}`);
+    throw new Error(
+      `Unsupported channel action: ${(current.params as { action?: string }).action}`,
+    );
   } catch (error) {
     const classified = classifyChannelError(error);
     current = applyRetryOrFail(current, classified, policy, {
@@ -323,11 +326,7 @@ function classifyChannelError(error: unknown): ClassifiedError {
   return base;
 }
 
-async function findTargetChannel(
-  rpc: FiberRpcClient,
-  peerId: string,
-  channelId?: `0x${string}`,
-) {
+async function findTargetChannel(rpc: FiberRpcClient, peerId: string, channelId?: `0x${string}`) {
   const channels = await rpc.listChannels({
     peer_id: peerId,
     include_closed: true,

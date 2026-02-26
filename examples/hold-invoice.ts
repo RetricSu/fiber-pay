@@ -17,13 +17,8 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto';
-import {
-  FiberRpcClient,
-  ckbToShannons,
-  shannonsToCkb,
-  toHex,
-} from '@fiber-pay/sdk';
 import type { HexString } from '@fiber-pay/sdk';
+import { ckbToShannons, FiberRpcClient, toHex } from '@fiber-pay/sdk';
 
 const RPC_URL = process.env.FIBER_RPC_URL || 'http://127.0.0.1:8227';
 
@@ -88,11 +83,10 @@ async function main() {
 
   // 4. Wait for invoice to be "Received" (funds are held)
   console.log('Waiting for payment to be held (Received status)...');
-  const acceptedInvoice = await client.waitForInvoiceStatus(
-    paymentHash,
-    'Received',
-    { timeout: 60000, interval: 2000 }
-  );
+  const acceptedInvoice = await client.waitForInvoiceStatus(paymentHash, 'Received', {
+    timeout: 60000,
+    interval: 2000,
+  });
 
   console.log(`✓ Payment held! Invoice status: ${acceptedInvoice.status}`);
   console.log('  Funds are locked — payer cannot cancel, receiver can settle or let expire\n');

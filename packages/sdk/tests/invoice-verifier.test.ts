@@ -3,10 +3,9 @@
  * Tests for invoice validation and verification logic
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { FiberRpcClient, ListPeersResult, ParseInvoiceResult } from '@fiber-pay/sdk';
 import { InvoiceVerifier } from '@fiber-pay/sdk';
-import type { FiberRpcClient } from '@fiber-pay/sdk';
-import type { ParseInvoiceResult, ListPeersResult } from '@fiber-pay/sdk';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('InvoiceVerifier', () => {
   let mockRpc: Partial<FiberRpcClient>;
@@ -48,7 +47,7 @@ describe('InvoiceVerifier', () => {
         expect.objectContaining({
           type: 'critical',
           code: 'INVALID_INVOICE_FORMAT',
-        })
+        }),
       );
     });
   });
@@ -62,12 +61,9 @@ describe('InvoiceVerifier', () => {
           currency: 'Fibt',
           amount: '0x5f5e100', // 1 CKB
           data: {
-            timestamp: ('0x' + Math.floor(Date.now() / 1000).toString(16)) as `0x${string}`,
+            timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
-            attrs: [
-              { Description: 'test' },
-              { ExpiryTime: '0xe10' as `0x${string}` },
-            ],
+            attrs: [{ Description: 'test' }, { ExpiryTime: '0xe10' as `0x${string}` }],
           },
         },
       };
@@ -105,7 +101,8 @@ describe('InvoiceVerifier', () => {
           amount: '0x5f5e100',
           data: {
             // 2 hours ago
-            timestamp: ('0x' + Math.floor((Date.now() - 7200000) / 1000).toString(16)) as `0x${string}`,
+            timestamp:
+              `0x${Math.floor((Date.now() - 7200000) / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
             attrs: [
               { ExpiryTime: '0xe10' as `0x${string}` }, // 1 hour
@@ -125,7 +122,7 @@ describe('InvoiceVerifier', () => {
         expect.objectContaining({
           type: 'critical',
           code: 'INVOICE_EXPIRED',
-        })
+        }),
       );
       expect(result.recommendation).toBe('reject');
     });
@@ -138,7 +135,7 @@ describe('InvoiceVerifier', () => {
           currency: 'Fibt',
           amount: '0x0', // Zero amount
           data: {
-            timestamp: ('0x' + Math.floor(Date.now() / 1000).toString(16)) as `0x${string}`,
+            timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
             attrs: [{ ExpiryTime: '0xe10' as `0x${string}` }],
           },
@@ -156,7 +153,7 @@ describe('InvoiceVerifier', () => {
         expect.objectContaining({
           type: 'critical',
           code: 'ZERO_AMOUNT',
-        })
+        }),
       );
     });
 
@@ -171,7 +168,7 @@ describe('InvoiceVerifier', () => {
           currency: 'Fibt',
           amount: `0x${twoMillionCkbInShannons.toString(16)}`,
           data: {
-            timestamp: ('0x' + Math.floor(Date.now() / 1000).toString(16)) as `0x${string}`,
+            timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
             attrs: [{ ExpiryTime: '0xe10' as `0x${string}` }],
           },
@@ -189,7 +186,7 @@ describe('InvoiceVerifier', () => {
         expect.objectContaining({
           type: 'critical',
           code: 'AMOUNT_TOO_LARGE',
-        })
+        }),
       );
     });
 
@@ -201,7 +198,7 @@ describe('InvoiceVerifier', () => {
           currency: 'Fibt',
           amount: '0x5f5e100',
           data: {
-            timestamp: ('0x' + Math.floor(Date.now() / 1000).toString(16)) as `0x${string}`,
+            timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
             attrs: [{ ExpiryTime: '0xe10' as `0x${string}` }],
           },
@@ -218,7 +215,7 @@ describe('InvoiceVerifier', () => {
         expect.objectContaining({
           type: 'warning',
           code: 'NO_PEERS_CONNECTED',
-        })
+        }),
       );
       expect(result.recommendation).toBe('warn');
     });
@@ -231,7 +228,7 @@ describe('InvoiceVerifier', () => {
           currency: 'Fibt',
           amount: '0x5f5e100',
           data: {
-            timestamp: ('0x' + Math.floor(Date.now() / 1000).toString(16)) as `0x${string}`,
+            timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
             attrs: [{ ExpiryTime: '0xe10' as `0x${string}` }],
           },
@@ -240,11 +237,13 @@ describe('InvoiceVerifier', () => {
 
       mockRpc.parseInvoice = vi.fn().mockResolvedValue(mockParseResult);
       mockRpc.listPeers = vi.fn().mockResolvedValue({
-        peers: [{
-          pubkey: '0x02' as `0x${string}`,
-          peer_id: 'QmTest',
-          address: '/ip4/127.0.0.1/tcp/8228',
-        }],
+        peers: [
+          {
+            pubkey: '0x02' as `0x${string}`,
+            peer_id: 'QmTest',
+            address: '/ip4/127.0.0.1/tcp/8228',
+          },
+        ],
       });
 
       const result = await verifier.verifyInvoice(invoice);
@@ -262,7 +261,7 @@ describe('InvoiceVerifier', () => {
           currency: 'Fibt',
           amount: '0x5f5e100',
           data: {
-            timestamp: ('0x' + Math.floor(Date.now() / 1000).toString(16)) as `0x${string}`,
+            timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
             attrs: [
               { Description: 'Test payment' },
@@ -275,11 +274,13 @@ describe('InvoiceVerifier', () => {
 
       mockRpc.parseInvoice = vi.fn().mockResolvedValue(mockParseResult);
       mockRpc.listPeers = vi.fn().mockResolvedValue({
-        peers: [{
-          pubkey: '0x02' as `0x${string}`,
-          peer_id: 'QmTest',
-          address: '/ip4/127.0.0.1/tcp/8228',
-        }],
+        peers: [
+          {
+            pubkey: '0x02' as `0x${string}`,
+            peer_id: 'QmTest',
+            address: '/ip4/127.0.0.1/tcp/8228',
+          },
+        ],
       });
 
       const result = await verifier.verifyInvoice(invoice);
@@ -296,7 +297,7 @@ describe('InvoiceVerifier', () => {
           currency: 'Fibt',
           amount: '0x5f5e100',
           data: {
-            timestamp: ('0x' + Math.floor(Date.now() / 1000).toString(16)) as `0x${string}`,
+            timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
             attrs: [{ ExpiryTime: '0xe10' as `0x${string}` }],
           },
@@ -305,11 +306,13 @@ describe('InvoiceVerifier', () => {
 
       mockRpc.parseInvoice = vi.fn().mockResolvedValue(mockParseResult);
       mockRpc.listPeers = vi.fn().mockResolvedValue({
-        peers: [{
-          pubkey: '0x02' as `0x${string}`,
-          peer_id: 'QmTest',
-          address: '/ip4/127.0.0.1/tcp/8228',
-        }],
+        peers: [
+          {
+            pubkey: '0x02' as `0x${string}`,
+            peer_id: 'QmTest',
+            address: '/ip4/127.0.0.1/tcp/8228',
+          },
+        ],
       });
 
       const result = await verifier.verifyInvoice(invoice);

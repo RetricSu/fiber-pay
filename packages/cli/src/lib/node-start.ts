@@ -2,13 +2,13 @@ import { spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  createKeyManager,
   ensureFiberBinary,
   type FiberNodeConfig,
   getDefaultBinaryPath,
   ProcessManager,
 } from '@fiber-pay/node';
 import { startRuntimeService } from '@fiber-pay/runtime';
-import { createKeyManager } from '@fiber-pay/sdk';
 import { autoConnectBootnodes, extractBootnodeAddrs } from './bootnode.js';
 import { type CliConfig, ensureNodeConfigFile } from './config.js';
 import { printJsonError, printJsonEvent } from './format.js';

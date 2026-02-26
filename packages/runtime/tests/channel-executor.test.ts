@@ -1,7 +1,7 @@
+import type { FiberRpcClient } from '@fiber-pay/sdk';
 import { describe, expect, it, vi } from 'vitest';
 import { runChannelJob } from '../src/jobs/executors/channel-executor.js';
 import { defaultPaymentRetryPolicy } from '../src/jobs/retry-policy.js';
-import type { FiberRpcClient } from '@fiber-pay/sdk';
 import type { ChannelJob } from '../src/jobs/types.js';
 
 function baseJob(overrides: Partial<ChannelJob> = {}): ChannelJob {
@@ -54,7 +54,12 @@ describe('runChannelJob', () => {
     } as unknown as FiberRpcClient;
 
     const states: string[] = [];
-    for await (const updated of runChannelJob(baseJob(), rpc, defaultPaymentRetryPolicy, new AbortController().signal)) {
+    for await (const updated of runChannelJob(
+      baseJob(),
+      rpc,
+      defaultPaymentRetryPolicy,
+      new AbortController().signal,
+    )) {
       states.push(updated.state);
     }
 
@@ -305,7 +310,9 @@ describe('runChannelJob', () => {
     }
 
     expect(updates[updates.length - 1].state).toBe('succeeded');
-    expect(updates.find((update) => update.state === 'channel_ready')?.result?.channelId).toBe('0xchan-ready');
+    expect(updates.find((update) => update.state === 'channel_ready')?.result?.channelId).toBe(
+      '0xchan-ready',
+    );
   });
 
   it('accept action transitions through channel_accepting to succeeded', async () => {
@@ -333,7 +340,9 @@ describe('runChannelJob', () => {
 
     expect(updates.some((update) => update.state === 'channel_accepting')).toBe(true);
     expect(updates[updates.length - 1].state).toBe('succeeded');
-    expect(updates.find((update) => update.state === 'channel_accepting')?.result?.channelId).toBe('0xaccepted');
+    expect(updates.find((update) => update.state === 'channel_accepting')?.result?.channelId).toBe(
+      '0xaccepted',
+    );
   });
 
   it('accept action schedules retry when temporary channel id is missing', async () => {

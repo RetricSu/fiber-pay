@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ChannelState, type Channel, type FiberRpcClient } from '@fiber-pay/sdk';
+import { type Channel, ChannelState, type FiberRpcClient } from '@fiber-pay/sdk';
 import { describe, expect, it } from 'vitest';
 import { AlertManager } from '../src/alerts/alert-manager.js';
 import type { Alert, AlertBackend } from '../src/alerts/types.js';

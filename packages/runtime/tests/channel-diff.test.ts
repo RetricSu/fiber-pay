@@ -1,4 +1,4 @@
-import { ChannelState, type Channel } from '@fiber-pay/sdk';
+import { type Channel, ChannelState } from '@fiber-pay/sdk';
 import { describe, expect, it } from 'vitest';
 import { diffChannels } from '../src/diff/channel-diff.js';
 

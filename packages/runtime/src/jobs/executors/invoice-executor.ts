@@ -1,9 +1,9 @@
 import type { FiberRpcClient } from '@fiber-pay/sdk';
+import { sleep } from '../../utils/async.js';
 import { classifyRpcError } from '../error-classifier.js';
+import { applyRetryOrFail, transitionJobState } from '../executor-utils.js';
 import { invoiceStateMachine } from '../state-machine.js';
 import type { InvoiceJob, RetryPolicy } from '../types.js';
-import { sleep } from '../../utils/async.js';
-import { applyRetryOrFail, transitionJobState } from '../executor-utils.js';
 
 const DEFAULT_POLL_INTERVAL = 1_500;
 
@@ -21,9 +21,7 @@ export async function* runInvoiceJob(
   }
 
   if (current.state === 'waiting_retry') {
-    const delay = current.nextRetryAt
-      ? Math.max(0, current.nextRetryAt - Date.now())
-      : 0;
+    const delay = current.nextRetryAt ? Math.max(0, current.nextRetryAt - Date.now()) : 0;
     if (delay > 0) {
       await sleep(delay, signal);
       if (signal.aborted) {
@@ -241,7 +239,9 @@ export async function* runInvoiceJob(
       return;
     }
 
-    throw new Error(`Unsupported invoice action: ${(current.params as { action?: string }).action}`);
+    throw new Error(
+      `Unsupported invoice action: ${(current.params as { action?: string }).action}`,
+    );
   } catch (error) {
     const classified = classifyRpcError(error);
     current = applyRetryOrFail(current, classified, policy, {
@@ -252,4 +252,3 @@ export async function* runInvoiceJob(
     yield current;
   }
 }
-

@@ -1,4 +1,4 @@
-import { FiberRpcClient } from '@fiber-pay/sdk';
+import type { FiberRpcClient } from '@fiber-pay/sdk';
 import type { AlertManager } from '../alerts/alert-manager.js';
 import { diffPeers } from '../diff/peer-diff.js';
 import type { Store } from '../storage/types.js';

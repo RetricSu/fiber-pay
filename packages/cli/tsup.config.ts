@@ -1,5 +1,5 @@
-import { defineConfig } from 'tsup';
 import { execSync } from 'node:child_process';
+import { defineConfig } from 'tsup';
 import packageJson from './package.json';
 
 function resolveHeadCommit(): string {

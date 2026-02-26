@@ -16,7 +16,9 @@ describe('diffPeers', () => {
 
     const changes = diffPeers(previous, current);
 
-    expect(changes.find((event) => event.type === 'peer_disconnected')?.peer.peer_id).toBe('peer-1');
+    expect(changes.find((event) => event.type === 'peer_disconnected')?.peer.peer_id).toBe(
+      'peer-1',
+    );
     expect(changes.find((event) => event.type === 'peer_connected')?.peer.peer_id).toBe('peer-3');
   });
 });

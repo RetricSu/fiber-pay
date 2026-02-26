@@ -1,5 +1,10 @@
 import type { Channel, PaymentHash, PeerInfo } from '@fiber-pay/sdk';
-import type { Alert, AlertFilter, TrackedInvoiceState, TrackedPaymentState } from '../alerts/types.js';
+import type {
+  Alert,
+  AlertFilter,
+  TrackedInvoiceState,
+  TrackedPaymentState,
+} from '../alerts/types.js';
 
 export interface PersistedRuntimeState {
   channels: Channel[];

@@ -23,3 +23,6 @@ export {
 // Process management
 export { ProcessManager } from './process/index.js';
 export type { FiberNodeConfig } from './process/manager.js';
+
+// Security / Key management
+export { createKeyManager, KeyManager } from './security/key-manager.js';

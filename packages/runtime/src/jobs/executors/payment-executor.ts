@@ -1,9 +1,9 @@
 import type { FiberRpcClient } from '@fiber-pay/sdk';
+import { sleep } from '../../utils/async.js';
 import { classifyRpcError } from '../error-classifier.js';
+import { applyRetryOrFail, transitionJobState } from '../executor-utils.js';
 import { paymentStateMachine } from '../state-machine.js';
 import type { PaymentJob, RetryPolicy } from '../types.js';
-import { sleep } from '../../utils/async.js';
-import { applyRetryOrFail, transitionJobState } from '../executor-utils.js';
 
 // ─── PaymentExecutor ──────────────────────────────────────────────────────────
 
@@ -38,9 +38,7 @@ export async function* runPaymentJob(
     }
 
     if (current.state === 'waiting_retry') {
-      const delay = current.nextRetryAt
-        ? Math.max(0, current.nextRetryAt - Date.now())
-        : 0;
+      const delay = current.nextRetryAt ? Math.max(0, current.nextRetryAt - Date.now()) : 0;
       if (delay > 0) {
         await sleep(delay, signal);
         if (signal.aborted) {
@@ -104,7 +102,16 @@ export async function* runPaymentJob(
         // Status is 'Created' or 'Inflight' — move to polling state
         current = transitionJobState(current, paymentStateMachine, 'payment_inflight');
         if (paymentHash) {
-          current = { ...current, params: { ...current.params, sendPaymentParams: { ...current.params.sendPaymentParams, payment_hash: paymentHash as `0x${string}` } } };
+          current = {
+            ...current,
+            params: {
+              ...current.params,
+              sendPaymentParams: {
+                ...current.params.sendPaymentParams,
+                payment_hash: paymentHash as `0x${string}`,
+              },
+            },
+          };
         }
         yield current;
         continue;
@@ -123,14 +130,17 @@ export async function* runPaymentJob(
 
     if (current.state === 'inflight') {
       // ── Poll get_payment until terminal ────────────────────────────────────
-      const hash =
-        current.params.sendPaymentParams.payment_hash as string | undefined;
+      const hash = current.params.sendPaymentParams.payment_hash as string | undefined;
 
       if (!hash) {
         // Shouldn't happen, but fail-safe
         current = transitionJobState(current, paymentStateMachine, 'payment_failed_permanent', {
           patch: {
-            error: { category: 'unknown', retryable: false, message: 'No payment_hash in inflight job' },
+            error: {
+              category: 'unknown',
+              retryable: false,
+              message: 'No payment_hash in inflight job',
+            },
           },
         });
         yield current;

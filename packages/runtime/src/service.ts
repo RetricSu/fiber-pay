@@ -15,17 +15,17 @@ import type {
   PaymentJobAlertData,
 } from './alerts/types.js';
 import { createRuntimeConfig, type RuntimeConfig, type RuntimeConfigInput } from './config.js';
+import { JobManager } from './jobs/job-manager.js';
+import type { ChannelJob, InvoiceJob, PaymentJob, RuntimeJob } from './jobs/types.js';
+import type { BaseMonitor } from './monitors/base-monitor.js';
 import { ChannelMonitor } from './monitors/channel-monitor.js';
 import { HealthMonitor } from './monitors/health-monitor.js';
 import { InvoiceTracker } from './monitors/invoice-tracker.js';
-import { BaseMonitor } from './monitors/base-monitor.js';
 import { PaymentTracker } from './monitors/payment-tracker.js';
 import { PeerMonitor } from './monitors/peer-monitor.js';
 import { RpcMonitorProxy } from './proxy/rpc-proxy.js';
 import { MemoryStore } from './storage/memory-store.js';
 import { SqliteJobStore } from './storage/sqlite-store.js';
-import { JobManager } from './jobs/job-manager.js';
-import type { ChannelJob, InvoiceJob, PaymentJob, RuntimeJob } from './jobs/types.js';
 
 export class FiberMonitorService extends EventEmitter {
   private readonly config: RuntimeConfig;
@@ -306,7 +306,9 @@ export class FiberMonitorService extends EventEmitter {
     return `${jobType}_job_${lifecycle}` as AlertType;
   }
 
-  private toJobAlertData(job: RuntimeJob): PaymentJobAlertData | InvoiceJobAlertData | ChannelJobAlertData {
+  private toJobAlertData(
+    job: RuntimeJob,
+  ): PaymentJobAlertData | InvoiceJobAlertData | ChannelJobAlertData {
     const error = job.error?.message;
 
     if (job.type === 'payment') {

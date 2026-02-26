@@ -96,7 +96,11 @@ function summarizeAlertData(data: unknown, withColor: boolean): string {
   const previousStateName = readStringField(previousChannelState ?? {}, 'state_name');
   if (!previousState && !currentState && previousStateName && currentStateName) {
     parts.push(
-      colorize(`state=${previousStateName}->${currentStateName}`, `${ANSI_BOLD}${ANSI_YELLOW}`, withColor),
+      colorize(
+        `state=${previousStateName}->${currentStateName}`,
+        `${ANSI_BOLD}${ANSI_YELLOW}`,
+        withColor,
+      ),
     );
   } else if (!previousState && !currentState && currentStateName) {
     parts.push(colorize(`state=${currentStateName}`, `${ANSI_BOLD}${ANSI_YELLOW}`, withColor));

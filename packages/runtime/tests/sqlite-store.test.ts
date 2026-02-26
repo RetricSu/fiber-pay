@@ -2,8 +2,8 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SqliteJobStore } from '../src/storage/sqlite-store.js';
 import type { PaymentJob, PaymentJobParams } from '../src/jobs/types.js';
+import { SqliteJobStore } from '../src/storage/sqlite-store.js';
 
 let store: SqliteJobStore;
 let dbPath: string;
@@ -43,16 +43,37 @@ describe('SqliteJobStore', () => {
     });
 
     it('throws on duplicate idempotency key', () => {
-      store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'dup' });
+      store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'dup',
+      });
       expect(() =>
-        store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'dup' })
+        store.createJob({
+          type: 'payment',
+          state: 'queued',
+          params: baseParams,
+          retryCount: 0,
+          maxRetries: 3,
+          idempotencyKey: 'dup',
+        }),
       ).toThrow();
     });
   });
 
   describe('getJob / getJobByIdempotencyKey', () => {
     it('returns job by id', () => {
-      const created = store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'idem1' });
+      const created = store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'idem1',
+      });
       const found = store.getJob(created.id);
       expect(found?.id).toBe(created.id);
     });
@@ -62,7 +83,14 @@ describe('SqliteJobStore', () => {
     });
 
     it('returns job by idempotency key', () => {
-      store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'lookup-key' });
+      store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'lookup-key',
+      });
       const found = store.getJobByIdempotencyKey('lookup-key');
       expect(found?.idempotencyKey).toBe('lookup-key');
     });
@@ -70,7 +98,14 @@ describe('SqliteJobStore', () => {
 
   describe('updateJob', () => {
     it('updates state and result', () => {
-      const created = store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'upd1' });
+      const created = store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'upd1',
+      });
       const updated = store.updateJob<PaymentJobParams, PaymentJob['result']>(created.id, {
         state: 'succeeded',
         result: { paymentHash: '0xabc', status: 'Success', fee: '0x0' },
@@ -86,14 +121,42 @@ describe('SqliteJobStore', () => {
 
   describe('listJobs', () => {
     it('returns all jobs with no filter', () => {
-      store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'l1' });
-      store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'l2' });
+      store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'l1',
+      });
+      store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'l2',
+      });
       expect(store.listJobs().length).toBe(2);
     });
 
     it('filters by state', () => {
-      store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'fs1' });
-      const j2 = store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'fs2' });
+      store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'fs1',
+      });
+      const j2 = store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'fs2',
+      });
       store.updateJob(j2.id, { state: 'succeeded' });
 
       const queued = store.listJobs({ state: 'queued' });
@@ -102,8 +165,22 @@ describe('SqliteJobStore', () => {
     });
 
     it('filters by multiple states', () => {
-      store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'ms1' });
-      const j2 = store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'ms2' });
+      store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'ms1',
+      });
+      const j2 = store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'ms2',
+      });
       store.updateJob(j2.id, { state: 'failed' });
 
       const active = store.listJobs({ state: ['queued', 'failed'] });
@@ -112,7 +189,14 @@ describe('SqliteJobStore', () => {
 
     it('respects limit', () => {
       for (let i = 0; i < 5; i++) {
-        store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: `lim${i}` });
+        store.createJob({
+          type: 'payment',
+          state: 'queued',
+          params: baseParams,
+          retryCount: 0,
+          maxRetries: 3,
+          idempotencyKey: `lim${i}`,
+        });
       }
       expect(store.listJobs({ limit: 3 }).length).toBe(3);
     });
@@ -120,7 +204,14 @@ describe('SqliteJobStore', () => {
 
   describe('getRetryableJobs', () => {
     it('returns jobs in waiting_retry state with next_retry_at <= now', () => {
-      const j = store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'ret1' });
+      const j = store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'ret1',
+      });
       store.updateJob(j.id, { state: 'waiting_retry', nextRetryAt: Date.now() - 1000 });
 
       const ready = store.getRetryableJobs();
@@ -128,7 +219,14 @@ describe('SqliteJobStore', () => {
     });
 
     it('does not return jobs whose next_retry_at is in the future', () => {
-      const j = store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'ret2' });
+      const j = store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'ret2',
+      });
       store.updateJob(j.id, { state: 'waiting_retry', nextRetryAt: Date.now() + 60_000 });
 
       expect(store.getRetryableJobs().length).toBe(0);
@@ -137,7 +235,14 @@ describe('SqliteJobStore', () => {
 
   describe('job events', () => {
     it('stores and retrieves job events', () => {
-      const j = store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'ev1' });
+      const j = store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'ev1',
+      });
       store.addJobEvent(j.id, 'created', undefined, 'queued');
       store.addJobEvent(j.id, 'executing', 'queued', 'executing');
 
@@ -151,10 +256,38 @@ describe('SqliteJobStore', () => {
 
   describe('getInProgressJobs', () => {
     it('returns only non-terminal jobs', () => {
-      const j1 = store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'ip1' });
-      const j2 = store.createJob({ type: 'payment', state: 'queued', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'ip2' });
-      const j3 = store.createJob({ type: 'invoice', state: 'invoice_active', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'ip3' });
-      const j4 = store.createJob({ type: 'channel', state: 'channel_opening', params: baseParams, retryCount: 0, maxRetries: 3, idempotencyKey: 'ip4' });
+      const j1 = store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'ip1',
+      });
+      const j2 = store.createJob({
+        type: 'payment',
+        state: 'queued',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'ip2',
+      });
+      const j3 = store.createJob({
+        type: 'invoice',
+        state: 'invoice_active',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'ip3',
+      });
+      const j4 = store.createJob({
+        type: 'channel',
+        state: 'channel_opening',
+        params: baseParams,
+        retryCount: 0,
+        maxRetries: 3,
+        idempotencyKey: 'ip4',
+      });
       store.updateJob(j2.id, { state: 'succeeded' });
 
       const inProgress = store.getInProgressJobs();

@@ -1,5 +1,5 @@
-import type { Alert, AlertBackend } from '../types.js';
 import { sleep } from '../../utils/async.js';
+import type { Alert, AlertBackend } from '../types.js';
 
 export interface WebhookAlertBackendConfig {
   url: string;

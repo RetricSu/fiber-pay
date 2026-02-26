@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
-import type { RetryPolicy } from './jobs/types.js';
 import { defaultPaymentRetryPolicy } from './jobs/retry-policy.js';
+import type { RetryPolicy } from './jobs/types.js';
 
 export interface StdoutAlertConfig {
   type: 'stdout';
@@ -98,12 +98,16 @@ export const defaultRuntimeConfig: RuntimeConfig = {
 export function createRuntimeConfig(input: RuntimeConfigInput = {}): RuntimeConfig {
   const config: RuntimeConfig = {
     fiberRpcUrl: input.fiberRpcUrl ?? defaultRuntimeConfig.fiberRpcUrl,
-    channelPollIntervalMs: input.channelPollIntervalMs ?? defaultRuntimeConfig.channelPollIntervalMs,
-    invoicePollIntervalMs: input.invoicePollIntervalMs ?? defaultRuntimeConfig.invoicePollIntervalMs,
-    paymentPollIntervalMs: input.paymentPollIntervalMs ?? defaultRuntimeConfig.paymentPollIntervalMs,
+    channelPollIntervalMs:
+      input.channelPollIntervalMs ?? defaultRuntimeConfig.channelPollIntervalMs,
+    invoicePollIntervalMs:
+      input.invoicePollIntervalMs ?? defaultRuntimeConfig.invoicePollIntervalMs,
+    paymentPollIntervalMs:
+      input.paymentPollIntervalMs ?? defaultRuntimeConfig.paymentPollIntervalMs,
     peerPollIntervalMs: input.peerPollIntervalMs ?? defaultRuntimeConfig.peerPollIntervalMs,
     healthPollIntervalMs: input.healthPollIntervalMs ?? defaultRuntimeConfig.healthPollIntervalMs,
-    includeClosedChannels: input.includeClosedChannels ?? defaultRuntimeConfig.includeClosedChannels,
+    includeClosedChannels:
+      input.includeClosedChannels ?? defaultRuntimeConfig.includeClosedChannels,
     completedItemTtlSeconds:
       input.completedItemTtlSeconds ?? defaultRuntimeConfig.completedItemTtlSeconds,
     requestTimeoutMs: input.requestTimeoutMs ?? defaultRuntimeConfig.requestTimeoutMs,
@@ -113,13 +117,16 @@ export function createRuntimeConfig(input: RuntimeConfigInput = {}): RuntimeConf
     },
     storage: {
       stateFilePath: input.storage?.stateFilePath ?? defaultRuntimeConfig.storage.stateFilePath,
-      flushIntervalMs: input.storage?.flushIntervalMs ?? defaultRuntimeConfig.storage.flushIntervalMs,
-      maxAlertHistory: input.storage?.maxAlertHistory ?? defaultRuntimeConfig.storage.maxAlertHistory,
+      flushIntervalMs:
+        input.storage?.flushIntervalMs ?? defaultRuntimeConfig.storage.flushIntervalMs,
+      maxAlertHistory:
+        input.storage?.maxAlertHistory ?? defaultRuntimeConfig.storage.maxAlertHistory,
     },
     jobs: {
       enabled: input.jobs?.enabled ?? defaultRuntimeConfig.jobs.enabled,
       dbPath: input.jobs?.dbPath ?? defaultRuntimeConfig.jobs.dbPath,
-      maxConcurrentJobs: input.jobs?.maxConcurrentJobs ?? defaultRuntimeConfig.jobs.maxConcurrentJobs,
+      maxConcurrentJobs:
+        input.jobs?.maxConcurrentJobs ?? defaultRuntimeConfig.jobs.maxConcurrentJobs,
       schedulerIntervalMs:
         input.jobs?.schedulerIntervalMs ?? defaultRuntimeConfig.jobs.schedulerIntervalMs,
       retryPolicy: {

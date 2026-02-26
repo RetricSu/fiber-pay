@@ -1,2 +1,2 @@
-export * from './key-manager.js';
+export * from './crypto.js';
 export * from './policy-engine.js';
