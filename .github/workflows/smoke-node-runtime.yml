@@ -56,18 +56,36 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $globalBin = pnpm bin -g
+          $globalRoot = pnpm root -g
+          $globalBin = Join-Path $globalRoot '.bin'
           $globalBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           $fiberPayBin = Join-Path $globalBin 'fiber-pay.cmd'
           "FIBER_PAY_BIN=$fiberPayBin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          if (-not (Test-Path $fiberPayBin)) {
+            Write-Host "fiber-pay.cmd not found at: $fiberPayBin"
+            Write-Host "Resolved global root: $globalRoot"
+            Write-Host "Resolved global bin: $globalBin"
+            if (Test-Path $globalBin) {
+              Get-ChildItem -Force $globalBin | Select-Object Name, FullName
+            }
+            throw "linked fiber-pay binary not found"
+          }
 
       - name: Resolve linked fiber-pay binary (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          GLOBAL_BIN="$(pnpm bin -g)"
+          GLOBAL_ROOT="$(pnpm root -g)"
+          GLOBAL_BIN="$GLOBAL_ROOT/.bin"
           echo "$GLOBAL_BIN" >> "$GITHUB_PATH"
           echo "FIBER_PAY_BIN=$GLOBAL_BIN/fiber-pay" >> "$GITHUB_ENV"
+          if [[ ! -x "$GLOBAL_BIN/fiber-pay" ]]; then
+            echo "fiber-pay not found at: $GLOBAL_BIN/fiber-pay"
+            echo "Resolved global root: $GLOBAL_ROOT"
+            echo "Resolved global bin: $GLOBAL_BIN"
+            ls -la "$GLOBAL_BIN" || true
+            exit 1
+          fi
 
       - name: Verify linked fiber-pay command (Windows)
         if: runner.os == 'Windows'
