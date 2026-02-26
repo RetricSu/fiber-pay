@@ -175,7 +175,7 @@ function assertKeyState(baseDir, expected) {
   }
 }
 
-async function waitForGeneratedKeys(baseDir, maxAttempts = 20) {
+async function waitForGeneratedKeys(baseDir, maxAttempts = 120) {
   let lastError;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -217,10 +217,10 @@ async function main() {
     }
     nodeStarted = true;
 
-    await waitForGeneratedKeys(baseDir);
-
     const nodeStatus = await waitForNodeRunning();
     console.log(`[smoke] node running: pid=${nodeStatus.pid ?? 'n/a'} rpcResponsive=${nodeStatus.rpcResponsive}`);
+
+    await waitForGeneratedKeys(baseDir);
 
     const runtimeStatus = await runFiberPay(['runtime', 'status', '--json'], { allowFailure: true });
     if (!(runtimeStatus.code === 0 && runtimeStatus.json?.success === true && runtimeStatus.json?.data?.running === true)) {
