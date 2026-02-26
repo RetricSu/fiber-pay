@@ -38,6 +38,7 @@ function lastJsonLine(text) {
 
 async function runFiberPay(args, { timeoutMs = 120_000, allowFailure = false } = {}) {
   return new Promise((resolve, reject) => {
+    // On Windows, .cmd files require shell mode for spawn to work
     const useShell = IS_WINDOWS && /\.cmd$/i.test(FIBER_PAY_BIN);
 
     const child = spawn(FIBER_PAY_BIN, args, {
@@ -88,7 +89,7 @@ async function runFiberPay(args, { timeoutMs = 120_000, allowFailure = false } =
   });
 }
 
-async function waitForNodeRunning(maxAttempts = 120) {
+async function waitForNodeRunning(maxAttempts = 60) {
   let lastResult;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const result = await runFiberPay(['node', 'status', '--json'], { allowFailure: true });
@@ -170,13 +171,12 @@ function assertKeyState(baseDir, expected) {
   if (fiberKey.length !== 32) {
     throw new Error(`Invalid fiber key length: expected 32 bytes, got ${fiberKey.length}`);
   }
-  const normalizedCkbKey = ckbKey.startsWith('0x') || ckbKey.startsWith('0X') ? ckbKey.slice(2) : ckbKey;
-  if (!/^[0-9a-fA-F]{64}$/.test(normalizedCkbKey)) {
-    throw new Error('Invalid ckb key format: expected 64-char hex private key (optionally 0x-prefixed)');
+  if (!/^[0-9a-fA-F]{64}$/.test(ckbKey)) {
+    throw new Error('Invalid ckb key format: expected 64-char hex private key');
   }
 }
 
-async function waitForGeneratedKeys(baseDir, maxAttempts = 120) {
+async function waitForGeneratedKeys(baseDir, maxAttempts = 60) {
   let lastError;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -195,6 +195,52 @@ async function waitForGeneratedKeys(baseDir, maxAttempts = 120) {
   );
 }
 
+/**
+ * Start the fiber-pay node as a background process.
+ *
+ * On Unix, we use the CLI's built-in --daemon flag which spawns a detached
+ * child internally. On Windows, the CLI's daemon mode silently fails because
+ * the re-spawned child process crashes (stdio:'ignore' + detached on Windows).
+ * So on Windows we manage the background process ourselves: spawn
+ * `fiber-pay node start` (without --daemon) with detached:true and pipe
+ * stdout/stderr to log files for diagnostics.
+ */
+async function startNodeBackground(baseDir) {
+  if (!IS_WINDOWS) {
+    const start = await runFiberPay(['node', 'start', '--daemon', '--json', '--quiet-fnn']);
+    if (!(start.json?.success === true || start.json?.event === 'node_daemon_starting')) {
+      throw new Error(
+        `node start did not return an expected daemon JSON payload. stdout:\n${start.stdout}\nstderr:\n${start.stderr}`,
+      );
+    }
+    return null; // no child handle needed; daemon is self-managed
+  }
+
+  // Windows: spawn node start in foreground mode but detach it as our own
+  // background child. The CLI will download the binary, generate keys, and
+  // start fnn within this process — no secondary daemon spawn involved.
+  const logsDir = join(baseDir, 'logs');
+  mkdirSync(logsDir, { recursive: true });
+
+  const { openSync } = await import('node:fs');
+  const outFd = openSync(join(logsDir, 'smoke-bg-stdout.log'), 'a');
+  const errFd = openSync(join(logsDir, 'smoke-bg-stderr.log'), 'a');
+
+  const child = spawn(FIBER_PAY_BIN, ['node', 'start', '--json', '--quiet-fnn'], {
+    env: process.env,
+    stdio: ['ignore', outFd, errFd],
+    shell: true,
+    detached: true,
+  });
+  child.unref();
+
+  if (!child.pid) {
+    throw new Error('Failed to spawn background node process on Windows');
+  }
+  console.log(`[smoke] Windows: spawned node start in background (PID: ${child.pid})`);
+  return child;
+}
+
 async function main() {
   const runTag = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
   const baseDir =
@@ -207,36 +253,39 @@ async function main() {
   console.log(`[smoke] using FIBER_DATA_DIR=${baseDir}`);
 
   let nodeStarted = false;
+  let bgChild = null;
   try {
     assertKeyState(baseDir, 'absent');
 
-    const start = await runFiberPay(['node', 'start', '--daemon', '--json', '--quiet-fnn']);
-    if (!(start.json?.success === true || start.json?.event === 'node_daemon_starting')) {
-      throw new Error(
-        `node start did not return an expected daemon JSON payload. stdout:\n${start.stdout}\nstderr:\n${start.stderr}`,
-      );
-    }
+    bgChild = await startNodeBackground(baseDir);
     nodeStarted = true;
+
+    await waitForGeneratedKeys(baseDir);
 
     const nodeStatus = await waitForNodeRunning();
     console.log(`[smoke] node running: pid=${nodeStatus.pid ?? 'n/a'} rpcResponsive=${nodeStatus.rpcResponsive}`);
 
-    await waitForGeneratedKeys(baseDir);
-
-    const runtimeStatus = await runFiberPay(['runtime', 'status', '--json'], { allowFailure: true });
-    if (!(runtimeStatus.code === 0 && runtimeStatus.json?.success === true && runtimeStatus.json?.data?.running === true)) {
-      const runtimeStart = await runFiberPay(['runtime', 'start', '--daemon', '--json'], {
-        allowFailure: true,
-      });
-      const alreadyRunning = runtimeStart.json?.error?.code === 'RUNTIME_ALREADY_RUNNING';
-      if (
-        runtimeStart.code !== 0 &&
-        !alreadyRunning &&
-        !(runtimeStart.json?.success === true || runtimeStart.json?.event === 'runtime_starting')
-      ) {
-        throw new Error(
-          `runtime start did not return an expected daemon JSON payload. stdout:\n${runtimeStart.stdout}\nstderr:\n${runtimeStart.stderr}`,
-        );
+    // On Windows, the foreground node-start (no --daemon) starts the runtime
+    // service embedded in-process, so we just wait for it to appear.
+    // On Unix, the daemon child sets FIBER_NODE_RUNTIME_DAEMON=1 which
+    // launches a separate runtime daemon. If that hasn't come up yet, we
+    // attempt an explicit `runtime start --daemon` as fallback.
+    if (!IS_WINDOWS) {
+      const runtimeStatus = await runFiberPay(['runtime', 'status', '--json'], { allowFailure: true });
+      if (!(runtimeStatus.code === 0 && runtimeStatus.json?.success === true && runtimeStatus.json?.data?.running === true)) {
+        const runtimeStart = await runFiberPay(['runtime', 'start', '--daemon', '--json'], {
+          allowFailure: true,
+        });
+        const alreadyRunning = runtimeStart.json?.error?.code === 'RUNTIME_ALREADY_RUNNING';
+        if (
+          runtimeStart.code !== 0 &&
+          !alreadyRunning &&
+          !(runtimeStart.json?.success === true || runtimeStart.json?.event === 'runtime_starting')
+        ) {
+          throw new Error(
+            `runtime start did not return an expected daemon JSON payload. stdout:\n${runtimeStart.stdout}\nstderr:\n${runtimeStart.stderr}`,
+          );
+        }
       }
     }
     await waitForRuntimeRunning();
@@ -254,6 +303,15 @@ async function main() {
     }
 
     await runFiberPay(['runtime', 'stop', '--json'], { allowFailure: true });
+
+    // On Windows, also kill the background child we spawned directly
+    if (bgChild && bgChild.pid) {
+      try {
+        process.kill(bgChild.pid);
+      } catch {
+        // already exited
+      }
+    }
 
     if (process.env.CI !== 'true') {
       rmSync(baseDir, { recursive: true, force: true });

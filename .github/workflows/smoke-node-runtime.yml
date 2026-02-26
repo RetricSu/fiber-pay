@@ -73,7 +73,6 @@ jobs:
 
       - name: Resolve linked fiber-pay binary (Unix)
         if: runner.os != 'Windows'
-        shell: bash
         run: |
           GLOBAL_ROOT="$(pnpm root -g)"
           GLOBAL_BIN="$GLOBAL_ROOT/.bin"
@@ -95,9 +94,7 @@ jobs:
 
       - name: Verify linked fiber-pay command (Unix)
         if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          "$FIBER_PAY_BIN" --help
+        run: '"$FIBER_PAY_BIN" --help'
 
       - name: Run node/runtime smoke test
         shell: bash
