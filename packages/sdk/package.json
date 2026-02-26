@@ -37,6 +37,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@noble/hashes": "^2.0.1",
     "zod": "^4.3.6"
   }
 }

@@ -72,11 +72,11 @@ export class KeyManager {
     // The fiber node expects different formats:
     // - fiber/sk: raw 32 bytes
     // - ckb/key: hex string (64 characters)
-    let keyData: string | Buffer;
+    let keyData: string | Uint8Array;
     if (type === 'fiber') {
       keyData = privateKey;
     } else {
-      keyData = privateKey.toString('hex');
+      keyData = Buffer.from(privateKey).toString('hex');
     }
 
     // Write key file with restricted permissions
@@ -101,7 +101,7 @@ export class KeyManager {
 
     // Get private key to derive public key
     const privateKey = await this.loadPrivateKey(type);
-    const publicKey = derivePublicKey(privateKey);
+    const publicKey = await derivePublicKey(privateKey);
 
     return {
       publicKey,
@@ -115,7 +115,7 @@ export class KeyManager {
    * Load and decrypt a private key (for internal use only)
    * This should NEVER be exposed to the LLM context
    */
-  private async loadPrivateKey(type: 'fiber' | 'ckb'): Promise<Buffer> {
+  private async loadPrivateKey(type: 'fiber' | 'ckb'): Promise<Uint8Array> {
     const keyPath = type === 'fiber' ? this.fiberKeyPath : this.ckbKeyPath;
     const keyData = readFileSync(keyPath);
 
@@ -123,17 +123,17 @@ export class KeyManager {
       if (!this.config.encryptionPassword) {
         throw new Error('Key is encrypted but no password provided');
       }
-      return decryptKey(keyData, this.config.encryptionPassword);
+      return await decryptKey(keyData, this.config.encryptionPassword);
     }
 
     // The fiber node stores keys in different formats:
     // - fiber/sk: raw 32 bytes
     // - ckb/key: hex string (64 characters)
     if (type === 'fiber') {
-      return keyData;
+      return new Uint8Array(keyData);
     } else {
       const hexString = keyData.toString('utf-8').trim();
-      return Buffer.from(hexString, 'hex');
+      return new Uint8Array(Buffer.from(hexString, 'hex'));
     }
   }
 
