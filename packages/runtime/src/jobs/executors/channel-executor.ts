@@ -1,7 +1,7 @@
 import { ChannelState, type FiberRpcClient } from '@fiber-pay/sdk';
 import { classifyRpcError } from '../error-classifier.js';
 import { channelStateMachine } from '../state-machine.js';
-import type { ChannelJob, RetryPolicy } from '../types.js';
+import type { ChannelJob, ClassifiedError, RetryPolicy } from '../types.js';
 import { sleep } from '../../utils/async.js';
 import { applyRetryOrFail, transitionJobState } from '../executor-utils.js';
 
@@ -281,7 +281,7 @@ export async function* runChannelJob(
 
     throw new Error(`Unsupported channel action: ${(current.params as { action?: string }).action}`);
   } catch (error) {
-    const classified = classifyRpcError(error);
+    const classified = classifyChannelError(error);
     current = applyRetryOrFail(current, classified, policy, {
       machine: channelStateMachine,
       retryEvent: 'payment_failed_retryable',
@@ -289,6 +289,38 @@ export async function* runChannelJob(
     });
     yield current;
   }
+}
+
+function classifyChannelError(error: unknown): ClassifiedError {
+  const base = classifyRpcError(error);
+  if (base.retryable) {
+    return base;
+  }
+
+  const raw = base.rawError ?? base.message;
+  if (
+    /channel\s+not\s+found|no\s+channel\s+with\s+.*\s+found|no\s+channel\s+.*\s+found/i.test(
+      raw,
+    )
+  ) {
+    return {
+      ...base,
+      category: 'temporary_failure',
+      retryable: true,
+      rawError: raw,
+    };
+  }
+
+  if (/invalid\s+state|negotiatingfunding|cannot\s+.*\s+in\s+.*state/i.test(raw)) {
+    return {
+      ...base,
+      category: 'temporary_failure',
+      retryable: true,
+      rawError: raw,
+    };
+  }
+
+  return base;
 }
 
 async function findTargetChannel(

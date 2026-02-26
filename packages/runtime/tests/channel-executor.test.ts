@@ -336,7 +336,7 @@ describe('runChannelJob', () => {
     expect(updates.find((update) => update.state === 'channel_accepting')?.result?.channelId).toBe('0xaccepted');
   });
 
-  it('accept action marks failed when temporary channel id is missing', async () => {
+  it('accept action schedules retry when temporary channel id is missing', async () => {
     const rpc = {
       acceptChannel: async () => {
         throw new Error('Invalid parameter: No channel with temp id Hash256(0xdeadbeef) found');
@@ -346,7 +346,7 @@ describe('runChannelJob', () => {
     const updates: ChannelJob[] = [];
     for await (const updated of runChannelJob(
       baseJob({
-        maxRetries: 0,
+        maxRetries: 2,
         params: {
           action: 'accept',
           acceptChannelParams: {
@@ -362,9 +362,45 @@ describe('runChannelJob', () => {
       updates.push(updated);
     }
 
-    expect(updates[updates.length - 1].state).toBe('failed');
-    expect(updates[updates.length - 1].error?.retryable).toBe(false);
+    expect(updates[updates.length - 1].state).toBe('waiting_retry');
+    expect(updates[updates.length - 1].retryCount).toBe(1);
+    expect(updates[updates.length - 1].error?.retryable).toBe(true);
     expect(updates[updates.length - 1].error?.message).toContain('No channel with temp id');
+  });
+
+  it('schedules retry when channel operation fails due to transient invalid state', async () => {
+    const rpc = {
+      shutdownChannel: async () => {
+        throw new Error(
+          'Invalid state: Trying to send shutdown message while in invalid state NegotiatingFunding(NegotiatingFundingFlags(OUR_INIT_SENT))',
+        );
+      },
+    } as unknown as FiberRpcClient;
+
+    const updates: ChannelJob[] = [];
+    for await (const updated of runChannelJob(
+      baseJob({
+        maxRetries: 2,
+        params: {
+          action: 'shutdown',
+          shutdownChannelParams: {
+            channel_id: '0xdeadbeef' as `0x${string}`,
+            force: false,
+          },
+          waitForClosed: false,
+        },
+      }),
+      rpc,
+      defaultPaymentRetryPolicy,
+      new AbortController().signal,
+    )) {
+      updates.push(updated);
+    }
+
+    expect(updates[updates.length - 1].state).toBe('waiting_retry');
+    expect(updates[updates.length - 1].retryCount).toBe(1);
+    expect(updates[updates.length - 1].error?.retryable).toBe(true);
+    expect(updates[updates.length - 1].error?.category).toBe('temporary_failure');
   });
 
   it('abandon action transitions through channel_abandoning to succeeded', async () => {

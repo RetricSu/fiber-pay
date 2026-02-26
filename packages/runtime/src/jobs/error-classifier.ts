@@ -16,6 +16,7 @@ const PATTERNS: Array<{ pattern: RegExp; category: ErrorCategory; retryable: boo
   // Peer / connectivity
   { pattern: /peer.*offline|peer.*unreachable|peer.*disconnect/i, category: 'peer_offline',        retryable: true  },
   { pattern: /connection.*refused|connection.*reset/i,           category: 'peer_offline',         retryable: true  },
+  { pattern: /fetch failed/i,                                    category: 'peer_offline',         retryable: true  },
   { pattern: /peer.*feature not found|waiting for peer to send init message/i, category: 'peer_offline', retryable: true },
   { pattern: /channel.*already.*exist|duplicat(e|ed).*channel/i, category: 'temporary_failure',    retryable: true  },
   // Timeout

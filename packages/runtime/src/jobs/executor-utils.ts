@@ -6,6 +6,7 @@ type RetryableJobShape = {
   state: JobState;
   error?: ClassifiedError;
   retryCount: number;
+  maxRetries: number;
   nextRetryAt?: number;
   updatedAt: number;
   completedAt?: number;
@@ -49,8 +50,13 @@ export function applyRetryOrFail<T extends RetryableJobShape>(
 ): T {
   const now = options?.now ?? Date.now();
 
-  if (shouldRetry(classifiedError, job.retryCount, policy)) {
-    const delay = computeRetryDelay(job.retryCount, policy);
+  const effectivePolicy: RetryPolicy = {
+    ...policy,
+    maxRetries: job.maxRetries,
+  };
+
+  if (shouldRetry(classifiedError, job.retryCount, effectivePolicy)) {
+    const delay = computeRetryDelay(job.retryCount, effectivePolicy);
     const retryTransition =
       options?.machine && options.retryEvent
         ? transitionJobState(job, options.machine, options.retryEvent, { now })

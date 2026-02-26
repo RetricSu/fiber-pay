@@ -48,6 +48,12 @@ describe('classifyRpcError', () => {
     expect(r.retryable).toBe(true);
   });
 
+  it('classifies fetch failed as retryable peer_offline', () => {
+    const r = classifyRpcError(new Error('fetch failed'));
+    expect(r.category).toBe('peer_offline');
+    expect(r.retryable).toBe(true);
+  });
+
   it('classifies duplicated payment hash as non-retryable invalid_payment', () => {
     const r = classifyRpcError(new Error('payment hash already exists'));
     expect(r.category).toBe('invalid_payment');
