@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve, relative, isAbsolute } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -23,6 +23,11 @@ function resolveCliEntrypoint() {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isPathWithinParent(pathToCheck, parentPath) {
+  const rel = relative(parentPath, pathToCheck);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
 
 function lastJsonLine(text) {
@@ -264,9 +269,18 @@ async function startNodeBackground(baseDir) {
 
 async function main() {
   const runTag = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-  const baseDir =
+  const expectedParent = process.env.RUNNER_TEMP || tmpdir();
+  const baseDirInput =
     process.env.FIBER_DATA_DIR ||
-    join(process.env.RUNNER_TEMP || tmpdir(), `fiber-pay-ci-smoke-${process.platform}-${runTag}`);
+    join(expectedParent, `fiber-pay-ci-smoke-${process.platform}-${runTag}`);
+
+  const baseDir = resolve(baseDirInput);
+  const expectedParentResolved = resolve(expectedParent);
+  if (!isPathWithinParent(baseDir, expectedParentResolved)) {
+    throw new Error(
+      `[smoke] invalid FIBER_DATA_DIR: ${baseDir}. Path must be within ${expectedParentResolved}`,
+    );
+  }
 
   process.env.FIBER_DATA_DIR = baseDir;
   mkdirSync(baseDir, { recursive: true });
