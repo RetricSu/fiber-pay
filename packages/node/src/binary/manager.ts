@@ -380,9 +380,23 @@ export class BinaryManager {
     // Extract using tar command
     try {
       await execAsync(`tar -xzf "${archivePath}" -C "${tempDir}"`);
-    } catch (_error) {
-      // Fallback: try with gunzip + tar separately
-      await execAsync(`gunzip -c "${archivePath}" | tar -xf - -C "${tempDir}"`);
+    } catch (primaryError) {
+      // Fallback: use Node's built-in zlib to avoid external `gunzip` dependency
+      try {
+        const { gunzipSync } = await import('node:zlib');
+        const tarPath = `${tempDir}/archive.tar`;
+        const tarBuffer = gunzipSync(buffer);
+        await writeFile(tarPath, tarBuffer);
+        await execAsync(`tar -xf "${tarPath}" -C "${tempDir}"`);
+      } catch (fallbackError) {
+        const primaryMessage =
+          primaryError instanceof Error ? primaryError.message : String(primaryError);
+        const fallbackMessage =
+          fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        throw new Error(
+          `Failed to extract tar.gz archive. Primary: ${primaryMessage}. Fallback: ${fallbackMessage}`,
+        );
+      }
     }
 
     // Find the binary in extracted files
