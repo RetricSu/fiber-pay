@@ -1,10 +1,11 @@
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { type Alert, formatRuntimeAlert } from '@fiber-pay/runtime';
 import { Command } from 'commander';
 import type { CliConfig } from '../lib/config.js';
 import { printJsonError, printJsonSuccess } from '../lib/format.js';
 import {
   type PersistedLogSourceOption,
+  readAppendedLines,
   readLastLines,
   resolvePersistedLogPaths,
   resolvePersistedLogTargets,
@@ -206,7 +207,8 @@ export function createLogsCommand(config: CliConfig): Command {
           {
             title: entry.title,
             path: entry.path,
-            seenLines: entry.exists ? entry.lines.length : 0,
+            offset: entry.exists ? statSync(entry.path).size : 0,
+            remainder: '',
           },
         ]),
       );
@@ -224,29 +226,48 @@ export function createLogsCommand(config: CliConfig): Command {
           resolve();
         };
 
+        let polling = false;
         const timer = setInterval(() => {
-          for (const target of targets) {
-            const state = states.get(target.source);
-            if (!state) continue;
-
-            if (!existsSync(state.path)) {
-              continue;
-            }
-
-            const allLines = readLastLines(state.path, Number.MAX_SAFE_INTEGER);
-            const total = allLines.length;
-            const fromIndex = total < state.seenLines ? 0 : state.seenLines;
-            const newLines = allLines.slice(fromIndex);
-            if (newLines.length === 0) {
-              continue;
-            }
-
-            for (const line of newLines) {
-              const output = target.source === 'runtime' ? formatRuntimeAlertHuman(line) : line;
-              console.log(`[${state.title}] ${output}`);
-            }
-            state.seenLines = total;
+          if (polling) {
+            return;
           }
+          polling = true;
+
+          void (async () => {
+            for (const target of targets) {
+              const state = states.get(target.source);
+              if (!state) continue;
+
+              if (!existsSync(state.path)) {
+                state.offset = 0;
+                state.remainder = '';
+                continue;
+              }
+
+              const result = await readAppendedLines(state.path, state.offset, state.remainder);
+              const newLines = result.lines;
+              if (newLines.length === 0) {
+                state.offset = result.nextOffset;
+                state.remainder = result.remainder;
+                continue;
+              }
+
+              for (const line of newLines) {
+                const output = target.source === 'runtime' ? formatRuntimeAlertHuman(line) : line;
+                console.log(`[${state.title}] ${output}`);
+              }
+              state.offset = result.nextOffset;
+              state.remainder = result.remainder;
+            }
+          })()
+            .catch((error) => {
+              const message =
+                error instanceof Error ? error.message : 'Failed to read appended logs';
+              console.error(`Error: ${message}`);
+            })
+            .finally(() => {
+              polling = false;
+            });
         }, intervalMs);
 
         process.on('SIGINT', stop);
