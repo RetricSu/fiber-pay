@@ -38,10 +38,12 @@ function lastJsonLine(text) {
 
 async function runFiberPay(args, { timeoutMs = 120_000, allowFailure = false } = {}) {
   return new Promise((resolve, reject) => {
+    const useShell = IS_WINDOWS && /\.cmd$/i.test(FIBER_PAY_BIN);
+
     const child = spawn(FIBER_PAY_BIN, args, {
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: false,
+      shell: useShell,
     });
 
     let stdout = '';
