@@ -1,6 +1,5 @@
 import { closeSync, createReadStream, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline';
 import type { RuntimeMeta } from './runtime-meta.js';
 
 export interface PersistedLogPaths {
@@ -83,9 +82,9 @@ export function readLastLines(filePath: string, maxLines: number): string[] {
     while (position > 0 && newlineCount <= maxLines) {
       const start = Math.max(0, position - chunkSize);
       const bytesToRead = position - start;
-      const buffer = Buffer.allocUnsafe(bytesToRead);
-      readSync(fd, buffer, 0, bytesToRead, start);
-      const chunk = buffer.toString('utf8');
+      const buffer = Buffer.alloc(bytesToRead);
+      const bytesRead = readSync(fd, buffer, 0, bytesToRead, start);
+      const chunk = buffer.toString('utf8', 0, bytesRead);
       chunks.unshift(chunk);
 
       for (let index = 0; index < chunk.length; index += 1) {
@@ -137,44 +136,29 @@ export async function readAppendedLines(
     start: safeOffset,
     end: size - 1,
   });
-  const lineReader = createInterface({
-    input: stream,
-    crlfDelay: Infinity,
-  });
 
   const lines: string[] = [];
   let pending = remainder;
-  for await (const line of lineReader) {
-    if (pending.length > 0) {
-      const combined = `${pending}${line}`;
-      if (combined.length > 0) {
-        lines.push(combined);
+  let bytesReadTotal = 0;
+
+  for await (const chunk of stream) {
+    const chunkText = String(chunk);
+    bytesReadTotal += Buffer.byteLength(chunkText, 'utf8');
+
+    const merged = `${pending}${chunkText}`;
+    const parts = merged.split(/\r?\n/);
+    pending = parts.pop() ?? '';
+
+    for (const line of parts) {
+      if (line.length > 0) {
+        lines.push(line);
       }
-      pending = '';
-      continue;
     }
-
-    if (line.length > 0) {
-      lines.push(line);
-    }
-  }
-
-  const fileBuffer = Buffer.allocUnsafe(1);
-  const fd = openSync(filePath, 'r');
-  try {
-    readSync(fd, fileBuffer, 0, 1, size - 1);
-  } finally {
-    closeSync(fd);
-  }
-  const endsWithNewline = fileBuffer[0] === 10;
-
-  if (!endsWithNewline && lines.length > 0) {
-    pending = lines.pop() ?? '';
   }
 
   return {
     lines,
-    nextOffset: size,
+    nextOffset: safeOffset + bytesReadTotal,
     remainder: pending,
   };
 }
