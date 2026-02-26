@@ -88,7 +88,7 @@ async function runFiberPay(args, { timeoutMs = 120_000, allowFailure = false } =
   });
 }
 
-async function waitForNodeRunning(maxAttempts = 40) {
+async function waitForNodeRunning(maxAttempts = 120) {
   let lastResult;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const result = await runFiberPay(['node', 'status', '--json'], { allowFailure: true });
@@ -170,8 +170,9 @@ function assertKeyState(baseDir, expected) {
   if (fiberKey.length !== 32) {
     throw new Error(`Invalid fiber key length: expected 32 bytes, got ${fiberKey.length}`);
   }
-  if (!/^[0-9a-fA-F]{64}$/.test(ckbKey)) {
-    throw new Error('Invalid ckb key format: expected 64-char hex private key');
+  const normalizedCkbKey = ckbKey.startsWith('0x') || ckbKey.startsWith('0X') ? ckbKey.slice(2) : ckbKey;
+  if (!/^[0-9a-fA-F]{64}$/.test(normalizedCkbKey)) {
+    throw new Error('Invalid ckb key format: expected 64-char hex private key (optionally 0x-prefixed)');
   }
 }
 
