@@ -1,10 +1,25 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const IS_WINDOWS = process.platform === 'win32';
 const FIBER_PAY_BIN = process.env.FIBER_PAY_BIN || (IS_WINDOWS ? 'fiber-pay.cmd' : 'fiber-pay');
+
+/**
+ * Resolve the actual .js CLI entrypoint for direct node invocation.
+ * This avoids .cmd shim indirection on Windows where shell:true + detached:true
+ * causes file descriptor inheritance to break across the cmd.exe → batch → node chain.
+ */
+function resolveCliEntrypoint() {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const cliJs = join(__dirname, '..', 'packages', 'cli', 'dist', 'cli.js');
+  if (!existsSync(cliJs)) {
+    throw new Error(`CLI entrypoint not found at ${cliJs}. Was the CLI built?`);
+  }
+  return cliJs;
+}
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -201,9 +216,15 @@ async function waitForGeneratedKeys(baseDir, maxAttempts = 60) {
  * On Unix, we use the CLI's built-in --daemon flag which spawns a detached
  * child internally. On Windows, the CLI's daemon mode silently fails because
  * the re-spawned child process crashes (stdio:'ignore' + detached on Windows).
- * So on Windows we manage the background process ourselves: spawn
- * `fiber-pay node start` (without --daemon) with detached:true and pipe
- * stdout/stderr to log files for diagnostics.
+ *
+ * Additionally, spawning .cmd shims with shell:true + detached:true + FD stdio
+ * does not work: the cmd.exe → batch → node.exe chain causes CRT file
+ * descriptors to not survive the double-hop, resulting in empty log files and
+ * invisible background processes.
+ *
+ * The fix: on Windows, resolve the .js CLI entrypoint directly and spawn
+ * node.exe with it — no shell, no .cmd. This gives proper FD inheritance,
+ * correct PID for cleanup, and the child runs the CLI code directly.
  */
 async function startNodeBackground(baseDir) {
   if (!IS_WINDOWS) {
@@ -216,9 +237,10 @@ async function startNodeBackground(baseDir) {
     return null; // no child handle needed; daemon is self-managed
   }
 
-  // Windows: spawn node start in foreground mode but detach it as our own
-  // background child. The CLI will download the binary, generate keys, and
-  // start fnn within this process — no secondary daemon spawn involved.
+  // Windows: spawn node.exe directly with the CLI .js entrypoint.
+  // No shell:true, no .cmd shim — this ensures FD inheritance works and
+  // the PID we get is the actual node process (not cmd.exe).
+  const cliEntrypoint = resolveCliEntrypoint();
   const logsDir = join(baseDir, 'logs');
   mkdirSync(logsDir, { recursive: true });
 
@@ -226,10 +248,9 @@ async function startNodeBackground(baseDir) {
   const outFd = openSync(join(logsDir, 'smoke-bg-stdout.log'), 'a');
   const errFd = openSync(join(logsDir, 'smoke-bg-stderr.log'), 'a');
 
-  const child = spawn(FIBER_PAY_BIN, ['node', 'start', '--json', '--quiet-fnn'], {
+  const child = spawn(process.execPath, [cliEntrypoint, 'node', 'start', '--json', '--quiet-fnn'], {
     env: process.env,
     stdio: ['ignore', outFd, errFd],
-    shell: true,
     detached: true,
   });
   child.unref();
@@ -237,7 +258,7 @@ async function startNodeBackground(baseDir) {
   if (!child.pid) {
     throw new Error('Failed to spawn background node process on Windows');
   }
-  console.log(`[smoke] Windows: spawned node start in background (PID: ${child.pid})`);
+  console.log(`[smoke] Windows: spawned node.exe ${cliEntrypoint} in background (PID: ${child.pid})`);
   return child;
 }
 
