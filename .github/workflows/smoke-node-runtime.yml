@@ -41,8 +41,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build CLI package
-        run: pnpm --filter @fiber-pay/cli build
+      - name: Build CLI dependency chain
+        run: |
+          pnpm --filter @fiber-pay/sdk build
+          pnpm --filter @fiber-pay/node build
+          pnpm --filter @fiber-pay/runtime build
+          pnpm --filter @fiber-pay/cli build
 
       - name: Link fiber-pay CLI globally via pnpm
         working-directory: packages/cli
