@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const IS_WINDOWS = process.platform === 'win32';
-const FIBER_PAY_BIN = IS_WINDOWS ? 'fiber-pay.cmd' : 'fiber-pay';
+const FIBER_PAY_BIN = process.env.FIBER_PAY_BIN || (IS_WINDOWS ? 'fiber-pay.cmd' : 'fiber-pay');
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

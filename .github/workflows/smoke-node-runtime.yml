@@ -45,12 +45,27 @@ jobs:
         run: pnpm --filter @fiber-pay/cli build
 
       - name: Link fiber-pay CLI globally via pnpm
-        run: pnpm --dir packages/cli link --global
+        working-directory: packages/cli
+        run: pnpm link --global
+
+      - name: Resolve linked fiber-pay binary
+        shell: bash
+        run: |
+          GLOBAL_BIN="$(pnpm bin -g)"
+          echo "$GLOBAL_BIN" >> "$GITHUB_PATH"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "FIBER_PAY_BIN=$GLOBAL_BIN/fiber-pay.cmd" >> "$GITHUB_ENV"
+          else
+            echo "FIBER_PAY_BIN=$GLOBAL_BIN/fiber-pay" >> "$GITHUB_ENV"
+          fi
 
       - name: Verify linked fiber-pay command
-        run: fiber-pay --help
+        shell: bash
+        run: |
+          "$FIBER_PAY_BIN" --help
 
       - name: Run node/runtime smoke test
+        shell: bash
         run: node scripts/ci-smoke-node-runtime.mjs
 
       - name: Upload smoke logs
