@@ -1,0 +1,12 @@
+{
+  "mode": "pre",
+  "tag": "rc",
+  "initialVersions": {
+    "@fiber-pay/agent": "0.1.0-rc.3",
+    "@fiber-pay/cli": "0.1.0-rc.3",
+    "@fiber-pay/node": "0.1.0-rc.3",
+    "@fiber-pay/runtime": "0.1.0-rc.3",
+    "@fiber-pay/sdk": "0.1.0-rc.3"
+  },
+  "changesets": []
+}

@@ -79,6 +79,39 @@ pnpm test
 pnpm build
 ```
 
+## Release checklist (maintainers)
+
+Tag-based release is authoritative in `.github/workflows/release.yml`.
+
+1. add changeset files during feature/fix PRs:
+
+```bash
+pnpm changeset
+```
+
+2. before release, consume changesets and update package versions + changelogs:
+
+```bash
+pnpm changeset:version
+```
+
+3. run repository-wide validation:
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+4. commit version/changelog updates to `master`, then create and push tag:
+
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+5. for prerelease tracks, use `vX.Y.Z-rc.N` (published to npm `next` dist-tag).
+
 ## Practical notes
 
 - ESM imports require `.js` extension in source imports.

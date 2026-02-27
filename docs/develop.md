@@ -23,49 +23,75 @@ pnpm --filter @fiber-pay/runtime test
 
 ## Release to npm (multi-package)
 
-This repo publishes all `@fiber-pay/*` packages in lockstep via Git tag.
+This repo uses `changesets` to manage lockstep versioning and auto-generate package changelogs.
 
-### Tag rules
+### Versioning model
 
-- Stable release: `vX.Y.Z` -> npm dist-tag `latest`
-- Pre-release: `vX.Y.Z-rc.N` / `vX.Y.Z-beta.N` -> npm dist-tag `next`
+- All publishable `@fiber-pay/*` packages are in a fixed group (same version).
+- Changelogs are generated automatically during `changeset version`.
 
-### Publish flow
+### Release flow
 
-- Bump versions in all publishable packages to the same version:
+1. Add a changeset after code changes:
 
 ```bash
-pnpm release:bump 0.1.1
+pnpm changeset
 ```
 
-This updates:
+2. Keep prerelease (`rc`) mode when needed:
 
-- `packages/sdk/package.json`
-- `packages/node/package.json`
-- `packages/runtime/package.json`
-- `packages/agent/package.json`
-- `packages/cli/package.json`
+```bash
+pnpm changeset pre enter rc
+```
 
-- Push commit to `main`.
-- Create and push tag:
+3. Consume changesets, bump versions, and generate changelogs:
+
+```bash
+pnpm changeset:version
+```
+
+4. Commit and push version/changelog changes to `master`.
+
+5. Create and push a release tag (or create a GitHub Release with that tag):
 
 ```bash
 git tag v0.1.1
 git push origin v0.1.1
 ```
 
-For pre-release:
+For prerelease:
 
 ```bash
 git tag v0.1.2-rc.1
 git push origin v0.1.2-rc.1
 ```
 
+6. Exit prerelease mode when preparing stable releases:
+
+```bash
+pnpm changeset pre exit
+```
+
+### Notes
+
+- `pnpm changeset:status` shows pending release changes.
+- Release workflow is tag-driven (`v*`) in `.github/workflows/release.yml`.
+- Stable tags (`vX.Y.Z`) publish with npm dist-tag `latest`; prerelease tags publish with `next`.
+
 ### Required GitHub secret
 
 - `NPM_TOKEN`: npm automation token with publish permission for `@fiber-pay/*`
 
 Workflow file: `.github/workflows/release.yml`
+
+### Quick release checklist
+
+- `pnpm changeset`
+- `pnpm changeset:version`
+- `pnpm typecheck && pnpm test && pnpm build`
+- commit and push updated versions/changelogs to `master`
+- create and push tag: `vX.Y.Z` (or `vX.Y.Z-rc.N`)
+- confirm `Release` workflow passes in GitHub Actions
 
 ## Core smoke workflow (runtime-backed)
 
