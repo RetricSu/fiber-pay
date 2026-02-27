@@ -29,6 +29,12 @@ Use this prompt in Cursor/Claude/Copilot/other agents:
 Follow this document https://raw.githubusercontent.com/RetricSu/fiber-pay/refs/heads/master/skills/fiber-pay/SKILL.md to equip yourself with a p2p payment system.
 ```
 
+## Human quickstart
+
+If you are operating `fiber-pay` manually (not through an AI agent), start here:
+
+- [docs/human-quickstart.md](docs/human-quickstart.md)
+
 ## Development
 
 Please read `docs/develop.md` for details.
