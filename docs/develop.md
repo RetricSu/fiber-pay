@@ -1,5 +1,7 @@
 # Development
 
+This document is the single source of truth for project development and maintainer operations (for both human and AI maintainers).
+
 Prerequisites:
 
 - Node.js `>=20`
@@ -7,10 +9,45 @@ Prerequisites:
 
 ```bash
 pnpm install
+pnpm format:check
+pnpm lint
+pnpm build
 pnpm typecheck
 pnpm test
-pnpm build
 ```
+
+## Maintainer baseline (human + AI)
+
+Always follow these rules for any change:
+
+1. Use this document as the canonical maintainer guide.
+2. Prefer `--json` output for CLI/runtime automation flows.
+3. Keep command semantics stable; do not introduce undocumented flags.
+4. If docs and code disagree, treat current code behavior as authoritative, then update docs.
+
+## Required validation policy
+
+### Commit gate (local hook)
+
+Every commit must pass local hook checks:
+
+- staged file autofix/check: `pnpm lint-staged`
+- repository format check: `pnpm format:check`
+- repository lint check: `pnpm lint`
+- repository build check: `pnpm build`
+- repository type check: `pnpm typecheck`
+- repository test check: `pnpm test`
+
+### CI gate
+
+CI remains the remote enforcement gate and must stay aligned with local checks.
+
+## Change-scope command matrix
+
+- Docs-only changes: `pnpm format:check`
+- Single-package source changes: run package-scoped checks + `pnpm lint`
+- Cross-package source changes: `pnpm format:check && pnpm lint && pnpm build && pnpm typecheck && pnpm test`
+- Release changes: full cross-package checks + release checklist below
 
 Package-scoped checks:
 
@@ -38,21 +75,21 @@ This repo uses `changesets` to manage lockstep versioning and auto-generate pack
 pnpm changeset
 ```
 
-2. Keep prerelease (`rc`) mode when needed:
+1. Keep prerelease (`rc`) mode when needed:
 
 ```bash
 pnpm changeset pre enter rc
 ```
 
-3. Consume changesets, bump versions, and generate changelogs:
+1. Consume changesets, bump versions, and generate changelogs:
 
 ```bash
 pnpm changeset:version
 ```
 
-4. Commit and push version/changelog changes to `master`.
+1. Commit and push version/changelog changes to `master`.
 
-5. Create and push a release tag (or create a GitHub Release with that tag):
+1. Create and push a release tag (or create a GitHub Release with that tag):
 
 ```bash
 git tag v0.1.1
@@ -66,7 +103,7 @@ git tag v0.1.2-rc.1
 git push origin v0.1.2-rc.1
 ```
 
-6. Exit prerelease mode when preparing stable releases:
+1. Exit prerelease mode when preparing stable releases:
 
 ```bash
 pnpm changeset pre exit
@@ -86,9 +123,11 @@ Workflow file: `.github/workflows/release.yml`
 
 ### Quick release checklist
 
+- `pnpm format:check`
+- `pnpm lint`
 - `pnpm changeset`
 - `pnpm changeset:version`
-- `pnpm typecheck && pnpm test && pnpm build`
+- `pnpm build && pnpm typecheck && pnpm test`
 - commit and push updated versions/changelogs to `master`
 - create and push tag: `vX.Y.Z` (or `vX.Y.Z-rc.N`)
 - confirm `Release` workflow passes in GitHub Actions

@@ -41,7 +41,7 @@ A focused refactor is required later. That refactor is intentionally deferred un
 
 ## Scope and sequencing decision
 
-1. First: align project intent in root docs (`README.md`, `AGENT.md`)
+1. First: align project intent in root docs (`README.md`, `docs/develop.md`)
 2. Next: continue documentation cleanup against this baseline
 3. Later: execute `@fiber-pay/agent` structural refactor
 4. Last: refresh skill docs after core docs and architecture intent are stable

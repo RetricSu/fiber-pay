@@ -1,2 +1,7 @@
 #!/usr/bin/env sh
-pnpm lint-staged
+pnpm lint-staged || exit 1
+pnpm format:check || exit 1
+pnpm lint || exit 1
+pnpm build || exit 1
+pnpm typecheck || exit 1
+pnpm test || exit 1
