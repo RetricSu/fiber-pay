@@ -1,0 +1,14 @@
+# Global owner fallback
+* @RetricSu
+
+# Package-level ownership
+/packages/sdk/ @RetricSu
+/packages/node/ @RetricSu
+/packages/runtime/ @RetricSu
+/packages/agent/ @RetricSu
+/packages/cli/ @RetricSu
+
+# Critical automation and docs
+/.github/workflows/ @RetricSu
+/docs/ @RetricSu
+/scripts/ @RetricSu

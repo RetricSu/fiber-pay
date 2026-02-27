@@ -42,6 +42,18 @@ Every commit must pass local hook checks:
 
 CI remains the remote enforcement gate and must stay aligned with local checks.
 
+### PR risk summary gate
+
+Every pull request is evaluated by a deterministic risk summary workflow:
+
+- workflow: `.github/workflows/pr-change-summary.yml`
+- script: `scripts/pr-change-summary.mjs`
+- outputs: PR comment + workflow summary + JSON artifact
+
+Governance details and response policy are documented in:
+
+- `docs/runbooks/ai-maintainer-governance.md`
+
 ## Change-scope command matrix
 
 - Docs-only changes: `pnpm format:check`
