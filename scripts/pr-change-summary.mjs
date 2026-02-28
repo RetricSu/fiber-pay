@@ -1,8 +1,56 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, normalize, relative, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
+
+// ---------------------------------------------------------------------------
+// Dynamic package discovery
+// ---------------------------------------------------------------------------
+
+function discoverPackages() {
+  const packagesDir = resolve(process.cwd(), 'packages');
+  const nameByDir = new Map(); // dir name -> package name
+  const entryPaths = new Set(); // public entrypoint source paths
+  const manifestPaths = new Set(); // package.json paths
+
+  if (!existsSync(packagesDir)) {
+    return { nameByDir, entryPaths, manifestPaths };
+  }
+
+  for (const dir of readdirSync(packagesDir, { withFileTypes: true })) {
+    if (!dir.isDirectory()) continue;
+    const pkgJsonPath = join('packages', dir.name, 'package.json');
+    const absPkgJson = resolve(packagesDir, dir.name, 'package.json');
+
+    if (!existsSync(absPkgJson)) continue;
+
+    const pkg = JSON.parse(readFileSync(absPkgJson, 'utf8'));
+    const pkgName = pkg.name || dir.name;
+
+    nameByDir.set(dir.name, pkgName);
+    manifestPaths.add(pkgJsonPath);
+
+    // Derive public entrypoints from `exports` field
+    if (pkg.exports) {
+      const exportValues = typeof pkg.exports === 'string' ? [pkg.exports] : Object.values(pkg.exports);
+      for (const val of exportValues) {
+        const entry = typeof val === 'string' ? val : val?.import || val?.default;
+        if (typeof entry === 'string') {
+          // Map dist path back to src (e.g. ./dist/index.js -> src/index.ts)
+          const srcPath = entry.replace(/^\.\/dist\//, 'src/').replace(/\.js$/, '.ts');
+          entryPaths.add(join('packages', dir.name, srcPath));
+        }
+      }
+    }
+  }
+
+  return { nameByDir, entryPaths, manifestPaths };
+}
+
+// ---------------------------------------------------------------------------
+// CLI helpers
+// ---------------------------------------------------------------------------
 
 function printUsageAndExit(message) {
   if (message) {
@@ -30,6 +78,10 @@ function getArg(flag, defaultValue = undefined) {
   return value;
 }
 
+// ---------------------------------------------------------------------------
+// Git helpers
+// ---------------------------------------------------------------------------
+
 function runGit(args, options = {}) {
   return execFileSync('git', args, { encoding: 'utf8', ...options });
 }
@@ -47,6 +99,10 @@ function validateGitRef(ref, label) {
     process.exit(1);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Output / formatting helpers
+// ---------------------------------------------------------------------------
 
 function resolveSafeOutputPath(outputPath) {
   const normalized = normalize(outputPath);
@@ -88,6 +144,10 @@ function clampList(items, maxItems = 25) {
   return { items: unique.slice(0, maxItems), omitted: unique.length - maxItems };
 }
 
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
 const base = getArg('--base');
 const head = getArg('--head');
 const jsonOut = getArg('--json-out', 'pr-change-summary.json');
@@ -103,36 +163,43 @@ validateGitRef(head, 'head ref');
 const resolvedJsonOut = resolveSafeOutputPath(jsonOut);
 const resolvedMdOut = resolveSafeOutputPath(mdOut);
 
-const nameStatus = runGit(['diff', '--name-status', `${base}...${head}`]);
-const entries = nameStatus
-  .split('\n')
-  .map((line) => line.trim())
-  .filter(Boolean)
-  .map((line) => {
-    const parts = line.split('\t');
-    const rawStatus = parts[0] || '';
+// --- Discover packages dynamically ---
+const { nameByDir, entryPaths: publicEntryPaths, manifestPaths: packageJsonPaths } = discoverPackages();
 
-    if (rawStatus.startsWith('R')) {
-      return {
-        status: 'R',
-        oldPath: parts[1],
-        path: parts[2],
-      };
-    }
+// --- Parse diff with NUL-delimited output for robustness ---
+const nameStatus = runGit(['diff', '--name-status', '-z', `${base}...${head}`]);
+const tokens = nameStatus.split('\0');
+const entries = [];
 
-    return {
-      status: rawStatus,
-      path: parts[1],
-    };
-  });
+for (let i = 0; i < tokens.length; ) {
+  const token = tokens[i];
+  if (!token) {
+    i += 1;
+    continue;
+  }
 
+  // Rename (R<score>) and Copy (C<score>) have two paths
+  if (token.startsWith('R') || token.startsWith('C')) {
+    const oldPath = tokens[i + 1] ?? '';
+    const newPath = tokens[i + 2] ?? '';
+    entries.push({ status: token[0], oldPath, path: newPath });
+    i += 3;
+    continue;
+  }
+
+  // Regular statuses: A, M, D, T, U, X — one path follows
+  const filePath = tokens[i + 1] ?? '';
+  entries.push({ status: token, path: filePath });
+  i += 2;
+}
+
+// --- Map paths to packages (dynamic) ---
 function mapPackage(path) {
   if (!path) return null;
-  if (path.startsWith('packages/sdk/')) return '@fiber-pay/sdk';
-  if (path.startsWith('packages/node/')) return '@fiber-pay/node';
-  if (path.startsWith('packages/runtime/')) return '@fiber-pay/runtime';
-  if (path.startsWith('packages/agent/')) return '@fiber-pay/agent';
-  if (path.startsWith('packages/cli/')) return '@fiber-pay/cli';
+  const match = path.match(/^packages\/([^/]+)\//);
+  if (match) {
+    return nameByDir.get(match[1]) || match[1];
+  }
   if (path.startsWith('docs/')) return 'docs';
   if (path.startsWith('scripts/')) return 'scripts';
   if (path.startsWith('.github/')) return 'github-config';
@@ -147,22 +214,6 @@ for (const entry of entries) {
   }
 }
 affectedPackages.delete(null);
-
-const publicEntryPaths = new Set([
-  'packages/sdk/src/index.ts',
-  'packages/node/src/index.ts',
-  'packages/runtime/src/index.ts',
-  'packages/agent/src/index.ts',
-  'packages/cli/src/index.ts',
-]);
-
-const packageJsonPaths = new Set([
-  'packages/sdk/package.json',
-  'packages/node/package.json',
-  'packages/runtime/package.json',
-  'packages/agent/package.json',
-  'packages/cli/package.json',
-]);
 
 const apiSignals = [];
 const breakingSignals = [];

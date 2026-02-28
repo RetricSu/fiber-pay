@@ -302,9 +302,7 @@ function classifyChannelError(error: unknown): ClassifiedError {
 
   const raw = base.rawError ?? base.message;
   if (
-    /channel\s+not\s+found|no\s+channel\s+with\s+.*\s+found|no\s+channel\s+.*\s+found/i.test(
-      raw,
-    )
+    /channel\s+not\s+found|no\s+channel\s+with\s+.*\s+found|no\s+channel\s+.*\s+found/i.test(raw)
   ) {
     return {
       ...base,
