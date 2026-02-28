@@ -1,7 +1,7 @@
 name: PR Change Summary
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
@@ -17,7 +17,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 0
+
+      - name: Fetch PR head commit ref
+        run: |
+          git fetch origin "pull/${{ github.event.pull_request.number }}/head:pr-head"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -28,7 +33,7 @@ jobs:
         run: |
           node scripts/pr-change-summary.mjs \
             --base "${{ github.event.pull_request.base.sha }}" \
-            --head "${{ github.event.pull_request.head.sha }}" \
+            --head "pr-head" \
             --json-out pr-change-summary.json \
             --md-out pr-change-summary.md
 

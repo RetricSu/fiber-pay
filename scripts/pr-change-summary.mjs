@@ -4,27 +4,46 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, normalize, relative, resolve } from 'node:path';
 
+function printUsageAndExit(message) {
+  if (message) {
+    console.error(message);
+  }
+  console.error(
+    'Usage: node scripts/pr-change-summary.mjs --base <ref> --head <ref> [--json-out <file>] [--md-out <file>]',
+  );
+  process.exit(1);
+}
+
 function getArg(flag, defaultValue = undefined) {
   const index = process.argv.indexOf(flag);
   if (index === -1) return defaultValue;
-  return process.argv[index + 1];
+
+  const value = process.argv[index + 1];
+
+  if (value === undefined || value.startsWith('--')) {
+    if (defaultValue !== undefined) {
+      return defaultValue;
+    }
+    printUsageAndExit(`Missing value for ${flag}`);
+  }
+
+  return value;
 }
 
 function runGit(args, options = {}) {
   return execFileSync('git', args, { encoding: 'utf8', ...options });
 }
 
-function runGitSafe(args) {
-  try {
-    return runGit(args);
-  } catch {
-    return '';
-  }
-}
-
 function validateGitRef(ref, label) {
   if (!ref || /[\0\r\n]/.test(ref)) {
     console.error(`Invalid ${label}: ${ref}`);
+    process.exit(1);
+  }
+
+  try {
+    runGit(['rev-parse', '--verify', `${ref}^{commit}`], { stdio: 'ignore' });
+  } catch {
+    console.error(`Git ref for ${label} does not resolve to a valid commit: ${ref}`);
     process.exit(1);
   }
 }
@@ -55,8 +74,7 @@ const jsonOut = getArg('--json-out', 'pr-change-summary.json');
 const mdOut = getArg('--md-out', 'pr-change-summary.md');
 
 if (!base || !head) {
-  console.error('Usage: node scripts/pr-change-summary.mjs --base <sha> --head <sha> [--json-out <file>] [--md-out <file>]');
-  process.exit(1);
+  printUsageAndExit();
 }
 
 validateGitRef(base, 'base ref');
@@ -65,7 +83,7 @@ validateGitRef(head, 'head ref');
 const resolvedJsonOut = resolveSafeOutputPath(jsonOut);
 const resolvedMdOut = resolveSafeOutputPath(mdOut);
 
-const nameStatus = runGitSafe(['diff', '--name-status', `${base}...${head}`]);
+const nameStatus = runGit(['diff', '--name-status', `${base}...${head}`]);
 const entries = nameStatus
   .split('\n')
   .map((line) => line.trim())
@@ -142,7 +160,7 @@ for (const entry of entries) {
     }
 
     const targetPath = currentPath || previousPath;
-    const diff = runGitSafe(['diff', '--unified=0', `${base}...${head}`, '--', targetPath]);
+    const diff = runGit(['diff', '--unified=0', `${base}...${head}`, '--', targetPath]);
     const removedExports = diff
       .split('\n')
       .filter((line) => line.startsWith('-') && /^\s*export\b/.test(line.slice(1)));
@@ -154,7 +172,7 @@ for (const entry of entries) {
 
   if (packageJsonPaths.has(currentPath)) {
     apiSignals.push(`Package manifest touched: ${currentPath}`);
-    const diff = runGitSafe(['diff', '--unified=0', `${base}...${head}`, '--', currentPath]);
+    const diff = runGit(['diff', '--unified=0', `${base}...${head}`, '--', currentPath]);
     if (/^-\s*"exports"/m.test(diff) || /^-\s*"\.\//m.test(diff)) {
       breakingSignals.push(`Potential export contract removal in ${currentPath}`);
     } else {
