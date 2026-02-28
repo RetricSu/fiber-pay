@@ -12,6 +12,7 @@ import { createPaymentCommand } from './commands/payment.js';
 import { createPeerCommand } from './commands/peer.js';
 import { createRuntimeCommand } from './commands/runtime.js';
 import { createVersionCommand } from './commands/version.js';
+import { isTopLevelVersionRequest } from './lib/argv.js';
 import { CLI_COMMIT, CLI_VERSION } from './lib/build-info.js';
 import { getEffectiveConfig } from './lib/config.js';
 import { printJsonError } from './lib/format.js';
@@ -26,32 +27,6 @@ function getFlagValue(argv: string[], index: number): string | undefined {
     return undefined;
   }
   return value;
-}
-
-const ROOT_COMMANDS = new Set([
-  'node',
-  'channel',
-  'invoice',
-  'payment',
-  'job',
-  'logs',
-  'peer',
-  'graph',
-  'binary',
-  'config',
-  'runtime',
-  'version',
-]);
-
-function hasRootCommand(argv: string[]): boolean {
-  return argv.slice(2).some((arg) => ROOT_COMMANDS.has(arg));
-}
-
-function isTopLevelVersionRequest(argv: string[]): boolean {
-  if (hasRootCommand(argv)) {
-    return false;
-  }
-  return argv.includes('--version') || argv.includes('-v');
 }
 
 /** Tracks which config keys were explicitly set via CLI flags. */

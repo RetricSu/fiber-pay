@@ -301,7 +301,7 @@ export interface ConnectPeerParams {
   save?: boolean;
 }
 
-/** connect_peer returns None. */
+/** connect_peer returns null. */
 export type ConnectPeerResult = null;
 
 export interface DisconnectPeerParams {
