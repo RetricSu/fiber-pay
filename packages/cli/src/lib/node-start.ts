@@ -2,10 +2,12 @@ import { spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  BinaryManager,
   createKeyManager,
   ensureFiberBinary,
   type FiberNodeConfig,
   getDefaultBinaryPath,
+  MigrationManager,
   ProcessManager,
 } from '@fiber-pay/node';
 import { startRuntimeService } from '@fiber-pay/runtime';
@@ -171,6 +173,49 @@ export async function runNodeStartCommand(
   if (!json) {
     console.log(`🧩 Binary: ${binaryPath}`);
     console.log(`🧩 Version: ${binaryVersion}`);
+  }
+
+  // Check if database migration is needed before starting the node
+  if (MigrationManager.storeExists(config.dataDir)) {
+    const installDir = join(config.dataDir, 'bin');
+    const bm = new BinaryManager(installDir);
+    const migrateBinPath = bm.getMigrateBinaryPath();
+    const migrationManager = new MigrationManager(migrateBinPath);
+    const storePath = MigrationManager.resolveStorePath(config.dataDir);
+
+    try {
+      const migrationCheck = await migrationManager.check(storePath);
+      if (migrationCheck.needed) {
+        const message = migrationCheck.valid
+          ? `Database migration required. Run \`fiber-pay node upgrade\` before starting.`
+          : migrationCheck.message;
+        emitStage('migration_check', 'error', {
+          code: 'MIGRATION_REQUIRED',
+          message,
+          storePath,
+        });
+        if (json) {
+          printJsonError({
+            code: 'MIGRATION_REQUIRED',
+            message,
+            recoverable: true,
+            suggestion: 'Run `fiber-pay node upgrade` to migrate the database, then retry start.',
+            details: { storePath, migrationCheck },
+          });
+        } else {
+          console.error(`❌ ${message}`);
+        }
+        process.exit(1);
+      }
+      emitStage('migration_check', 'ok', { storePath, needed: false });
+    } catch {
+      // fnn-migrate binary may not exist (e.g. older install). Just warn and proceed.
+      emitStage('migration_check', 'ok', {
+        storePath,
+        skipped: true,
+        reason: 'fnn-migrate binary not available',
+      });
+    }
   }
 
   const nodeConfig: FiberNodeConfig = {

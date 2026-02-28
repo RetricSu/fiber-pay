@@ -124,6 +124,15 @@ export class BinaryManager {
   }
 
   /**
+   * Get the path where the fnn-migrate binary should be installed
+   */
+  getMigrateBinaryPath(): string {
+    const { platform } = this.getPlatformInfo();
+    const binaryName = platform === 'win32' ? 'fnn-migrate.exe' : 'fnn-migrate';
+    return join(this.installDir, binaryName);
+  }
+
+  /**
    * Check if the binary is installed and get its info
    */
   async getBinaryInfo(): Promise<BinaryInfo> {
@@ -403,7 +412,12 @@ export class BinaryManager {
     const files = await readdir(tempDir, { recursive: true });
     const binaryFile = files.find((f) => {
       const name = String(f);
-      return name.endsWith('fnn') || name.endsWith('fnn.exe');
+      return (
+        name.endsWith('/fnn') ||
+        name === 'fnn' ||
+        name.endsWith('\\fnn') ||
+        name.endsWith('fnn.exe')
+      );
     });
 
     if (binaryFile) {
@@ -417,6 +431,31 @@ export class BinaryManager {
       );
       if (possibleBinary) {
         await rename(join(tempDir, possibleBinary), targetPath);
+      }
+    }
+
+    // Also extract fnn-migrate if present in the archive
+    const migrateFile = files.find((f) => {
+      const name = String(f);
+      return (
+        name.endsWith('/fnn-migrate') ||
+        name === 'fnn-migrate' ||
+        name.endsWith('\\fnn-migrate') ||
+        name.endsWith('fnn-migrate.exe')
+      );
+    });
+
+    if (migrateFile) {
+      const migrateSourcePath = join(tempDir, String(migrateFile));
+      const migrateTargetPath = this.getMigrateBinaryPath();
+      try {
+        await rename(migrateSourcePath, migrateTargetPath);
+        const { platform } = this.getPlatformInfo();
+        if (platform !== 'win32') {
+          chmodSync(migrateTargetPath, 0o755);
+        }
+      } catch {
+        // fnn-migrate is optional; don't fail the main install
       }
     }
 
@@ -452,11 +491,40 @@ export class BinaryManager {
     const files = await readdir(tempDir, { recursive: true });
     const binaryFile = files.find((f) => {
       const name = String(f);
-      return name.endsWith('fnn') || name.endsWith('fnn.exe');
+      return (
+        name.endsWith('/fnn') ||
+        name === 'fnn' ||
+        name.endsWith('\\fnn') ||
+        name.endsWith('fnn.exe')
+      );
     });
 
     if (binaryFile) {
       await rename(join(tempDir, String(binaryFile)), targetPath);
+    }
+
+    // Also extract fnn-migrate if present
+    const migrateFile = files.find((f) => {
+      const name = String(f);
+      return (
+        name.endsWith('/fnn-migrate') ||
+        name === 'fnn-migrate' ||
+        name.endsWith('\\fnn-migrate') ||
+        name.endsWith('fnn-migrate.exe')
+      );
+    });
+
+    if (migrateFile) {
+      const migrateTargetPath = this.getMigrateBinaryPath();
+      try {
+        await rename(join(tempDir, String(migrateFile)), migrateTargetPath);
+        const { platform } = this.getPlatformInfo();
+        if (platform !== 'win32') {
+          chmodSync(migrateTargetPath, 0o755);
+        }
+      } catch {
+        // fnn-migrate is optional
+      }
     }
 
     await rm(tempDir, { recursive: true, force: true });
