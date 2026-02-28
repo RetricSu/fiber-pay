@@ -181,7 +181,7 @@ export function createNodeCommand(config: CliConfig): Command {
       const targetVersion = targetTag.startsWith('v') ? targetTag.slice(1) : targetTag;
 
       if (currentInfo.ready && currentInfo.version === targetVersion && !options.force) {
-        const msg = `Already running ${targetTag}. Use --force to re-download.`;
+        const msg = `Already installed ${targetTag}. Use --force to re-download.`;
         if (json) {
           printJsonSuccess({
             action: 'none',
@@ -231,10 +231,50 @@ export function createNodeCommand(config: CliConfig): Command {
 
       // Step 6: Check migration if store exists
       if (storeExists) {
-        const migrationManager = new MigrationManager(migrateBinaryPath);
+        let migrationManager: MigrationManager;
+        try {
+          migrationManager = new MigrationManager(migrateBinaryPath);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'fnn-migrate binary not available';
+          if (json) {
+            printJsonError({
+              code: 'MIGRATION_TOOL_MISSING',
+              message: msg,
+              recoverable: true,
+              suggestion:
+                'Re-download the binary with: fiber-pay node upgrade --force, or choose a version that includes fnn-migrate.',
+            });
+          } else {
+            console.error(`\n⚠️  ${msg}`);
+            console.log(
+              '   Re-download with --force, or choose a version that includes fnn-migrate.',
+            );
+          }
+          process.exit(1);
+        }
 
         if (!json) console.log('🔍 Checking store compatibility...');
-        migrationCheck = await migrationManager.check(storePath);
+
+        try {
+          migrationCheck = await migrationManager.check(storePath);
+        } catch (checkErr) {
+          const msg = checkErr instanceof Error ? checkErr.message : String(checkErr);
+          if (json) {
+            printJsonError({
+              code: 'MIGRATION_TOOL_MISSING',
+              message: `Migration check failed: ${msg}`,
+              recoverable: true,
+              suggestion:
+                'Re-download the binary with: fiber-pay node upgrade --force, or choose a version that includes fnn-migrate.',
+            });
+          } else {
+            console.error(`\n⚠️  Migration check failed: ${msg}`);
+            console.log(
+              '   Re-download with --force, or choose a version that includes fnn-migrate.',
+            );
+          }
+          process.exit(1);
+        }
 
         if (options.checkOnly) {
           if (json) {
@@ -272,7 +312,6 @@ export function createNodeCommand(config: CliConfig): Command {
           if (!json) console.log('🔄 Running database migration...');
 
           const result = await migrationManager.migrate({
-            migrateBinaryPath,
             storePath,
             backup: options.backup !== false,
           });
@@ -284,7 +323,7 @@ export function createNodeCommand(config: CliConfig): Command {
                 message: result.message,
                 recoverable: !!result.backupPath,
                 suggestion: result.backupPath
-                  ? `Rollback with: rm -rf "${storePath}" && mv "${result.backupPath}" "${storePath}"`
+                  ? `To roll back, delete the current store at "${storePath}" and restore the backup from "${result.backupPath}".`
                   : 'Re-download the previous version or start fresh.',
                 details: { output: result.output, backupPath: result.backupPath },
               });

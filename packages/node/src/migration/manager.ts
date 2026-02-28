@@ -6,12 +6,12 @@
  * the on-disk store format so that it is compatible with a newer `fnn` binary.
  */
 
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // =============================================================================
 // Types
@@ -40,8 +40,6 @@ export interface MigrationResult {
 }
 
 export interface MigrationOptions {
-  /** Path to the fnn-migrate binary */
-  migrateBinaryPath: string;
   /** Path to the fiber store directory (typically `<dataDir>/fiber/store`) */
   storePath: string;
   /** Create a backup before migrating (default: true) */
@@ -84,9 +82,11 @@ export class MigrationManager {
     }
 
     try {
-      const { stdout } = await execAsync(
-        `"${this.migrateBinaryPath}" -p "${storePath}" --check-validate`,
-      );
+      const { stdout } = await execFileAsync(this.migrateBinaryPath, [
+        '-p',
+        storePath,
+        '--check-validate',
+      ]);
       const output = stdout.trim();
       if (output.includes('validate success')) {
         return {
@@ -227,9 +227,11 @@ export class MigrationManager {
 
     // Run migration
     try {
-      const { stdout, stderr } = await execAsync(
-        `"${this.migrateBinaryPath}" -p "${storePath}" --skip-confirm`,
-      );
+      const { stdout, stderr } = await execFileAsync(this.migrateBinaryPath, [
+        '-p',
+        storePath,
+        '--skip-confirm',
+      ]);
       const output = `${stdout}\n${stderr}`.trim();
 
       if (output.includes('migrated successfully') || output.includes('db migrated')) {
@@ -241,11 +243,15 @@ export class MigrationManager {
         };
       }
 
-      // If it didn't explicitly fail, treat as success
+      // Command exited 0 but no recognized success message — treat as failure to be safe
+      let ambiguousMessage = `Migration command finished without errors, but the expected success message was not found. Output: ${output}`;
+      if (backupPath) {
+        ambiguousMessage += `\n\nA backup was created at: ${backupPath}\nTo roll back, delete the current store at "${storePath}" and restore the backup from that path.`;
+      }
       return {
-        success: true,
+        success: false,
         backupPath,
-        message: 'Migration completed.',
+        message: ambiguousMessage,
         output,
       };
     } catch (error) {
@@ -254,7 +260,7 @@ export class MigrationManager {
       // Offer rollback information
       let message = `Migration failed: ${stderr}`;
       if (backupPath) {
-        message += `\n\nA backup was created at: ${backupPath}\nTo rollback: rm -rf "${storePath}" && mv "${backupPath}" "${storePath}"`;
+        message += `\n\nA backup was created at: ${backupPath}\nTo roll back, delete the current store at "${storePath}" and restore the backup from that path.`;
       }
 
       return {
@@ -297,7 +303,7 @@ export class MigrationManager {
   }
 
   /**
-   * Check if the store directory exists and has content.
+   * Check if the store directory exists and is a directory.
    */
   static storeExists(dataDir: string): boolean {
     const storePath = MigrationManager.resolveStorePath(dataDir);

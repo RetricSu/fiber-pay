@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   BinaryManager,
   createKeyManager,
@@ -177,8 +177,10 @@ export async function runNodeStartCommand(
 
   // Check if database migration is needed before starting the node
   if (MigrationManager.storeExists(config.dataDir)) {
-    const installDir = join(config.dataDir, 'bin');
-    const bm = new BinaryManager(installDir);
+    // Derive migrate binary location from the resolved binaryPath directory,
+    // so it stays in sync even when binaryPath is customized via config.
+    const binaryDir = dirname(binaryPath);
+    const bm = new BinaryManager(binaryDir);
     const migrateBinPath = bm.getMigrateBinaryPath();
     const migrationManager = new MigrationManager(migrateBinPath);
     const storePath = MigrationManager.resolveStorePath(config.dataDir);

@@ -41,25 +41,27 @@ Some breaking changes require closing all channels first. The error message incl
 ## Backup & rollback
 
 - Backup created at `<dataDir>/fiber/store.bak-<timestamp>` by default
-- Rollback: `rm -rf <store> && mv <backup> <store>`
+- Rollback: delete the current store directory and restore the backup in its place
 
 ## Programmatic API (`@fiber-pay/node`)
 
 ```typescript
 import { BinaryManager, MigrationManager } from '@fiber-pay/node';
+import * as os from 'os';
 
-const bm = new BinaryManager('~/.fiber-pay/bin');
+const dataDir = `${os.homedir()}/.fiber-pay`;
+const bm = new BinaryManager(`${dataDir}/bin`);
 const migrateBin = bm.getMigrateBinaryPath();  // path to fnn-migrate
 
 const mm = new MigrationManager(migrateBin);
-const storePath = MigrationManager.resolveStorePath('~/.fiber-pay');
+const storePath = MigrationManager.resolveStorePath(dataDir);
 
 // Check
 const check = await mm.check(storePath);
 // check.needed / check.valid / check.message
 
 // Migrate (with backup)
-const result = await mm.migrate({ migrateBinaryPath: migrateBin, storePath });
+const result = await mm.migrate({ storePath });
 // result.success / result.backupPath / result.message
 
 // Rollback
