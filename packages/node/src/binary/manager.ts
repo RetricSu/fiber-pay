@@ -57,6 +57,7 @@ interface AssetCandidate {
 const GITHUB_REPO = 'nervosnetwork/fiber';
 const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_REPO}/releases`;
 const DEFAULT_INSTALL_DIR = join(process.env.HOME || '~', '.fiber-pay', 'bin');
+const RELEASE_TAG_PATTERN = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 // Binary naming patterns for different platforms
 // Pattern used to match assets: fnn_vX.X.X-{pattern}.tar.gz
@@ -187,7 +188,19 @@ export class BinaryManager {
    * Normalize a version into a release tag
    */
   normalizeTag(version: string): string {
-    return version.startsWith('v') ? version : `v${version}`;
+    const input = version.trim();
+    if (!input) {
+      throw new Error('Version cannot be empty');
+    }
+
+    const tag = input.startsWith('v') ? input : `v${input}`;
+    if (!RELEASE_TAG_PATTERN.test(tag)) {
+      throw new Error(
+        `Invalid version format: ${version}. Expected semver-like tag, e.g. v0.7.1 or v0.7.1-rc.1`,
+      );
+    }
+
+    return tag;
   }
 
   /**

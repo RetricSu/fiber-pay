@@ -28,3 +28,22 @@ describe('BinaryManager asset candidate selection', () => {
     expect(candidates.every((candidate) => candidate.usesRosetta === false)).toBe(true);
   });
 });
+
+describe('BinaryManager version normalization', () => {
+  it('accepts valid semver tags and adds v prefix when missing', () => {
+    const manager = new BinaryManager('/tmp/fiber-pay-test');
+
+    expect(manager.normalizeTag('0.7.1')).toBe('v0.7.1');
+    expect(manager.normalizeTag('v0.7.1-rc.1')).toBe('v0.7.1-rc.1');
+    expect(manager.normalizeTag('v0.7.1+build.1')).toBe('v0.7.1+build.1');
+  });
+
+  it('rejects malformed or path-like version inputs', () => {
+    const manager = new BinaryManager('/tmp/fiber-pay-test');
+
+    expect(() => manager.normalizeTag('')).toThrow(/Version cannot be empty/);
+    expect(() => manager.normalizeTag('latest')).toThrow(/Invalid version format/);
+    expect(() => manager.normalizeTag('v0.7.1/../../evil')).toThrow(/Invalid version format/);
+    expect(() => manager.normalizeTag('v0.7')).toThrow(/Invalid version format/);
+  });
+});

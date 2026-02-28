@@ -5,13 +5,7 @@
 import { dirname } from 'node:path';
 import { BinaryManager, type MigrationCheckResult, MigrationManager } from '@fiber-pay/node';
 import { printJsonError } from './format.js';
-
-function replaceRawMigrateHint(message: string): string {
-  return message.replace(
-    /Fiber need to run some database migrations, please run `fnn-migrate[^`]*` to start migrations\.?/g,
-    'Fiber database migration is required.',
-  );
-}
+import { replaceRawMigrateHint } from './migration-utils.js';
 
 // =============================================================================
 // Types

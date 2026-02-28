@@ -5,21 +5,8 @@
 import { BinaryManager, type DownloadProgress, MigrationManager } from '@fiber-pay/node';
 import type { CliConfig } from './config.js';
 import { printJsonError, printJsonSuccess } from './format.js';
+import { normalizeMigrationCheck, replaceRawMigrateHint } from './migration-utils.js';
 import { isProcessRunning, readPidFile } from './pid.js';
-
-function replaceRawMigrateHint(message: string): string {
-  return message.replace(
-    /Fiber need to run some database migrations, please run `fnn-migrate[^`]*` to start migrations\.?/g,
-    'Fiber database migration is required.',
-  );
-}
-
-function normalizeMigrationCheck<T extends { message: string }>(check: T): T {
-  return {
-    ...check,
-    message: replaceRawMigrateHint(check.message),
-  };
-}
 
 export interface NodeUpgradeOptions {
   version?: string;
@@ -351,7 +338,12 @@ async function runMigrationAndReport(
   try {
     const postCheck = await migrationManager.check(storePath);
     return normalizeMigrationCheck(postCheck);
-  } catch {
+  } catch (err) {
+    if (!json) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('⚠️  Post-migration check failed; final migration status may be stale.');
+      console.error(`   ${message}`);
+    }
     return normalizeMigrationCheck(migrationCheck);
   }
 }
