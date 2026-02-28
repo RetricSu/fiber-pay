@@ -7,11 +7,25 @@ import type { CliConfig } from './config.js';
 import { printJsonError, printJsonSuccess } from './format.js';
 import { isProcessRunning, readPidFile } from './pid.js';
 
+function replaceRawMigrateHint(message: string): string {
+  return message.replace(
+    /Fiber need to run some database migrations, please run `fnn-migrate[^`]*` to start migrations\.?/g,
+    'Fiber database migration is required.',
+  );
+}
+
+function normalizeMigrationCheck<T extends { message: string }>(check: T): T {
+  return {
+    ...check,
+    message: replaceRawMigrateHint(check.message),
+  };
+}
+
 export interface NodeUpgradeOptions {
   version?: string;
   backup?: boolean;
   checkOnly?: boolean;
-  force?: boolean;
+  forceMigrate?: boolean;
   json?: boolean;
 }
 
@@ -56,25 +70,6 @@ export async function runNodeUpgradeCommand(
   const currentInfo = await binaryManager.getBinaryInfo();
   const targetVersion = targetTag.startsWith('v') ? targetTag.slice(1) : targetTag;
 
-  if (currentInfo.ready && currentInfo.version === targetVersion && !options.force) {
-    const msg = `Already installed ${targetTag}. Use --force to re-download.`;
-    if (json) {
-      printJsonSuccess({
-        action: 'none',
-        currentVersion: currentInfo.version,
-        targetVersion,
-        message: msg,
-      });
-    } else {
-      console.log(`✅ ${msg}`);
-    }
-    return;
-  }
-
-  if (!json && currentInfo.ready) {
-    console.log(`   Current version: v${currentInfo.version}`);
-  }
-
   // Step 4: Prepare migration-related paths
   const storePath = MigrationManager.resolveStorePath(config.dataDir);
   const migrateBinaryPath = binaryManager.getMigrateBinaryPath();
@@ -83,25 +78,71 @@ export async function runNodeUpgradeCommand(
   const storeExists = MigrationManager.storeExists(config.dataDir);
 
   if (!json && storeExists) {
-    console.log('📂 Existing store detected, will check migration after download.');
+    console.log('📂 Existing store detected.');
   }
 
-  // Step 5: Download new binary (this also extracts fnn-migrate)
-  if (!json) console.log('⬇️  Downloading new binary...');
-
-  const showProgress = (progress: DownloadProgress) => {
-    if (!json) {
-      const percent = progress.percent !== undefined ? ` (${progress.percent}%)` : '';
-      process.stdout.write(`\r   [${progress.phase}]${percent} ${progress.message}`.padEnd(80));
-      if (progress.phase === 'installing') console.log();
+  if (currentInfo.ready && currentInfo.version === targetVersion && !options.forceMigrate) {
+    if (storeExists) {
+      migrationCheck = await runMigrationAndReport({
+        migrateBinaryPath,
+        storePath,
+        json,
+        checkOnly: Boolean(options.checkOnly),
+        targetVersion,
+        backup: options.backup !== false,
+        forceMigrateAttempt: false,
+      });
     }
-  };
 
-  await binaryManager.download({
-    version: targetTag,
-    force: true,
-    onProgress: showProgress,
-  });
+    const msg = migrationCheck
+      ? `Already installed ${targetTag}. Store compatibility checked.`
+      : `Already installed ${targetTag}. Use --force-migrate to run migration flow anyway.`;
+    if (json) {
+      printJsonSuccess({
+        action: 'none',
+        currentVersion: currentInfo.version,
+        targetVersion,
+        message: msg,
+        migration: migrationCheck,
+      });
+    } else {
+      console.log(`✅ ${msg}`);
+    }
+    return;
+  }
+
+  const versionMatches = currentInfo.ready && currentInfo.version === targetVersion;
+  const shouldDownload = !versionMatches;
+
+  if (!json && currentInfo.ready) {
+    console.log(`   Current version: v${currentInfo.version}`);
+  }
+
+  if (shouldDownload) {
+    if (!json && storeExists) {
+      console.log('📂 Existing store detected, will check migration after download.');
+    }
+
+    // Step 5: Download new binary (this also extracts fnn-migrate)
+    if (!json) console.log('⬇️  Downloading new binary...');
+
+    const showProgress = (progress: DownloadProgress) => {
+      if (!json) {
+        const percent = progress.percent !== undefined ? ` (${progress.percent}%)` : '';
+        process.stdout.write(`\r   [${progress.phase}]${percent} ${progress.message}`.padEnd(80));
+        if (progress.phase === 'installing') console.log();
+      }
+    };
+
+    await binaryManager.download({
+      version: targetTag,
+      force: true,
+      onProgress: showProgress,
+    });
+  } else if (!json && options.forceMigrate) {
+    console.log('⏭️  Skipping binary download: target version is already installed.');
+    console.log('🔁 --force-migrate enabled: attempting migration flow on existing binaries.');
+  }
 
   // Step 6: Check migration if store exists
   if (storeExists) {
@@ -112,6 +153,7 @@ export async function runNodeUpgradeCommand(
       checkOnly: Boolean(options.checkOnly),
       targetVersion,
       backup: options.backup !== false,
+      forceMigrateAttempt: Boolean(options.forceMigrate),
     });
   }
 
@@ -145,6 +187,7 @@ interface MigrationRunOptions {
   checkOnly: boolean;
   targetVersion: string;
   backup: boolean;
+  forceMigrateAttempt: boolean;
 }
 
 /**
@@ -157,7 +200,15 @@ interface MigrationRunOptions {
 async function runMigrationAndReport(
   opts: MigrationRunOptions,
 ): Promise<Awaited<ReturnType<MigrationManager['check']>> | null> {
-  const { migrateBinaryPath, storePath, json, checkOnly, targetVersion, backup } = opts;
+  const {
+    migrateBinaryPath,
+    storePath,
+    json,
+    checkOnly,
+    targetVersion,
+    backup,
+    forceMigrateAttempt,
+  } = opts;
 
   // Instantiate MigrationManager
   let migrationManager: MigrationManager;
@@ -171,11 +222,13 @@ async function runMigrationAndReport(
         message: msg,
         recoverable: true,
         suggestion:
-          'Re-download the binary with: fiber-pay node upgrade --force, or choose a version that includes fnn-migrate.',
+          'Run `fiber-pay node upgrade` to reinstall binaries, then retry `fiber-pay node upgrade --force-migrate`.',
       });
     } else {
       console.error(`\n⚠️  ${msg}`);
-      console.log('   Re-download with --force, or choose a version that includes fnn-migrate.');
+      console.log(
+        '   Run `fiber-pay node upgrade` to reinstall binaries, then retry `fiber-pay node upgrade --force-migrate`.',
+      );
     }
     process.exit(1);
   }
@@ -194,25 +247,28 @@ async function runMigrationAndReport(
         message: `Migration check failed: ${msg}`,
         recoverable: true,
         suggestion:
-          'Re-download the binary with: fiber-pay node upgrade --force, or choose a version that includes fnn-migrate.',
+          'Run `fiber-pay node upgrade` to reinstall binaries, then retry `fiber-pay node upgrade --force-migrate`.',
       });
     } else {
       console.error(`\n⚠️  Migration check failed: ${msg}`);
-      console.log('   Re-download with --force, or choose a version that includes fnn-migrate.');
+      console.log(
+        '   Run `fiber-pay node upgrade` to reinstall binaries, then retry `fiber-pay node upgrade --force-migrate`.',
+      );
     }
     process.exit(1);
   }
 
   // --check-only: report and let the caller return
   if (checkOnly) {
+    const normalizedCheck = normalizeMigrationCheck(migrationCheck);
     if (json) {
       printJsonSuccess({
         action: 'check-only',
         targetVersion,
-        migration: migrationCheck,
+        migration: normalizedCheck,
       });
     } else {
-      console.log(`\n📋 Migration status: ${migrationCheck.message}`);
+      console.log(`\n📋 Migration status: ${normalizedCheck.message}`);
     }
     // Signal to caller to return early
     process.exit(0);
@@ -220,24 +276,42 @@ async function runMigrationAndReport(
 
   if (!migrationCheck.needed) {
     if (!json) console.log('   Store is compatible, no migration needed.');
-    return migrationCheck;
+    return normalizeMigrationCheck(migrationCheck);
   }
 
   // Breaking change — cannot auto-migrate
-  if (!migrationCheck.valid) {
+  if (!migrationCheck.valid && !forceMigrateAttempt) {
+    const normalizedMessage = replaceRawMigrateHint(migrationCheck.message);
     if (json) {
       printJsonError({
         code: 'MIGRATION_INCOMPATIBLE',
-        message: migrationCheck.message,
+        message: normalizedMessage,
         recoverable: false,
-        suggestion: 'Close all channels with the old fnn version, remove the store, then restart.',
-        details: { storePath, migrationCheck },
+        suggestion: `Back up your store first (directory: "${storePath}"). Then run \`fiber-pay node upgrade --force-migrate\`. If it still fails, close all channels with the old fnn version, remove the store, and restart with a fresh store. If you attempted migration with backup enabled, you can roll back by restoring the backup directory.`,
+        details: {
+          storePath,
+          migrationCheck: {
+            ...migrationCheck,
+            message: normalizedMessage,
+          },
+        },
       });
     } else {
       console.error('\n❌ Store migration is not possible automatically.');
-      console.log(migrationCheck.message);
+      console.log(normalizedMessage);
+      console.log(`   1) Back up store directory: ${storePath}`);
+      console.log('   2) Try: fiber-pay node upgrade --force-migrate');
+      console.log(
+        '   3) If it still fails, close channels on old fnn, remove store, then restart.',
+      );
+      console.log('   4) If migration created a backup, you can roll back by restoring it.');
     }
     process.exit(1);
+  }
+
+  if (!migrationCheck.valid && !json) {
+    console.log('⚠️  Store check reported incompatibility, but --force-migrate is set.');
+    console.log('   Attempting migration anyway with backup enabled (unless --no-backup).');
   }
 
   // Run migration
@@ -246,6 +320,7 @@ async function runMigrationAndReport(
   const result = await migrationManager.migrate({
     storePath,
     backup,
+    force: forceMigrateAttempt,
   });
 
   if (!result.success) {
@@ -273,5 +348,10 @@ async function runMigrationAndReport(
     }
   }
 
-  return migrationCheck;
+  try {
+    const postCheck = await migrationManager.check(storePath);
+    return normalizeMigrationCheck(postCheck);
+  } catch {
+    return normalizeMigrationCheck(migrationCheck);
+  }
 }

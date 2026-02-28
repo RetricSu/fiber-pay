@@ -46,6 +46,12 @@ export interface MigrationOptions {
   backup?: boolean;
   /** Directory to place backups in (default: sibling of storePath) */
   backupDir?: string;
+  /**
+   * Force migration attempt even when pre-check reports incompatible data.
+   * Use carefully: migration command may still fail and store may require
+   * manual recovery; backup is strongly recommended.
+   */
+  force?: boolean;
 }
 
 // =============================================================================
@@ -183,7 +189,7 @@ export class MigrationManager {
    * interactive prompts.
    */
   async migrate(options: MigrationOptions): Promise<MigrationResult> {
-    const { storePath, backup: doBackup = true, backupDir } = options;
+    const { storePath, backup: doBackup = true, backupDir, force = false } = options;
 
     this.ensureBinaryExists();
 
@@ -204,7 +210,7 @@ export class MigrationManager {
       };
     }
 
-    if (!checkResult.valid) {
+    if (!checkResult.valid && !force) {
       return {
         success: false,
         message: checkResult.message,

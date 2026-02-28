@@ -15,6 +15,7 @@ fiber-pay node stop
 # 2. Upgrade binary + migrate store
 fiber-pay node upgrade                    # latest version
 fiber-pay node upgrade --version v0.7.1   # specific version
+fiber-pay node upgrade --force-migrate    # force migration check/attempt
 
 # 3. Restart
 fiber-pay node start
@@ -27,21 +28,29 @@ fiber-pay node start
 | `--version <ver>` | Pin target version instead of latest |
 | `--no-backup` | Skip store backup before migration |
 | `--check-only` | Dry-run: report migration status without executing |
-| `--force` | Re-download binary even if version matches |
+| `--force-migrate` | Force migration attempt even if compatibility check reports incompatible data |
 | `--json` | Machine-readable output |
 
 ## Startup guard
 
-`fiber-pay node start` automatically checks store compatibility before launching fnn. If migration is needed, it exits with `MIGRATION_REQUIRED` and directs the user to run `node upgrade`.
+`fiber-pay node start` automatically checks store compatibility before launching fnn. If migration is needed, it exits with `MIGRATION_REQUIRED` and directs the user to run `fiber-pay node upgrade --force-migrate`.
 
 ## When auto-migration fails
 
 Some breaking changes require closing all channels first. The error message includes step-by-step manual instructions and a link to the upstream [Migration Guide](https://github.com/nervosnetwork/fiber/wiki/Fiber-Breaking-Change-Migration-Guide).
 
+Recommended operator sequence:
+
+1. Back up the current store directory first (default: `<dataDir>/fiber/store`).
+2. Run `fiber-pay node upgrade --force-migrate`.
+3. If migration still fails, close channels using the old fnn version, then remove the store and restart with a fresh store.
+4. If backup was created, roll back by restoring the backup directory.
+
 ## Backup & rollback
 
 - Backup created at `<dataDir>/fiber/store.bak-<timestamp>` by default
 - Rollback: delete the current store directory and restore the backup in its place
+- `--force-migrate` follows the same backup behavior (unless `--no-backup` is explicitly set)
 
 ## Programmatic API (`@fiber-pay/node`)
 

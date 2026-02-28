@@ -6,6 +6,13 @@ import { dirname } from 'node:path';
 import { BinaryManager, type MigrationCheckResult, MigrationManager } from '@fiber-pay/node';
 import { printJsonError } from './format.js';
 
+function replaceRawMigrateHint(message: string): string {
+  return message.replace(
+    /Fiber need to run some database migrations, please run `fnn-migrate[^`]*` to start migrations\.?/g,
+    'Fiber database migration is required.',
+  );
+}
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -71,19 +78,31 @@ export async function runMigrationGuard(
 
   if (migrationCheck.needed) {
     const message = migrationCheck.valid
-      ? 'Database migration required. Run `fiber-pay node upgrade` before starting.'
-      : migrationCheck.message;
+      ? 'Database migration required. Run `fiber-pay node upgrade --force-migrate` before starting.'
+      : replaceRawMigrateHint(migrationCheck.message);
 
     if (json) {
       printJsonError({
         code: 'MIGRATION_REQUIRED',
         message,
         recoverable: true,
-        suggestion: 'Run `fiber-pay node upgrade` to migrate the database, then retry start.',
-        details: { storePath, migrationCheck },
+        suggestion: `Back up your store first (directory: "${storePath}"). Then run \`fiber-pay node upgrade --force-migrate\`. If migration still fails, close channels on the old fnn version, remove the store, and restart with a fresh store. If backup exists, restore it to roll back.`,
+        details: {
+          storePath,
+          migrationCheck: {
+            ...migrationCheck,
+            message,
+          },
+        },
       });
     } else {
       console.error(`❌ ${message}`);
+      console.error(`   1) Back up store directory: ${storePath}`);
+      console.error('   2) Run: fiber-pay node upgrade --force-migrate');
+      console.error(
+        '   3) If it still fails, close channels on old fnn, remove store, then restart.',
+      );
+      console.error('   4) If backup exists, restore it to roll back.');
     }
     process.exit(1);
   }

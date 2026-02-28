@@ -78,7 +78,10 @@ export function createNodeCommand(config: CliConfig): Command {
     .option('--version <version>', 'Target Fiber version (default: latest)')
     .option('--no-backup', 'Skip creating a store backup before migration')
     .option('--check-only', 'Only check if migration is needed, do not migrate')
-    .option('--force', 'Force re-download the binary even if same version')
+    .option(
+      '--force-migrate',
+      'Force migration attempt even when compatibility check reports incompatible data',
+    )
     .option('--json')
     .action(async (options) => {
       await runNodeUpgradeCommand(config, options);
