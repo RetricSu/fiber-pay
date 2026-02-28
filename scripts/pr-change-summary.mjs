@@ -35,7 +35,7 @@ function runGit(args, options = {}) {
 }
 
 function validateGitRef(ref, label) {
-  if (!ref || /[\0\r\n]/.test(ref)) {
+  if (!ref || ref.startsWith('-') || /[\0\r\n]/.test(ref)) {
     console.error(`Invalid ${label}: ${ref}`);
     process.exit(1);
   }
@@ -66,6 +66,26 @@ function resolveSafeOutputPath(outputPath) {
   }
 
   return resolvedPath;
+}
+
+function sanitizeText(value) {
+  return String(value).replace(/[\r\n\t]/g, ' ').trim();
+}
+
+function escapeMarkdownInline(value) {
+  const text = sanitizeText(value)
+    .replace(/`/g, '\\`')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]');
+  return text.length > 220 ? `${text.slice(0, 217)}...` : text;
+}
+
+function clampList(items, maxItems = 25) {
+  const unique = Array.from(new Set(items.map((item) => sanitizeText(item)).filter(Boolean)));
+  if (unique.length <= maxItems) {
+    return { items: unique, omitted: 0 };
+  }
+  return { items: unique.slice(0, maxItems), omitted: unique.length - maxItems };
 }
 
 const base = getArg('--base');
@@ -232,16 +252,20 @@ const summary = {
 };
 
 const marker = '<!-- pr-change-summary -->';
+const safeRiskReasons = clampList(summary.risk.reasons);
+const safeAffectedPackages = clampList(summary.affectedPackages, 12);
+
 const markdown = [
   marker,
   '## PR Change Summary',
   '',
   `- **Risk Level**: ${summary.risk.level.toUpperCase()}`,
   `- **Changed Files**: ${summary.changedFileCount}`,
-  `- **Affected Packages**: ${summary.affectedPackages.length > 0 ? summary.affectedPackages.join(', ') : 'none'}`,
+  `- **Affected Packages**: ${safeAffectedPackages.items.length > 0 ? safeAffectedPackages.items.map((item) => `\`${escapeMarkdownInline(item)}\``).join(', ') : 'none'}`,
   '',
   '### Risk Reasons',
-  ...summary.risk.reasons.map((reason) => `- ${reason}`),
+  ...safeRiskReasons.items.map((reason) => `- ${escapeMarkdownInline(reason)}`),
+  ...(safeRiskReasons.omitted > 0 ? [`- ...and ${safeRiskReasons.omitted} more reason(s)`] : []),
   '',
   '### Interface Signals',
   `- API touched: ${summary.signals.api.length}`,
@@ -251,10 +275,15 @@ const markdown = [
   '- This report is rule-based (deterministic), not LLM-generated.',
 ].join('\n');
 
+const MAX_MARKDOWN_LENGTH = 60000;
+const finalMarkdown = markdown.length > MAX_MARKDOWN_LENGTH
+  ? `${markdown.slice(0, MAX_MARKDOWN_LENGTH - 80)}\n\n- Output truncated for size safety.\n`
+  : markdown;
+
 mkdirSync(dirname(resolvedJsonOut), { recursive: true });
 mkdirSync(dirname(resolvedMdOut), { recursive: true });
 writeFileSync(resolvedJsonOut, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
-writeFileSync(resolvedMdOut, `${markdown}\n`, 'utf8');
+writeFileSync(resolvedMdOut, `${finalMarkdown}\n`, 'utf8');
 
 console.log(`Wrote ${resolvedJsonOut}`);
 console.log(`Wrote ${resolvedMdOut}`);
