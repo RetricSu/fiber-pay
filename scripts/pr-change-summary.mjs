@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, isAbsolute, normalize, relative, resolve } from 'node:path';
 
 function getArg(flag, defaultValue = undefined) {
   const index = process.argv.indexOf(flag);
@@ -10,16 +10,43 @@ function getArg(flag, defaultValue = undefined) {
   return process.argv[index + 1];
 }
 
-function run(command) {
-  return execSync(command, { encoding: 'utf8' }).trim();
+function runGit(args, options = {}) {
+  return execFileSync('git', args, { encoding: 'utf8', ...options });
 }
 
-function runSafe(command) {
+function runGitSafe(args) {
   try {
-    return execSync(command, { encoding: 'utf8' });
+    return runGit(args);
   } catch {
     return '';
   }
+}
+
+function validateGitRef(ref, label) {
+  if (!ref || /[\0\r\n]/.test(ref)) {
+    console.error(`Invalid ${label}: ${ref}`);
+    process.exit(1);
+  }
+}
+
+function resolveSafeOutputPath(outputPath) {
+  const normalized = normalize(outputPath);
+
+  if (isAbsolute(normalized)) {
+    console.error(`Output path must be relative to repository root: ${outputPath}`);
+    process.exit(1);
+  }
+
+  const repoRoot = process.cwd();
+  const resolvedPath = resolve(repoRoot, normalized);
+  const rel = relative(repoRoot, resolvedPath);
+
+  if (rel.startsWith('..') || isAbsolute(rel)) {
+    console.error(`Output path escapes repository root: ${outputPath}`);
+    process.exit(1);
+  }
+
+  return resolvedPath;
 }
 
 const base = getArg('--base');
@@ -32,7 +59,13 @@ if (!base || !head) {
   process.exit(1);
 }
 
-const nameStatus = runSafe(`git diff --name-status ${base}...${head}`);
+validateGitRef(base, 'base ref');
+validateGitRef(head, 'head ref');
+
+const resolvedJsonOut = resolveSafeOutputPath(jsonOut);
+const resolvedMdOut = resolveSafeOutputPath(mdOut);
+
+const nameStatus = runGitSafe(['diff', '--name-status', `${base}...${head}`]);
 const entries = nameStatus
   .split('\n')
   .map((line) => line.trim())
@@ -109,10 +142,10 @@ for (const entry of entries) {
     }
 
     const targetPath = currentPath || previousPath;
-    const diff = runSafe(`git diff --unified=0 ${base}...${head} -- \"${targetPath}\"`);
+    const diff = runGitSafe(['diff', '--unified=0', `${base}...${head}`, '--', targetPath]);
     const removedExports = diff
       .split('\n')
-      .filter((line) => line.startsWith('-export ' ) || line.startsWith('-export{') || line.startsWith('-export {'));
+      .filter((line) => line.startsWith('-') && /^\s*export\b/.test(line.slice(1)));
 
     if (removedExports.length > 0) {
       breakingSignals.push(`Removed export statement(s) in ${targetPath}`);
@@ -121,7 +154,7 @@ for (const entry of entries) {
 
   if (packageJsonPaths.has(currentPath)) {
     apiSignals.push(`Package manifest touched: ${currentPath}`);
-    const diff = runSafe(`git diff --unified=0 ${base}...${head} -- \"${currentPath}\"`);
+    const diff = runGitSafe(['diff', '--unified=0', `${base}...${head}`, '--', currentPath]);
     if (/^-\s*"exports"/m.test(diff) || /^-\s*"\.\//m.test(diff)) {
       breakingSignals.push(`Potential export contract removal in ${currentPath}`);
     } else {
@@ -200,10 +233,10 @@ const markdown = [
   '- This report is rule-based (deterministic), not LLM-generated.',
 ].join('\n');
 
-mkdirSync(dirname(jsonOut), { recursive: true });
-mkdirSync(dirname(mdOut), { recursive: true });
-writeFileSync(jsonOut, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
-writeFileSync(mdOut, `${markdown}\n`, 'utf8');
+mkdirSync(dirname(resolvedJsonOut), { recursive: true });
+mkdirSync(dirname(resolvedMdOut), { recursive: true });
+writeFileSync(resolvedJsonOut, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
+writeFileSync(resolvedMdOut, `${markdown}\n`, 'utf8');
 
-console.log(`Wrote ${jsonOut}`);
-console.log(`Wrote ${mdOut}`);
+console.log(`Wrote ${resolvedJsonOut}`);
+console.log(`Wrote ${resolvedMdOut}`);
