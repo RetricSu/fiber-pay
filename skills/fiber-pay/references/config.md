@@ -1,4 +1,4 @@
-# FNN Config Reference (v0.6.1)
+# FNN Config Reference (v0.7.1)
 
 - Structured reference for `config.yml` used by the Fiber Network Node (`fnn`). 
 - All values are set via `fiber-pay config set <path> <value>`.
@@ -102,6 +102,8 @@ Each entry: `{ name, script: { code_hash, hash_type, args }, cell_deps: [...] }`
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `rpc.listening_addr` | string | *required if rpc enabled* | Bind address. Use localhost for security |
+| `rpc.cors_enabled` | bool | `false` | Whether to enable CORS for JSON-RPC |
+| `rpc.cors_allowed_origins` | string[] | `[]` | Allowed CORS origins when CORS is enabled |
 | `rpc.biscuit_public_key` | string | none | Biscuit auth public key |
 | `rpc.enabled_modules` | string[] | all standard | Modules: `cch`, `channel`, `graph`, `payment`, `info`, `invoice`, `peer`, `watchtower`, `dev` |
 
@@ -137,11 +139,10 @@ Requires `cch` in `services`.
 | `cch.lnd_cert_path` | string | none | LND TLS cert path |
 | `cch.lnd_macaroon_path` | string | none | LND macaroon path |
 | `cch.wrapped_btc_type_script_args` | string | *required* | Wrapped BTC type script args |
-| `cch.order_expiry` | number | `3600` | Order expiry (seconds) |
+| `cch.expiry_delta_seconds` | number | `3600` | Order expiry delta (seconds) |
 | `cch.base_fee_sats` | number | `0` | Base fee per order (sats) |
 | `cch.fee_rate_per_million_sats` | number | `1` | Proportional fee |
 | `cch.btc_final_tlc_expiry` | number | `36` | BTC final TLC expiry (seconds) |
-| `cch.ckb_final_tlc_expiry_delta` | number | `86400000` (24h) | CKB final TLC expiry delta (ms) |
 
 ---
 

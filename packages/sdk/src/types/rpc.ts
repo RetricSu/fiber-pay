@@ -1,8 +1,8 @@
 /**
- * Fiber Network Node RPC Types (Fiber v0.6.1)
+ * Fiber Network Node RPC Types (Fiber v0.7.1)
  *
  * The types in this file are intended to align with the upstream RPC spec:
- * https://github.com/nervosnetwork/fiber/blob/v0.6.1/crates/fiber-lib/src/rpc/README.md
+ * https://github.com/nervosnetwork/fiber/blob/v0.7.1/crates/fiber-lib/src/rpc/README.md
  */
 
 // =============================================================================
@@ -135,6 +135,8 @@ export interface Htlc {
 export interface Channel {
   channel_id: ChannelId;
   is_public: boolean;
+  is_acceptor: boolean;
+  is_one_way: boolean;
   channel_outpoint: OutPoint | null;
   peer_id: PeerId;
   funding_udt_type_script: Script | null;
@@ -153,6 +155,7 @@ export interface Channel {
   tlc_expiry_delta: HexString;
   tlc_fee_proportional_millionths: HexString;
   shutdown_transaction_hash: Hash256 | null;
+  failure_detail?: string;
 }
 
 // =============================================================================
@@ -298,7 +301,7 @@ export interface ConnectPeerParams {
   save?: boolean;
 }
 
-/** connect_peer returns None in v0.6.1 */
+/** connect_peer returns None. */
 export type ConnectPeerResult = null;
 
 export interface DisconnectPeerParams {
@@ -315,6 +318,7 @@ export interface OpenChannelParams {
   peer_id: PeerId;
   funding_amount: HexString;
   public?: boolean;
+  one_way?: boolean;
   funding_udt_type_script?: Script;
   shutdown_script?: Script;
   commitment_delay_epoch?: HexString;
@@ -349,6 +353,7 @@ export interface AcceptChannelResult {
 export interface ListChannelsParams {
   peer_id?: PeerId;
   include_closed?: boolean;
+  only_pending?: boolean;
 }
 
 export interface ListChannelsResult {
@@ -385,7 +390,9 @@ export interface SendPaymentParams {
   invoice?: string;
   timeout?: HexString;
   max_fee_amount?: HexString;
+  max_fee_rate?: HexString;
   max_parts?: HexString;
+  trampoline_hops?: Pubkey[];
   keysend?: boolean;
   udt_type_script?: Script;
   allow_self_payment?: boolean;
@@ -416,6 +423,7 @@ export interface NewInvoiceParams {
   udt_type_script?: Script;
   hash_algorithm?: HashAlgorithm;
   allow_mpp?: boolean;
+  allow_trampoline_routing?: boolean;
 }
 
 export interface NewInvoiceResult {
@@ -525,7 +533,7 @@ export type CchOrderStatus =
   | 'Pending'
   | 'IncomingAccepted'
   | 'OutgoingInFlight'
-  | 'OutgoingSettled'
+  | 'OutgoingSucceeded'
   | 'Succeeded'
   | 'Failed';
 

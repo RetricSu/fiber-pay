@@ -1,6 +1,6 @@
 ---
 name: fiber-pay
-description: Operate CKB Lightning payments through fiber-pay CLI. Use when tasks involve node lifecycle, channel management, invoice/payment flows, config tuning, or multi-node orchestration on Fiber Network v0.6.1.
+description: Operate CKB Lightning payments through fiber-pay CLI. Use when tasks involve node lifecycle, channel management, invoice/payment flows, config tuning, or multi-node orchestration on Fiber Network v0.7.1.
 ---
 
 # fiber-pay
@@ -8,8 +8,8 @@ description: Operate CKB Lightning payments through fiber-pay CLI. Use when task
 fiber-pay is an AI payment layer over Fiber Network for CKB Lightning. It provides an AI-friendly CLI to manage node lifecycle, channels, invoices, payments, and more.
 
 - Last updated: 2026-02-19
-- Fiber node target: v0.6.1
-- Fiber RPC reference: https://github.com/nervosnetwork/fiber/blob/v0.6.1/crates/fiber-lib/src/rpc/README.md
+- Fiber node target: v0.7.1
+- Fiber RPC reference: https://github.com/nervosnetwork/fiber/blob/v0.7.1/crates/fiber-lib/src/rpc/README.md
 
 ## Architecture
 

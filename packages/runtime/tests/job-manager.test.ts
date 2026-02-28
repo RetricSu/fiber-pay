@@ -104,6 +104,8 @@ const successRpc = {
       {
         channel_id: '0xchan1',
         is_public: false,
+        is_acceptor: false,
+        is_one_way: false,
         channel_outpoint: null,
         peer_id: 'peer-1',
         funding_udt_type_script: null,

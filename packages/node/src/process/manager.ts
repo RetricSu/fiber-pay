@@ -62,7 +62,7 @@ const DEFAULT_TESTNET_FIBER_CONFIG = {
   listening_addr: '/ip4/0.0.0.0/tcp/8228',
   bootnode_addrs: [
     '/ip4/54.179.226.154/tcp/8228/p2p/Qmes1EBD4yNo9Ywkfe6eRw9tG1nVNGLDmMud1xJMsoYFKy',
-    '/ip4/54.179.226.154/tcp/18228/p2p/QmdyQWjPtbK4NWWsvy8s69NGJaQULwgeQDT5ZpNDrTNaeV',
+    '/ip4/16.163.7.105/tcp/8228/p2p/QmdyQWjPtbK4NWWsvy8s69NGJaQULwgeQDT5ZpNDrTNaeV',
   ],
   announce_listening_addr: true,
   chain: 'testnet',

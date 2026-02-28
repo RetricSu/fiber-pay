@@ -6,7 +6,7 @@ describe('BinaryManager asset candidate selection', () => {
     const manager = new BinaryManager('/tmp/fiber-pay-test');
     vi.spyOn(manager, 'getPlatformInfo').mockReturnValue({ platform: 'darwin', arch: 'arm64' });
 
-    const candidates = manager.buildAssetCandidates('v0.6.1');
+    const candidates = manager.buildAssetCandidates('v0.7.1');
 
     expect(candidates.length).toBeGreaterThanOrEqual(2);
     expect(candidates[0].name).toContain('aarch64-darwin');
@@ -21,7 +21,7 @@ describe('BinaryManager asset candidate selection', () => {
     const manager = new BinaryManager('/tmp/fiber-pay-test');
     vi.spyOn(manager, 'getPlatformInfo').mockReturnValue({ platform: 'linux', arch: 'arm64' });
 
-    const candidates = manager.buildAssetCandidates('v0.6.1');
+    const candidates = manager.buildAssetCandidates('v0.7.1');
 
     expect(candidates.length).toBeGreaterThan(0);
     expect(candidates.every((candidate) => !candidate.name.includes('x86_64-linux'))).toBe(true);

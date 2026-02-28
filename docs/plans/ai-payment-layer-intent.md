@@ -10,7 +10,7 @@ It is the baseline for updating root docs and guiding `@fiber-pay/agent` evoluti
 
 ## Core intent
 
-fiber-pay is an **AI payment layer** on top of Fiber Network (target: `v0.6.1`).
+fiber-pay is an **AI payment layer** on top of Fiber Network (target: `v0.7.1`).
 
 The repository also exposes `sdk / node / cli` as foundational capabilities so the payment layer is practical to build, run, and debug.
 
@@ -60,5 +60,5 @@ When in doubt during implementation or documentation changes:
 
 - prefer AI payment layer framing over package-centric framing
 - avoid over-promising agent-runtime capabilities not yet implemented
-- keep Fiber `v0.6.1` compatibility explicit in behavior docs
+- keep Fiber `v0.7.1` compatibility explicit in behavior docs
 - use grouped CLI command model consistently

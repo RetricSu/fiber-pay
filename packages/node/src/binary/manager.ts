@@ -145,7 +145,7 @@ export class BinaryManager {
     if (exists) {
       try {
         const { stdout } = await execAsync(`"${binaryPath}" --version`);
-        // Output format: "fnn Fiber v0.6.1 (f761b6d 2026-01-14)"
+        // Output format: "fnn Fiber v0.7.1 (f761b6d 2026-01-14)"
         // Extract the version number
         const versionMatch = stdout.match(/v(\d+\.\d+\.\d+)/);
         version = versionMatch ? versionMatch[1] : stdout.trim();

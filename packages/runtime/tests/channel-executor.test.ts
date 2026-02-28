@@ -33,6 +33,8 @@ describe('runChannelJob', () => {
           {
             channel_id: '0xchan1',
             is_public: false,
+            is_acceptor: false,
+            is_one_way: false,
             channel_outpoint: null,
             peer_id: 'peer-1',
             funding_udt_type_script: null,
@@ -105,6 +107,8 @@ describe('runChannelJob', () => {
           {
             channel_id: '0xchan-existing',
             is_public: false,
+            is_acceptor: false,
+            is_one_way: false,
             channel_outpoint: null,
             peer_id: 'peer-1',
             funding_udt_type_script: null,
@@ -154,6 +158,8 @@ describe('runChannelJob', () => {
             {
               channel_id: '0xchan1',
               is_public: false,
+              is_acceptor: false,
+              is_one_way: false,
               channel_outpoint: null,
               peer_id: 'peer-1',
               funding_udt_type_script: null,
@@ -218,6 +224,8 @@ describe('runChannelJob', () => {
           {
             channel_id: '0xchan-shutting-down',
             is_public: false,
+            is_acceptor: false,
+            is_one_way: false,
             channel_outpoint: null,
             peer_id: 'peer-1',
             funding_udt_type_script: null,
@@ -260,6 +268,8 @@ describe('runChannelJob', () => {
           {
             channel_id: '0xchan-stale',
             is_public: false,
+            is_acceptor: false,
+            is_one_way: false,
             channel_outpoint: null,
             peer_id: 'peer-1',
             funding_udt_type_script: null,
@@ -279,6 +289,8 @@ describe('runChannelJob', () => {
           {
             channel_id: '0xchan-ready',
             is_public: false,
+            is_acceptor: false,
+            is_one_way: false,
             channel_outpoint: null,
             peer_id: 'peer-1',
             funding_udt_type_script: null,

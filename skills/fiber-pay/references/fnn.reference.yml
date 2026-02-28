@@ -1,7 +1,7 @@
 # =============================================================================
 # Fiber Network Node (fnn) - Full Configuration Reference
 # =============================================================================
-# Version: v0.6.1
+# Version: v0.7.1
 #
 # Usage:
 #   fnn --config /path/to/config.yml
@@ -213,6 +213,15 @@ rpc:
   # [default: None - must be set if rpc service is enabled]
   listening_addr: "127.0.0.1:8227"
 
+  # Whether to enable CORS for RPC
+  # [default: false]
+  # cors_enabled: false
+
+  # Allowed CORS origins when CORS is enabled
+  # [default: []]
+  # cors_allowed_origins:
+  #   - "https://example.com"
+
   # Biscuit public key for RPC authentication
   # [default: None (no auth)]
   # biscuit_public_key: "your-public-key"
@@ -284,9 +293,9 @@ ckb:
 #   # (required if cch is enabled)
 #   wrapped_btc_type_script_args: "0x..."
 #
-#   # Cross-chain order expiry time, in seconds
+#   # Cross-chain order expiry delta, in seconds
 #   # [default: 3600 (1 hour)]
-#   order_expiry: 3600
+#   expiry_delta_seconds: 3600
 #
 #   # Base fee per cross-chain order, in satoshis
 #   # [default: 0]
@@ -300,6 +309,3 @@ ckb:
 #   # [default: 36]
 #   btc_final_tlc_expiry: 36
 #
-#   # Final TLC expiry delta for CKB network, in milliseconds
-#   # [default: 86400000 (24 hours)]
-#   ckb_final_tlc_expiry_delta: 86400000

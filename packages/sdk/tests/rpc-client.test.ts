@@ -382,6 +382,8 @@ describe('FiberRpcClient - Polling Helpers', () => {
             channel_id: '0xch-upper',
             peer_id: 'QmTest',
             is_public: true,
+            is_acceptor: false,
+            is_one_way: false,
             channel_outpoint: null,
             funding_udt_type_script: null,
             state: { state_name: 'CHANNEL_READY', state_flags: [] },
@@ -414,6 +416,8 @@ describe('FiberRpcClient - Polling Helpers', () => {
               channel_id: '0xch1',
               peer_id: 'QmTest',
               is_public: true,
+              is_acceptor: false,
+              is_one_way: false,
               channel_outpoint: null,
               funding_udt_type_script: null,
               state: { state_name: 'AWAITING_CHANNEL_READY', state_flags: [] },
@@ -438,6 +442,8 @@ describe('FiberRpcClient - Polling Helpers', () => {
               channel_id: '0xch1',
               peer_id: 'QmTest',
               is_public: true,
+              is_acceptor: false,
+              is_one_way: false,
               channel_outpoint: null,
               funding_udt_type_script: null,
               state: { state_name: 'CHANNEL_READY', state_flags: [] },
@@ -474,6 +480,8 @@ describe('FiberRpcClient - Polling Helpers', () => {
             channel_id: '0xch1',
             peer_id: 'QmTest',
             is_public: true,
+            is_acceptor: false,
+            is_one_way: false,
             channel_outpoint: null,
             funding_udt_type_script: null,
             state: { state_name: 'Closed', state_flags: [] },
@@ -570,7 +578,7 @@ describe('FiberRpcClient - Polling Helpers', () => {
 // =============================================================================
 
 describe('Type Correctness', () => {
-  it('CkbInvoiceStatus should include v0.6.1 variants', () => {
+  it('CkbInvoiceStatus should include v0.7.1 variants', () => {
     const statuses: CkbInvoiceStatus[] = ['Open', 'Cancelled', 'Expired', 'Received', 'Paid'];
     expect(statuses).toHaveLength(5);
   });

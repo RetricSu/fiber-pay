@@ -2,7 +2,7 @@
 
 AI-friendly toolchain for CKB Lightning on Fiber Network.
 
-Fiber target: `v0.6.1`
+Fiber target: `v0.7.1`
 
 ## Positioning
 

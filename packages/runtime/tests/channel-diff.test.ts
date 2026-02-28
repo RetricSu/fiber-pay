@@ -6,6 +6,8 @@ function makeChannel(overrides: Partial<Channel>): Channel {
   return {
     channel_id: '0x01',
     is_public: true,
+    is_acceptor: false,
+    is_one_way: false,
     channel_outpoint: null,
     peer_id: 'peer-1',
     funding_udt_type_script: null,

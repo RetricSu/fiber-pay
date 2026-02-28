@@ -28,6 +28,32 @@ function getFlagValue(argv: string[], index: number): string | undefined {
   return value;
 }
 
+const ROOT_COMMANDS = new Set([
+  'node',
+  'channel',
+  'invoice',
+  'payment',
+  'job',
+  'logs',
+  'peer',
+  'graph',
+  'binary',
+  'config',
+  'runtime',
+  'version',
+]);
+
+function hasRootCommand(argv: string[]): boolean {
+  return argv.slice(2).some((arg) => ROOT_COMMANDS.has(arg));
+}
+
+function isTopLevelVersionRequest(argv: string[]): boolean {
+  if (hasRootCommand(argv)) {
+    return false;
+  }
+  return argv.includes('--version') || argv.includes('-v');
+}
+
 /** Tracks which config keys were explicitly set via CLI flags. */
 const explicitFlags = new Set<string>();
 
@@ -130,14 +156,20 @@ function printFatal(error: unknown): void {
 }
 
 async function main(): Promise<void> {
-  applyGlobalOverrides(process.argv);
+  const argv = process.argv;
+
+  if (isTopLevelVersionRequest(argv)) {
+    console.log(`${CLI_VERSION} (${CLI_COMMIT})`);
+    return;
+  }
+
+  applyGlobalOverrides(argv);
   const config = getEffectiveConfig(explicitFlags).config;
 
   const program = new Command();
   program
     .name('fiber-pay')
     .description('AI Agent Payment SDK for CKB Lightning Network')
-    .version(`${CLI_VERSION} (${CLI_COMMIT})`, '-v, --version', 'Show version and commit id')
     .option('--profile <name>', 'Use profile at ~/.fiber-pay/profiles/<name>')
     .option('--data-dir <path>', 'Override data directory for all commands')
     .option('--rpc-url <url>', 'Override RPC URL for all commands')
@@ -170,7 +202,7 @@ async function main(): Promise<void> {
   program.addCommand(createRuntimeCommand(config));
   program.addCommand(createVersionCommand());
 
-  await program.parseAsync(process.argv);
+  await program.parseAsync(argv);
 }
 
 main().catch((error) => {

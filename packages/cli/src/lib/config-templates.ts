@@ -1,12 +1,12 @@
 export type FiberNetwork = 'testnet' | 'mainnet';
 
-export const TESTNET_CONFIG_TEMPLATE_V061 = `# This configuration file only contains the necessary configurations for the testnet deployment.
+export const TESTNET_CONFIG_TEMPLATE_V071 = `# This configuration file only contains the necessary configurations for the testnet deployment.
 # All options' descriptions can be found via \`fnn --help\` and be overridden by command line arguments or environment variables.
 fiber:
-  listening_addr: "/ip4/127.0.0.1/tcp/8228"
+  listening_addr: "/ip4/0.0.0.0/tcp/8228"
   bootnode_addrs:
     - "/ip4/54.179.226.154/tcp/8228/p2p/Qmes1EBD4yNo9Ywkfe6eRw9tG1nVNGLDmMud1xJMsoYFKy"
-    - "/ip4/54.179.226.154/tcp/18228/p2p/QmdyQWjPtbK4NWWsvy8s69NGJaQULwgeQDT5ZpNDrTNaeV"
+    - "/ip4/16.163.7.105/tcp/8228/p2p/QmdyQWjPtbK4NWWsvy8s69NGJaQULwgeQDT5ZpNDrTNaeV"
   announce_listening_addr: true
   announced_addrs:
     # If you want to announce your fiber node public address to the network, you need to add the address here, please change the ip to your public ip accordingly.
@@ -73,7 +73,7 @@ services:
   - ckb
 `;
 
-export const MAINNET_CONFIG_TEMPLATE_V061 = `# This configuration file only contains the necessary configurations for the mainnet deployment.
+export const MAINNET_CONFIG_TEMPLATE_V071 = `# This configuration file only contains the necessary configurations for the mainnet deployment.
 # All options' descriptions can be found via \`fnn --help\` and be overridden by command line arguments or environment variables.
 fiber:
   listening_addr: "/ip4/0.0.0.0/tcp/8228"
@@ -150,5 +150,5 @@ services:
 `;
 
 export function getConfigTemplate(network: FiberNetwork): string {
-  return network === 'mainnet' ? MAINNET_CONFIG_TEMPLATE_V061 : TESTNET_CONFIG_TEMPLATE_V061;
+  return network === 'mainnet' ? MAINNET_CONFIG_TEMPLATE_V071 : TESTNET_CONFIG_TEMPLATE_V071;
 }
