@@ -44,9 +44,7 @@ CI remains the remote enforcement gate and must stay aligned with local checks.
 
 ### Changeset CI check
 
-Every pull request is checked for a changeset file by `.github/workflows/changeset-check.yml`.
-If no `.changeset/*.md` is found, the workflow fails and posts a reminder comment.
-Add the `skip-changeset` label to bypass for docs/CI/chore-only PRs.
+Every pull request is checked for a changeset file by `.github/workflows/changeset-check.yml`. See the [Changeset enforcement](#changeset-enforcement) section for details on when this check applies and how to bypass it.
 
 ## Change-scope command matrix
 
