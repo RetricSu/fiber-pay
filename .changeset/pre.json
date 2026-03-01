@@ -8,5 +8,8 @@
     "@fiber-pay/runtime": "0.1.0-rc.3",
     "@fiber-pay/sdk": "0.1.0-rc.3"
   },
-  "changesets": []
+  "changesets": [
+    "clever-oranges-obey",
+    "green-keys-smoke"
+  ]
 }
