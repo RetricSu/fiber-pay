@@ -104,8 +104,8 @@ curl -fsS "$PROXY_A/jobs/$PAYMENT_JOB_ID/events" | jq
 ## One-command regression (recommended)
 
 ```bash
-pnpm e2e:runtime-jobs
-JOB_TIMEOUT_SEC=420 CHANNEL_CLEANUP_TIMEOUT_SEC=120 pnpm e2e:runtime-jobs -- --json
+pnpm e2e
+CHANNEL_READY_TIMEOUT_SEC=420 CHANNEL_CLOSE_TIMEOUT_SEC=180 pnpm e2e
 ```
 
 ## Handy job commands

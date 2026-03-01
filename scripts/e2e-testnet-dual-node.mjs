@@ -1,998 +1,649 @@
 #!/usr/bin/env node
-/**
- * E2E testnet dual-node test — cross-platform Node.js rewrite.
- *
- * Lifecycle:
- *   1. (optional) pnpm build
- *   2. config init (with per-node rpc/p2p ports)
- *   3. binary download (or skip)
- *   4. start both nodes, wait for RPC ready
- *   5. (optional) faucet claim + CKB deposit
- *   6. peer connect → open channel → create invoice → send payment → close channel
- *   7. cleanup (stop nodes, collect artifacts)
- *
- * Environment variables (all optional, sensible defaults provided):
- *   ARTIFACT_DIR, WORK_ROOT,
- *   NODE_A_DIR, NODE_B_DIR,
- *   NODE_A_RPC_PORT, NODE_A_P2P_PORT, NODE_B_RPC_PORT, NODE_B_P2P_PORT,
- *   NETWORK, FIBER_KEY_PASSWORD,
- *   SOURCE_PRIVKEY, SOURCE_ADDRESS,
- *   CHANNEL_FUNDING_CKB, INVOICE_AMOUNT_CKB, DEPOSIT_AMOUNT_CKB,
- *   DEPOSIT_MAX_ATTEMPTS, DEPOSIT_RETRY_DELAY_SEC,
- *   NODE_READY_TIMEOUT_SEC, FUNDING_WAIT_TIMEOUT_SEC,
- *   CHANNEL_READY_TIMEOUT_SEC, PAYMENT_TIMEOUT_SEC, CLOSE_TIMEOUT_SEC,
- *   POLL_INTERVAL_SEC,
- *   SKIP_BUILD, SKIP_DEPOSIT, SKIP_BINARY_DOWNLOAD,
- *   FIBER_BINARY_VERSION
- */
 
-import { execFileSync, spawn } from 'node:child_process';
-import {
-  copyFileSync,
-  createWriteStream,
-  existsSync,
-  mkdirSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
-import { platform } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process'
+import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, platform } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-// ---------------------------------------------------------------------------
-// Paths
-// ---------------------------------------------------------------------------
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const ROOT_DIR = resolve(__dirname, '..');
-const CLI_DIR = join(ROOT_DIR, 'packages', 'cli');
-const CLI_ENTRY = join(CLI_DIR, 'dist', 'cli.js');
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const isWin = platform() === 'win32';
-
-function timestamp() {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-}
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const ROOT_DIR = resolve(__dirname, '..')
+const CLI_ENTRY = join(ROOT_DIR, 'packages', 'cli', 'dist', 'cli.js')
+const IS_WIN = platform() === 'win32'
 
 function env(name, fallback) {
-  const v = process.env[name];
-  if (v === undefined || v === '') return fallback;
-  return v;
+  const value = process.env[name]
+  if (value === undefined || value === '') return fallback
+  return value
 }
 
 function envInt(name, fallback) {
-  const v = process.env[name];
-  if (v === undefined || v === '') return fallback;
-  return parseInt(v, 10);
+  const value = process.env[name]
+  if (value === undefined || value === '') return fallback
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return parsed
 }
 
-function log(...args) {
-  process.stderr.write(`[e2e-dual-node] ${args.join(' ')}\n`);
+function envBool(name, fallback) {
+  const value = process.env[name]
+  if (value === undefined || value === '') return fallback
+  return value === '1' || value.toLowerCase() === 'true'
 }
 
-function fail(msg) {
-  throw new Error(msg);
+function timestamp() {
+  const now = new Date()
+  const pad = (v) => String(v).padStart(2, '0')
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+}
+
+function log(message, details) {
+  if (details === undefined) {
+    process.stderr.write(`[e2e-dual-node] ${message}\n`)
+    return
+  }
+  process.stderr.write(`[e2e-dual-node] ${message}: ${details}\n`)
+}
+
+function fail(message) {
+  throw new Error(message)
+}
+
+function ensureDir(path) {
+  if (!existsSync(path)) {
+    mkdirSync(path, { recursive: true })
+  }
 }
 
 function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
+  return new Promise((resolveSleep) => setTimeout(resolveSleep, ms))
 }
 
 function nowSec() {
-  return Math.floor(Date.now() / 1000);
+  return Math.floor(Date.now() / 1000)
 }
 
-function ensureDir(p) {
-  if (!existsSync(p)) mkdirSync(p, { recursive: true });
-}
-
-/**
- * Retry a sync/async function up to `retries` times with a delay between attempts.
- */
-async function retry(fn, { retries = 3, delaySec = 3, label = 'operation' } = {}) {
-  let lastErr;
-  for (let i = 1; i <= retries; i++) {
-    try {
-      const result = await fn();
-      return result;
-    } catch (err) {
-      lastErr = err;
-      log(`${label}: attempt ${i}/${retries} failed — ${err.message?.split('\n')[0] ?? err}`);
-      if (i < retries) {
-        await sleep(delaySec * 1000);
-      }
-    }
-  }
-  fail(`${label}: all ${retries} attempts failed. Last error: ${lastErr?.message ?? lastErr}`);
-}
-
-// ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
-
-const ARTIFACT_DIR = env(
-  'ARTIFACT_DIR',
-  join(ROOT_DIR, '.artifacts', `e2e-testnet-dual-node-${timestamp()}`),
-);
-const WORK_ROOT = env('WORK_ROOT', join(ROOT_DIR, '.tmp', 'e2e-testnet-dual-node'));
-
-const NODE_A_DIR = env('NODE_A_DIR', join(WORK_ROOT, 'node-a'));
-const NODE_B_DIR = env('NODE_B_DIR', join(WORK_ROOT, 'node-b'));
-
-const NODE_A_RPC_PORT = envInt('NODE_A_RPC_PORT', 8227);
-const NODE_A_P2P_PORT = envInt('NODE_A_P2P_PORT', 8228);
-const NODE_B_RPC_PORT = envInt('NODE_B_RPC_PORT', 8327);
-const NODE_B_P2P_PORT = envInt('NODE_B_P2P_PORT', 8328);
-
-const NETWORK = env('NETWORK', 'testnet');
-const KEY_PASSWORD = env('FIBER_KEY_PASSWORD', 'fiber-pay-e2e-key');
-const SOURCE_PRIVKEY = env(
-  'SOURCE_PRIVKEY',
-  '0x254d048481119a73458935d4cd942e09f5bc12b02b925e816626cafc7d23b7c4',
-);
-const SOURCE_ADDRESS = env(
-  'SOURCE_ADDRESS',
-  'ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqwwkx07pxk8g495z5u0j62pkucp5h2sjmszcrnx7',
-);
-
-const CHANNEL_FUNDING_CKB = envInt('CHANNEL_FUNDING_CKB', 200);
-const INVOICE_AMOUNT_CKB = envInt('INVOICE_AMOUNT_CKB', 5);
-const DEPOSIT_AMOUNT_CKB = envInt('DEPOSIT_AMOUNT_CKB', 250);
-const DEPOSIT_MAX_ATTEMPTS = envInt('DEPOSIT_MAX_ATTEMPTS', 4);
-const DEPOSIT_RETRY_DELAY_SEC = envInt('DEPOSIT_RETRY_DELAY_SEC', 20);
-
-const NODE_READY_TIMEOUT_SEC = envInt('NODE_READY_TIMEOUT_SEC', 90);
-const FUNDING_WAIT_TIMEOUT_SEC = envInt('FUNDING_WAIT_TIMEOUT_SEC', 600);
-const CHANNEL_APPEAR_TIMEOUT_SEC = envInt('CHANNEL_APPEAR_TIMEOUT_SEC', 45);
-const CHANNEL_READY_TIMEOUT_SEC = envInt('CHANNEL_READY_TIMEOUT_SEC', 600);
-const PAYMENT_TIMEOUT_SEC = envInt('PAYMENT_TIMEOUT_SEC', 180);
-const _CLOSE_TIMEOUT_SEC = envInt('CLOSE_TIMEOUT_SEC', 300);
-const POLL_INTERVAL_SEC = envInt('POLL_INTERVAL_SEC', 5);
-
-const SKIP_BUILD = env('SKIP_BUILD', '0') === '1';
-const SKIP_DEPOSIT = env('SKIP_DEPOSIT', '0') === '1';
-const SKIP_BINARY_DOWNLOAD = env('SKIP_BINARY_DOWNLOAD', '0') === '1';
-const CLEAR_BEFORE_RUN = env('CLEAR_BEFORE_RUN', '1') === '1';
-const FIBER_BINARY_VERSION = env('FIBER_BINARY_VERSION', 'v0.6.1');
-
-const NODE_A_RPC_URL = `http://127.0.0.1:${NODE_A_RPC_PORT}`;
-const NODE_B_RPC_URL = `http://127.0.0.1:${NODE_B_RPC_PORT}`;
-
-const NODE_A_START_LOG = join(ARTIFACT_DIR, 'node-a.start.log');
-const NODE_B_START_LOG = join(ARTIFACT_DIR, 'node-b.start.log');
-
-// ---------------------------------------------------------------------------
-// Cross-platform command helpers
-// ---------------------------------------------------------------------------
-
-/** Resolve the right command for the OS (adds .cmd on Windows for npm/pnpm). */
 function resolveCmd(cmd) {
-  if (isWin && ['pnpm', 'npx', 'npm', 'offckb'].includes(cmd)) {
-    return `${cmd}.cmd`;
-  }
-  return cmd;
+  if (IS_WIN && ['pnpm', 'npm', 'npx'].includes(cmd)) return `${cmd}.cmd`
+  return cmd
 }
 
-/**
- * Synchronous exec helper – returns stdout as a string.
- * On failure throws with detailed output unless `opts.ignoreError` is set.
- */
-function run(cmd, args, opts = {}) {
-  const { ignoreError = false, cwd = ROOT_DIR, envOverrides = {} } = opts;
-  try {
-    const result = execFileSync(resolveCmd(cmd), args, {
-      cwd,
-      encoding: 'utf-8',
-      maxBuffer: 50 * 1024 * 1024,
-      env: { ...process.env, ...envOverrides },
-      stdio: ['pipe', 'pipe', 'pipe'],
-      // On Windows, we need shell: true for .cmd files
-      ...(isWin ? { shell: true } : {}),
-    });
-    return result;
-  } catch (err) {
-    if (ignoreError) return '';
-    // Build a readable error that includes child process output
-    const cmdStr = [cmd, ...args].join(' ');
-    const childStdout = (err.stdout ?? '').trim();
-    const childStderr = (err.stderr ?? '').trim();
-    const details = [
-      `Command failed (exit ${err.status ?? '?'}): ${cmdStr}`,
-      childStderr && `  stderr: ${childStderr}`,
-      childStdout && `  stdout: ${childStdout}`,
-    ]
-      .filter(Boolean)
-      .join('\n');
-    const wrapped = new Error(details);
-    wrapped.exitCode = err.status;
-    wrapped.childStdout = childStdout;
-    wrapped.childStderr = childStderr;
-    throw wrapped;
-  }
-}
-
-/**
- * Run a command and return { stdout, stderr, exitCode }.
- * Never throws.
- */
-function runSafe(cmd, args, opts = {}) {
-  const { cwd = ROOT_DIR, envOverrides = {} } = opts;
+function run(cmd, args, { cwd = ROOT_DIR, envOverrides = {}, ignoreError = false } = {}) {
   try {
     const stdout = execFileSync(resolveCmd(cmd), args, {
       cwd,
+      env: { ...process.env, ...envOverrides },
       encoding: 'utf-8',
       maxBuffer: 50 * 1024 * 1024,
-      env: { ...process.env, ...envOverrides },
       stdio: ['pipe', 'pipe', 'pipe'],
-      ...(isWin ? { shell: true } : {}),
-    });
-    return { stdout, stderr: '', exitCode: 0 };
-  } catch (err) {
+      ...(IS_WIN ? { shell: true } : {}),
+    })
+    return stdout
+  } catch (error) {
+    if (ignoreError) return ''
+    const stderr = (error.stderr ?? '').toString()
+    const stdout = (error.stdout ?? '').toString()
+    const cmdline = [cmd, ...args].join(' ')
+    fail(
+      [`Command failed (exit=${error.status ?? 'unknown'}): ${cmdline}`, stderr && `stderr: ${stderr.trim()}`, stdout && `stdout: ${stdout.trim()}`]
+        .filter(Boolean)
+        .join('\n'),
+    )
+  }
+}
+
+function runSafe(cmd, args, { cwd = ROOT_DIR, envOverrides = {} } = {}) {
+  try {
+    const stdout = execFileSync(resolveCmd(cmd), args, {
+      cwd,
+      env: { ...process.env, ...envOverrides },
+      encoding: 'utf-8',
+      maxBuffer: 50 * 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      ...(IS_WIN ? { shell: true } : {}),
+    })
+    return { exitCode: 0, stdout, stderr: '' }
+  } catch (error) {
     return {
-      stdout: err.stdout ?? '',
-      stderr: err.stderr ?? '',
-      exitCode: err.status ?? 1,
-    };
-  }
-}
-
-/**
- * Spawn a child process detached – returns the ChildProcess.
- * stdout + stderr are written to logPath.
- */
-function spawnDetached(cmd, args, opts = {}) {
-  const { cwd = ROOT_DIR, envOverrides = {}, logPath } = opts;
-  ensureDir(dirname(logPath));
-  const out = createWriteStream(logPath, { flags: 'w' });
-  const child = spawn(resolveCmd(cmd), args, {
-    cwd,
-    env: { ...process.env, ...envOverrides },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: !isWin,
-    ...(isWin ? { shell: true } : {}),
-  });
-  child.stdout.pipe(out);
-  child.stderr.pipe(out);
-  return child;
-}
-
-// ---------------------------------------------------------------------------
-// fiber-pay CLI wrappers
-// ---------------------------------------------------------------------------
-
-function fiberPayEnv(nodeName) {
-  const dir = nodeName === 'A' ? NODE_A_DIR : NODE_B_DIR;
-  const rpc = nodeName === 'A' ? NODE_A_RPC_URL : NODE_B_RPC_URL;
-  const rpcPort = nodeName === 'A' ? NODE_A_RPC_PORT : NODE_B_RPC_PORT;
-  const p2pPort = nodeName === 'A' ? NODE_A_P2P_PORT : NODE_B_P2P_PORT;
-  return {
-    FIBER_DATA_DIR: dir,
-    FIBER_RPC_URL: rpc,
-    FIBER_RPC_PORT: String(rpcPort),
-    FIBER_P2P_PORT: String(p2pPort),
-    FIBER_NETWORK: NETWORK,
-    FIBER_KEY_PASSWORD: KEY_PASSWORD,
-  };
-}
-
-function fiberPay(nodeName, ...args) {
-  return run('pnpm', ['--filter', '@fiber-pay/cli', 'exec', 'node', CLI_ENTRY, ...args], {
-    envOverrides: fiberPayEnv(nodeName),
-  });
-}
-
-function fiberPaySafe(nodeName, ...args) {
-  return runSafe('pnpm', ['--filter', '@fiber-pay/cli', 'exec', 'node', CLI_ENTRY, ...args], {
-    envOverrides: fiberPayEnv(nodeName),
-  });
-}
-
-function fiberPaySpawn(nodeName, args, logPath) {
-  return spawnDetached('pnpm', ['--filter', '@fiber-pay/cli', 'exec', 'node', CLI_ENTRY, ...args], {
-    envOverrides: fiberPayEnv(nodeName),
-    logPath,
-  });
-}
-
-// ---------------------------------------------------------------------------
-// JSON helpers
-// ---------------------------------------------------------------------------
-
-function jsonParse(str) {
-  try {
-    return JSON.parse(str);
-  } catch {
-    return undefined;
-  }
-}
-
-function jsonGet(obj, path) {
-  if (!obj) return undefined;
-  const tokens = path
-    .replace(/\[(\d+)\]/g, '.$1')
-    .split('.')
-    .filter(Boolean);
-  let cur = obj;
-  for (const t of tokens) {
-    if (cur == null) return undefined;
-    cur = cur[t];
-  }
-  return cur;
-}
-
-function hexToBigInt(value) {
-  if (typeof value !== 'string') return undefined;
-  if (value.startsWith('0x') || value.startsWith('0X')) {
-    return BigInt(value);
-  }
-  if (/^\d+$/.test(value)) {
-    return BigInt(value);
-  }
-  return undefined;
-}
-
-function shannonsToCkb(shannons) {
-  return Number(shannons) / 100_000_000;
-}
-
-async function fetchNodeInfoRaw(rpcUrl) {
-  const response = await fetch(rpcUrl, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'node_info', params: [] }),
-  });
-
-  if (!response.ok) {
-    fail(`node_info RPC failed at ${rpcUrl} with HTTP ${response.status}`);
-  }
-
-  const payload = await response.json();
-  if (payload?.error) {
-    fail(`node_info RPC error at ${rpcUrl}: ${JSON.stringify(payload.error)}`);
-  }
-  if (!payload?.result) {
-    fail(`node_info RPC returned no result at ${rpcUrl}`);
-  }
-
-  return payload.result;
-}
-
-function _firstMultiaddr(infoObj) {
-  const addresses = jsonGet(infoObj, 'data.addresses');
-  if (!Array.isArray(addresses) || addresses.length === 0) return undefined;
-  const first = addresses[0];
-  if (typeof first === 'string') return first;
-  if (first && typeof first.address === 'string') return first.address;
-  return undefined;
-}
-
-// ---------------------------------------------------------------------------
-// Hex compressed pubkey → libp2p peer ID (base58btc)
-// ---------------------------------------------------------------------------
-
-import { createHash } from 'node:crypto';
-
-const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-
-function base58btcEncode(buf) {
-  let num = BigInt(`0x${Buffer.from(buf).toString('hex')}`);
-  let str = '';
-  while (num > 0n) {
-    str = BASE58_ALPHABET[Number(num % 58n)] + str;
-    num = num / 58n;
-  }
-  // Preserve leading zeros
-  for (let i = 0; i < buf.length && buf[i] === 0; i++) {
-    str = `1${str}`;
-  }
-  return str;
-}
-
-/**
- * Convert a hex-encoded secp256k1 compressed public key (33 bytes)
- * to a libp2p peer ID (base58btc-encoded SHA256 multihash of raw key bytes).
- */
-function hexPubkeyToPeerId(hexPubkey) {
-  const raw = Buffer.from(hexPubkey.replace(/^0x/, ''), 'hex');
-  if (raw.length !== 33) {
-    fail(`Expected 33-byte compressed pubkey, got ${raw.length} bytes`);
-  }
-  // SHA256 multihash: 0x12 (sha2-256) + 0x20 (32 bytes) + sha256(raw compressed pubkey)
-  const sha = createHash('sha256').update(raw).digest();
-  const mh = Buffer.concat([Buffer.from([0x12, 0x20]), sha]);
-  return base58btcEncode(mh);
-}
-
-// ---------------------------------------------------------------------------
-// Polling helpers
-// ---------------------------------------------------------------------------
-
-async function waitForNodeReady(nodeName, timeoutSec) {
-  const start = nowSec();
-  while (true) {
-    const { stdout } = fiberPaySafe(nodeName, 'node', 'info', '--json');
-    const parsed = jsonParse(stdout);
-    if (parsed && jsonGet(parsed, 'success') === true) {
-      log(`Node ${nodeName} is ready`);
-      return parsed;
-    }
-    if (nowSec() - start >= timeoutSec) {
-      fail(`Node ${nodeName} not ready within ${timeoutSec}s`);
-    }
-    await sleep(POLL_INTERVAL_SEC * 1000);
-  }
-}
-
-function matchChannelByPeer(channel, peerSelectors) {
-  if (!channel || typeof channel !== 'object') return false;
-  const peerId = channel.peer_id;
-  if (typeof peerId !== 'string') return false;
-  return peerSelectors.includes(peerId);
-}
-
-function findChannel(channels, peerSelectors, stateName) {
-  if (!Array.isArray(channels) || channels.length === 0) return undefined;
-
-  const matched = channels.find((ch) => {
-    if (stateName && ch?.state?.state_name !== stateName) return false;
-    return matchChannelByPeer(ch, peerSelectors);
-  });
-  if (matched) return matched;
-
-  if (channels.length === 1) {
-    const only = channels[0];
-    if (!stateName || only?.state?.state_name === stateName) {
-      return only;
+      exitCode: error.status ?? 1,
+      stdout: (error.stdout ?? '').toString(),
+      stderr: (error.stderr ?? '').toString(),
     }
   }
-
-  return undefined;
 }
 
-async function waitForChannelReady(peerSelectors, timeoutSec) {
-  const start = nowSec();
-  let lastRaw = '';
-  let lastParsed;
-  while (true) {
-    const { stdout } = fiberPaySafe('A', 'channel', 'list', '--state', 'CHANNEL_READY', '--json');
-    lastRaw = stdout;
-    const parsed = jsonParse(stdout);
-    lastParsed = parsed;
-    if (parsed) {
-      const channels = jsonGet(parsed, 'data.channels');
-      const readyChannel = findChannel(channels, peerSelectors, 'ChannelReady');
-      if (readyChannel?.channel_id) {
-        return readyChannel.channel_id;
-      }
-    }
-    if (nowSec() - start >= timeoutSec) {
-      writeArtifact('wait-channel-ready.last.raw.txt', lastRaw);
-      writeArtifact('wait-channel-ready.last.parsed.json', {
-        peerSelectors,
-        timeoutSec,
-        parsed: lastParsed ?? null,
-      });
-      fail(
-        `Channel did not reach ChannelReady within ${timeoutSec}s (peer selectors=${peerSelectors.join(',')})`,
-      );
-    }
-    await sleep(POLL_INTERVAL_SEC * 1000);
-  }
-}
-
-async function waitForChannelAppear(peerSelectors, timeoutSec) {
-  const start = nowSec();
-  let lastRaw = '';
-  let lastParsed;
-  while (true) {
-    const { stdout } = fiberPaySafe('A', 'channel', 'list', '--include-closed', '--json');
-    lastRaw = stdout;
-    const parsed = jsonParse(stdout);
-    lastParsed = parsed;
-    if (parsed) {
-      const channels = jsonGet(parsed, 'data.channels');
-      const appearedChannel = findChannel(channels, peerSelectors);
-      if (appearedChannel?.channel_id) {
-        return appearedChannel.channel_id;
-      }
-    }
-
-    if (nowSec() - start >= timeoutSec) {
-      writeArtifact('wait-channel-appear.last.raw.txt', lastRaw);
-      writeArtifact('wait-channel-appear.last.parsed.json', {
-        peerSelectors,
-        timeoutSec,
-        parsed: lastParsed ?? null,
-      });
-      fail(
-        `Channel did not appear after open within ${timeoutSec}s (peer selectors=${peerSelectors.join(',')})`,
-      );
-    }
-    await sleep(POLL_INTERVAL_SEC * 1000);
-  }
-}
-
-async function waitForPeerConnected(peerId, timeoutSec) {
-  const start = nowSec();
-  while (true) {
-    const { stdout } = fiberPaySafe('A', 'peer', 'list', '--json');
-    const parsed = jsonParse(stdout);
-    if (parsed) {
-      const peers = jsonGet(parsed, 'data.peers');
-      if (Array.isArray(peers)) {
-        const found = peers.some((peer) => peer?.peer_id === peerId);
-        if (found) {
-          log(`Peer connected: ${peerId}`);
-          return;
-        }
-      }
-    }
-
-    if (nowSec() - start >= timeoutSec) {
-      fail(`Peer ${peerId} not connected within ${timeoutSec}s`);
-    }
-    await sleep(POLL_INTERVAL_SEC * 1000);
-  }
-}
-
-async function waitForPaymentTerminal(paymentHash, timeoutSec) {
-  const start = nowSec();
-  while (true) {
-    const { stdout } = fiberPaySafe('A', 'payment', 'get', paymentHash, '--json');
-    const parsed = jsonParse(stdout);
-    if (parsed) {
-      const status = jsonGet(parsed, 'data.status');
-      if (status === 'Success' || status === 'success') {
-        log('Payment reached Success');
-        return;
-      }
-      if (status === 'Failed' || status === 'failed') {
-        const reason = jsonGet(parsed, 'data.failureReason') ?? 'unknown';
-        fail(`Payment failed: ${reason}`);
-      }
-    }
-    if (nowSec() - start >= timeoutSec) {
-      fail(`Payment not terminal within ${timeoutSec}s`);
-    }
-    await sleep(POLL_INTERVAL_SEC * 1000);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Deposit / faucet helpers
-// ---------------------------------------------------------------------------
-
-async function depositWithRetry(nodeName, fundingAddr, amountCkb, logPath, sourcePrivkey) {
-  ensureDir(dirname(logPath));
-  let logContent = '';
-  const appendLog = (s) => {
-    logContent += `${s}\n`;
-  };
-
-  for (let attempt = 1; attempt <= DEPOSIT_MAX_ATTEMPTS; attempt++) {
-    log(`Transferring funds to Node ${nodeName} (attempt ${attempt}/${DEPOSIT_MAX_ATTEMPTS})`);
-
-    appendLog(`=== funding attempt ${attempt}/${DEPOSIT_MAX_ATTEMPTS} node=${nodeName} ===`);
-    appendLog(`timestamp: ${new Date().toISOString()}`);
-    if (fundingAddr) appendLog(`address: ${fundingAddr}`);
-    if (amountCkb) appendLog(`amount_ckb: ${amountCkb}`);
-    appendLog('');
-
-    if (!sourcePrivkey) {
-      appendLog(`Missing source private key for transfer node=${nodeName}.`);
-      writeFileSync(logPath, logContent, 'utf-8');
-      fail(`Missing source private key for transfer node=${nodeName}`);
-    }
-
-    const { stdout, stderr, exitCode } = runSafe('offckb', [
-      'transfer',
-      '--network',
-      NETWORK,
-      '--privkey',
-      sourcePrivkey,
-      fundingAddr,
-      String(amountCkb),
-    ]);
-    appendLog(`${stdout}\n${stderr}`);
-
-    if (exitCode === 0) {
-      log(`Transfer submitted for Node ${nodeName}`);
-      writeFileSync(logPath, logContent, 'utf-8');
-      return;
-    }
-
-    if (attempt < DEPOSIT_MAX_ATTEMPTS) {
-      log(
-        `Funding attempt ${attempt} failed (node=${nodeName}); retrying in ${DEPOSIT_RETRY_DELAY_SEC}s`,
-      );
-      await sleep(DEPOSIT_RETRY_DELAY_SEC * 1000);
-    }
-  }
-
-  writeFileSync(logPath, logContent, 'utf-8');
-  log(`ERROR: Transfer to Node ${nodeName} failed after ${DEPOSIT_MAX_ATTEMPTS} attempts.`);
-  log(`ERROR: Check transfer logs: ${logPath}`);
-  fail(`Deposit failed for node=${nodeName}`);
-}
-
-function getBalanceCkb(address) {
-  const { stdout, stderr } = runSafe('offckb', ['balance', '--network', NETWORK, address]);
-  const combined = `${stdout}\n${stderr}`;
-  const match = combined.match(/Balance:\s*([0-9][0-9.]*)\s*CKB/);
-  return match ? parseFloat(match[1]) : undefined;
-}
-
-async function waitForBalanceAtLeast(nodeName, address, expectedCkb, timeoutSec) {
-  const start = nowSec();
-  while (true) {
-    const balance = getBalanceCkb(address);
-    if (balance !== undefined && balance >= expectedCkb) {
-      log(`Node ${nodeName} funding balance reached ${balance} CKB`);
-      return;
-    }
-    if (nowSec() - start >= timeoutSec) {
-      fail(
-        `Node ${nodeName} funding balance did not reach ${expectedCkb} CKB within ${timeoutSec}s`,
-      );
-    }
-    await sleep(POLL_INTERVAL_SEC * 1000);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Cleanup
-// ---------------------------------------------------------------------------
-
-/** @type {import('node:child_process').ChildProcess | null} */
-let nodeAChild = null;
-/** @type {import('node:child_process').ChildProcess | null} */
-let nodeBChild = null;
-
-function collectArtifacts() {
-  ensureDir(ARTIFACT_DIR);
-  const nodeAConfig = join(NODE_A_DIR, 'config.yml');
-  const nodeBConfig = join(NODE_B_DIR, 'config.yml');
-  if (existsSync(nodeAConfig)) copyFileSync(nodeAConfig, join(ARTIFACT_DIR, 'node-a.config.yml'));
-  if (existsSync(nodeBConfig)) copyFileSync(nodeBConfig, join(ARTIFACT_DIR, 'node-b.config.yml'));
-}
-
-function stopNodes() {
-  fiberPaySafe('A', 'node', 'stop');
-  fiberPaySafe('B', 'node', 'stop');
-
-  if (nodeAChild && !nodeAChild.killed) {
+function parseJsonMaybe(raw) {
+  const direct = raw.trim()
+  if (direct.length > 0) {
     try {
-      nodeAChild.kill();
+      return JSON.parse(direct)
     } catch {}
   }
-  if (nodeBChild && !nodeBChild.killed) {
+
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
     try {
-      nodeBChild.kill();
+      return JSON.parse(lines[i])
     } catch {}
   }
+
+  return undefined
 }
 
-function cleanup(exitCode) {
-  log(`Collecting artifacts into ${ARTIFACT_DIR}`);
-  try {
-    collectArtifacts();
-  } catch {}
-  try {
-    stopNodes();
-  } catch {}
-  if (exitCode !== 0) {
-    log(`FAILED (exit code ${exitCode}). See artifacts: ${ARTIFACT_DIR}`);
-  } else {
-    log(`SUCCESS. Artifacts: ${ARTIFACT_DIR}`);
+function normalizeHex32(value, label) {
+  const normalized = value.trim().toLowerCase().replace(/^0x/, '')
+  if (!/^[0-9a-f]{64}$/.test(normalized)) {
+    fail(`${label} must be a 32-byte hex string`)
   }
+  if (/^0+$/.test(normalized)) {
+    fail(`${label} must not be zero`)
+  }
+  return normalized
 }
 
-function clearTestWorkspace() {
-  log(`Clearing previous workspace at ${WORK_ROOT}`);
-  try {
-    fiberPaySafe('A', 'node', 'stop');
-  } catch {}
-  try {
-    fiberPaySafe('B', 'node', 'stop');
-  } catch {}
-  try {
-    rmSync(WORK_ROOT, { recursive: true, force: true });
-  } catch {}
+function extractStateName(stateValue) {
+  if (typeof stateValue === 'string') return stateValue
+  if (stateValue && typeof stateValue.state_name === 'string') return stateValue.state_name
+  return ''
 }
 
-// ---------------------------------------------------------------------------
-// Write artifact helper
-// ---------------------------------------------------------------------------
+function isClosedState(stateName) {
+  return stateName === 'CLOSED' || stateName === 'Closed'
+}
 
 function writeArtifact(name, content) {
-  const filePath = join(ARTIFACT_DIR, name);
-  writeFileSync(
-    filePath,
-    typeof content === 'string' ? content : JSON.stringify(content, null, 2),
-    'utf-8',
-  );
+  const target = join(ARTIFACT_DIR, name)
+  writeFileSync(target, typeof content === 'string' ? content : JSON.stringify(content, null, 2), 'utf-8')
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
+function nodeEnv(nodeName) {
+  const isA = nodeName === 'A'
+  const dataDir = isA ? NODE_A_DIR : NODE_B_DIR
+  const rpcPort = isA ? NODE_A_RPC_PORT : NODE_B_RPC_PORT
+  const p2pPort = isA ? NODE_A_P2P_PORT : NODE_B_P2P_PORT
+  return {
+    FIBER_DATA_DIR: dataDir,
+    FIBER_NETWORK: NETWORK,
+    FIBER_KEY_PASSWORD: KEY_PASSWORD,
+    FIBER_RPC_PORT: String(rpcPort),
+    FIBER_P2P_PORT: String(p2pPort),
+    FIBER_RPC_URL: `http://127.0.0.1:${rpcPort}`,
+  }
+}
+
+function fiberPayRaw(nodeName, args, { allowFailure = false } = {}) {
+  return run('pnpm', ['--filter', '@fiber-pay/cli', 'exec', 'node', CLI_ENTRY, ...args], {
+    envOverrides: nodeEnv(nodeName),
+    ignoreError: allowFailure,
+  })
+}
+
+function fiberPaySafe(nodeName, args) {
+  return runSafe('pnpm', ['--filter', '@fiber-pay/cli', 'exec', 'node', CLI_ENTRY, ...args], {
+    envOverrides: nodeEnv(nodeName),
+  })
+}
+
+function writeOptionalJsonArtifact(name, commandResult) {
+  const parsed = parseJsonMaybe(commandResult.stdout)
+  writeArtifact(name, {
+    exitCode: commandResult.exitCode,
+    stdout: parsed ?? commandResult.stdout,
+    stderr: commandResult.stderr,
+  })
+}
+
+function fiberPayJson(nodeName, args, { allowFailure = false } = {}) {
+  const raw = fiberPayRaw(nodeName, [...args, '--json'], { allowFailure })
+  const parsed = parseJsonMaybe(raw)
+  if (!parsed) {
+    fail(`Invalid JSON from node ${nodeName}: ${args.join(' ')}\n${raw}`)
+  }
+  return { raw, parsed }
+}
+
+async function retry(action, { retries, delaySec, label }) {
+  let lastError
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      return await action()
+    } catch (error) {
+      lastError = error
+      log(`${label} attempt ${attempt}/${retries} failed`, error.message ?? String(error))
+      if (attempt < retries) {
+        await sleep(delaySec * 1000)
+      }
+    }
+  }
+  fail(`${label} failed after ${retries} attempts: ${lastError?.message ?? lastError}`)
+}
+
+async function waitForNodeReady(nodeName, timeoutSec) {
+  const deadline = nowSec() + timeoutSec
+  while (nowSec() < deadline) {
+    const { exitCode, stdout } = fiberPaySafe(nodeName, ['node', 'ready', '--json'])
+    if (exitCode === 0) {
+      const parsed = parseJsonMaybe(stdout)
+      if (
+        parsed?.success === true &&
+        parsed?.data?.nodeRunning === true &&
+        parsed?.data?.rpcReachable === true
+      ) {
+        return parsed
+      }
+    }
+    await sleep(POLL_INTERVAL_SEC * 1000)
+  }
+  fail(`Node ${nodeName} not ready within ${timeoutSec}s`)
+}
+
+function listChannels(nodeName, { includeClosed = true } = {}) {
+  const args = ['channel', 'list']
+  if (includeClosed) args.push('--include-closed')
+  const { parsed } = fiberPayJson(nodeName, args)
+  return Array.isArray(parsed?.data?.channels) ? parsed.data.channels : []
+}
+
+function findLatestChannel(channels, peerId, { stateName, includeClosed = true } = {}) {
+  const candidates = channels.filter((channel) => {
+    if (channel?.peer_id !== peerId) return false
+    const channelState = extractStateName(channel?.state)
+    if (!includeClosed && isClosedState(channelState)) return false
+    if (stateName && channelState !== stateName) return false
+    return typeof channel?.channel_id === 'string'
+  })
+
+  if (candidates.length === 0) return undefined
+
+  const sorted = candidates.sort((left, right) => {
+    const l = BigInt(left?.created_at ?? '0x0')
+    const r = BigInt(right?.created_at ?? '0x0')
+    if (l === r) return 0
+    return l > r ? -1 : 1
+  })
+
+  return sorted[0]
+}
+
+async function waitForChannelState({ nodeName, channelId, targetState, timeoutSec }) {
+  const deadline = nowSec() + timeoutSec
+  while (nowSec() < deadline) {
+    const channels = listChannels(nodeName, { includeClosed: true })
+    const channel = channels.find((item) => item?.channel_id === channelId)
+    const stateName = extractStateName(channel?.state)
+    if (stateName === targetState) return channel
+    await sleep(POLL_INTERVAL_SEC * 1000)
+  }
+  fail(`Channel ${channelId} on node ${nodeName} did not reach ${targetState} within ${timeoutSec}s`)
+}
+
+async function waitForReadyChannel(peerId, timeoutSec) {
+  const deadline = nowSec() + timeoutSec
+  while (nowSec() < deadline) {
+    const channelsA = listChannels('A', { includeClosed: false })
+    const channelsB = listChannels('B', { includeClosed: false })
+    const channelA = findLatestChannel(channelsA, peerId, {
+      stateName: 'CHANNEL_READY',
+      includeClosed: false,
+    })
+    const channelB = findLatestChannel(channelsB, EXPECTED_NODE_A_PEER_ID, {
+      stateName: 'CHANNEL_READY',
+      includeClosed: false,
+    })
+    if (channelA?.channel_id && channelB?.channel_id && channelA.channel_id === channelB.channel_id) {
+      return channelA.channel_id
+    }
+    await sleep(POLL_INTERVAL_SEC * 1000)
+  }
+  fail(`Channel did not reach CHANNEL_READY within ${CHANNEL_READY_TIMEOUT_SEC}s`)
+}
+
+async function closeActiveChannels(peerId) {
+  const channels = listChannels('A', { includeClosed: true })
+  const active = channels.filter((channel) => {
+    if (channel?.peer_id !== peerId) return false
+    const stateName = extractStateName(channel?.state)
+    return stateName !== '' && !isClosedState(stateName)
+  })
+
+  if (active.length === 0) return
+
+  for (const channel of active) {
+    try {
+      fiberPayJson('A', ['channel', 'close', channel.channel_id])
+    } catch {
+      fiberPayJson('A', ['channel', 'close', channel.channel_id, '--force'])
+    }
+  }
+
+  const deadline = nowSec() + CHANNEL_CLOSE_TIMEOUT_SEC
+  while (nowSec() < deadline) {
+    const snapshot = listChannels('A', { includeClosed: true })
+    const stillActive = snapshot.some((channel) => {
+      if (channel?.peer_id !== peerId) return false
+      const stateName = extractStateName(channel?.state)
+      return stateName !== '' && !isClosedState(stateName)
+    })
+    if (!stillActive) return
+    await sleep(POLL_INTERVAL_SEC * 1000)
+  }
+
+  fail('Pre-cleanup channels did not close in time')
+}
+
+function checkFundingBalance(statusData, nodeLabel) {
+  const total = Number(statusData?.balance?.fundingAddressTotalCkb ?? Number.NaN)
+  if (!Number.isFinite(total)) {
+    fail(`Unable to read fundingAddressTotalCkb for node ${nodeLabel}`)
+  }
+  if (total < MIN_FUNDING_BALANCE_CKB) {
+    fail(
+      `Node ${nodeLabel} funding balance ${total} CKB is below MIN_FUNDING_BALANCE_CKB=${MIN_FUNDING_BALANCE_CKB}. Please pre-fund fixed node first.`,
+    )
+  }
+}
+
+function writeFixedKeys(nodeName, fiberKeyHex, ckbKeyHex) {
+  const dataDir = nodeName === 'A' ? NODE_A_DIR : NODE_B_DIR
+  const fiberDir = join(dataDir, 'fiber')
+  const ckbDir = join(dataDir, 'ckb')
+  ensureDir(fiberDir)
+  ensureDir(ckbDir)
+
+  writeFileSync(join(fiberDir, 'sk'), Buffer.from(fiberKeyHex, 'hex'))
+  writeFileSync(join(ckbDir, 'key'), `${ckbKeyHex}\n`, 'utf-8')
+}
+
+function clearNodeDirs() {
+  for (const dirPath of [NODE_A_DIR, NODE_B_DIR]) {
+    try {
+      rmSync(dirPath, { recursive: true, force: true })
+    } catch {}
+  }
+}
+
+function collectArtifacts() {
+  for (const [name, dirPath] of [
+    ['node-a', NODE_A_DIR],
+    ['node-b', NODE_B_DIR],
+  ]) {
+    const configPath = join(dirPath, 'config.yml')
+    if (existsSync(configPath)) {
+      copyFileSync(configPath, join(ARTIFACT_DIR, `${name}.config.yml`))
+    }
+  }
+}
+
+async function stopNodesBestEffort() {
+  fiberPayRaw('A', ['node', 'stop', '--json'], { allowFailure: true })
+  fiberPayRaw('B', ['node', 'stop', '--json'], { allowFailure: true })
+}
+
+const ARTIFACT_DIR = env(
+  'ARTIFACT_DIR',
+  join(ROOT_DIR, '.artifacts', `e2e-dual-node-${timestamp()}`),
+)
+
+const DEFAULT_PROFILE_ROOT = join(homedir(), '.fiber-pay', 'profiles')
+const NODE_A_DIR = env('NODE_A_DIR', join(DEFAULT_PROFILE_ROOT, 'e2e-a'))
+const NODE_B_DIR = env('NODE_B_DIR', join(DEFAULT_PROFILE_ROOT, 'e2e-b'))
+
+const NODE_A_RPC_PORT = envInt('NODE_A_RPC_PORT', 8727)
+const NODE_A_P2P_PORT = envInt('NODE_A_P2P_PORT', 8728)
+const NODE_B_RPC_PORT = envInt('NODE_B_RPC_PORT', 8827)
+const NODE_B_P2P_PORT = envInt('NODE_B_P2P_PORT', 8828)
+
+const NETWORK = env('NETWORK', 'testnet')
+const KEY_PASSWORD = env('FIBER_KEY_PASSWORD', 'fiber-pay-e2e-key')
+const FIBER_BINARY_VERSION = env('FIBER_BINARY_VERSION', 'v0.7.1')
+
+const FIXED_NODE_A_FIBER_SK_HEX = normalizeHex32(
+  env('FIXED_NODE_A_FIBER_SK_HEX', '0000000000000000000000000000000000000000000000000000000000000001'),
+  'FIXED_NODE_A_FIBER_SK_HEX',
+)
+const FIXED_NODE_B_FIBER_SK_HEX = normalizeHex32(
+  env('FIXED_NODE_B_FIBER_SK_HEX', '0000000000000000000000000000000000000000000000000000000000000002'),
+  'FIXED_NODE_B_FIBER_SK_HEX',
+)
+const FIXED_NODE_A_CKB_SK_HEX = normalizeHex32(
+  env('FIXED_NODE_A_CKB_SK_HEX', '0000000000000000000000000000000000000000000000000000000000000011'),
+  'FIXED_NODE_A_CKB_SK_HEX',
+)
+const FIXED_NODE_B_CKB_SK_HEX = normalizeHex32(
+  env('FIXED_NODE_B_CKB_SK_HEX', '0000000000000000000000000000000000000000000000000000000000000012'),
+  'FIXED_NODE_B_CKB_SK_HEX',
+)
+
+let EXPECTED_NODE_A_PEER_ID = ''
+
+const CHANNEL_FUNDING_CKB = envInt('CHANNEL_FUNDING_CKB', 200)
+const INVOICE_AMOUNT_CKB = envInt('INVOICE_AMOUNT_CKB', 1)
+const MIN_FUNDING_BALANCE_CKB = envInt(
+  'MIN_FUNDING_BALANCE_CKB',
+  CHANNEL_FUNDING_CKB + INVOICE_AMOUNT_CKB + 5,
+)
+
+const NODE_READY_TIMEOUT_SEC = envInt('NODE_READY_TIMEOUT_SEC', 120)
+const CHANNEL_READY_TIMEOUT_SEC = envInt('CHANNEL_READY_TIMEOUT_SEC', 360)
+const PAYMENT_TIMEOUT_SEC = envInt('PAYMENT_TIMEOUT_SEC', 180)
+const CHANNEL_CLOSE_TIMEOUT_SEC = envInt('CHANNEL_CLOSE_TIMEOUT_SEC', 360)
+const POLL_INTERVAL_SEC = envInt('POLL_INTERVAL_SEC', 3)
+
+const SKIP_BUILD = envBool('SKIP_BUILD', false)
+const SKIP_BINARY_DOWNLOAD = envBool('SKIP_BINARY_DOWNLOAD', false)
+const CLEAR_BEFORE_RUN = envBool('CLEAR_BEFORE_RUN', false)
+const STOP_NODES_ON_EXIT = envBool('STOP_NODES_ON_EXIT', true)
 
 async function main() {
-  ensureDir(ARTIFACT_DIR);
+  ensureDir(ARTIFACT_DIR)
 
   if (CLEAR_BEFORE_RUN) {
-    clearTestWorkspace();
+    log('Clearing node directories', `${NODE_A_DIR}, ${NODE_B_DIR}`)
+    clearNodeDirs()
   }
 
-  ensureDir(NODE_A_DIR);
-  ensureDir(NODE_B_DIR);
+  ensureDir(NODE_A_DIR)
+  ensureDir(NODE_B_DIR)
 
-  // Check required commands
-  for (const cmd of ['pnpm', 'node']) {
-    try {
-      execFileSync(isWin ? 'where' : 'which', [cmd], { stdio: 'pipe' });
-    } catch {
-      fail(`Required command not found: ${cmd}`);
-    }
-  }
-
-  if (!SKIP_DEPOSIT) {
-    try {
-      execFileSync(isWin ? 'where' : 'which', ['offckb'], { stdio: 'pipe' });
-    } catch {
-      fail('Required command not found: offckb (needed for deposit). Set SKIP_DEPOSIT=1 to skip.');
-    }
-  }
-
-  // ---- Build ----
   if (!SKIP_BUILD) {
-    log('Preparing CLI (pnpm build)');
-    run('pnpm', ['build']);
+    log('Building workspace')
+    run('pnpm', ['build'])
   }
 
-  // ---- Config init ----
-  log('Initializing configs');
-  const configInitA = fiberPay('A', 'config', 'init', '--network', NETWORK, '--force', '--json');
-  writeArtifact('node-a.config-init.json', configInitA);
-  const configInitB = fiberPay('B', 'config', 'init', '--network', NETWORK, '--force', '--json');
-  writeArtifact('node-b.config-init.json', configInitB);
+  log('Initializing configs')
+  writeArtifact(
+    'node-a.config-init.json',
+    fiberPayRaw('A', ['config', 'init', '--network', NETWORK, '--force', '--json']),
+  )
+  writeArtifact(
+    'node-b.config-init.json',
+    fiberPayRaw('B', ['config', 'init', '--network', NETWORK, '--force', '--json']),
+  )
 
-  // ---- Binary download ----
+  log('Writing fixed node keys')
+  writeFixedKeys('A', FIXED_NODE_A_FIBER_SK_HEX, FIXED_NODE_A_CKB_SK_HEX)
+  writeFixedKeys('B', FIXED_NODE_B_FIBER_SK_HEX, FIXED_NODE_B_CKB_SK_HEX)
+
   if (!SKIP_BINARY_DOWNLOAD) {
-    log(`Ensuring fnn binaries (version=${FIBER_BINARY_VERSION})`);
-    const binA = fiberPay('A', 'binary', 'download', '--version', FIBER_BINARY_VERSION, '--json');
-    writeArtifact('node-a.binary.json', binA);
-    const binB = fiberPay('B', 'binary', 'download', '--version', FIBER_BINARY_VERSION, '--json');
-    writeArtifact('node-b.binary.json', binB);
-  } else {
-    log('Skipping binary download (SKIP_BINARY_DOWNLOAD=1), checking existing binaries');
-    const infoA = fiberPay('A', 'binary', 'info', '--json');
-    writeArtifact('node-a.binary-info.json', infoA);
-    const infoB = fiberPay('B', 'binary', 'info', '--json');
-    writeArtifact('node-b.binary-info.json', infoB);
+    log('Ensuring fiber binaries', FIBER_BINARY_VERSION)
+    writeArtifact(
+      'node-a.binary.json',
+      fiberPayRaw('A', ['binary', 'download', '--version', FIBER_BINARY_VERSION, '--json']),
+    )
+    writeArtifact(
+      'node-b.binary.json',
+      fiberPayRaw('B', ['binary', 'download', '--version', FIBER_BINARY_VERSION, '--json']),
+    )
   }
 
-  // ---- Start nodes ----
-  log(`Starting Node A (rpc=${NODE_A_RPC_PORT}, p2p=${NODE_A_P2P_PORT})`);
-  nodeAChild = fiberPaySpawn('A', ['node', 'start'], NODE_A_START_LOG);
+  log('Starting nodes')
+  fiberPayRaw('A', ['node', 'start', '--daemon', '--json'], { allowFailure: true })
+  fiberPayRaw('B', ['node', 'start', '--daemon', '--json'], { allowFailure: true })
 
-  log(`Starting Node B (rpc=${NODE_B_RPC_PORT}, p2p=${NODE_B_P2P_PORT})`);
-  nodeBChild = fiberPaySpawn('B', ['node', 'start'], NODE_B_START_LOG);
+  await waitForNodeReady('A', NODE_READY_TIMEOUT_SEC)
+  await waitForNodeReady('B', NODE_READY_TIMEOUT_SEC)
 
-  // ---- Wait for ready ----
-  await waitForNodeReady('A', NODE_READY_TIMEOUT_SEC);
-  await waitForNodeReady('B', NODE_READY_TIMEOUT_SEC);
+  const statusA = fiberPayJson('A', ['node', 'status']).parsed.data
+  const statusB = fiberPayJson('B', ['node', 'status']).parsed.data
+  writeArtifact('node-a.status.json', statusA)
+  writeArtifact('node-b.status.json', statusB)
 
-  // ---- Collect node info ----
-  const nodeAInfoRaw = fiberPay('A', 'node', 'info', '--json');
-  const nodeBInfoRaw = fiberPay('B', 'node', 'info', '--json');
-  writeArtifact('node-a.info.json', nodeAInfoRaw);
-  writeArtifact('node-b.info.json', nodeBInfoRaw);
+  checkFundingBalance(statusA, 'A')
+  checkFundingBalance(statusB, 'B')
 
-  const nodeAInfo = jsonParse(nodeAInfoRaw);
-  const nodeBInfo = jsonParse(nodeBInfoRaw);
-  if (!nodeAInfo || !nodeBInfo) fail('Failed to parse node info');
+  const peerA = statusA?.peerId
+  const peerB = statusB?.peerId
+  const multiaddrA = statusA?.multiaddr
+  const multiaddrB = statusB?.multiaddr
 
-  const nodeAHexId = jsonGet(nodeAInfo, 'data.nodeId');
-  const nodeBHexId = jsonGet(nodeBInfo, 'data.nodeId');
-  const nodeAFundingAddr = jsonGet(nodeAInfo, 'data.fundingAddress');
-  const nodeBFundingAddr = jsonGet(nodeBInfo, 'data.fundingAddress');
-
-  if (typeof nodeAHexId !== 'string' || typeof nodeBHexId !== 'string') {
-    fail('Failed to extract node hex IDs from node info');
+  if (!peerA || !peerB || !multiaddrA || !multiaddrB) {
+    fail('Missing peerId or multiaddr in node status')
   }
 
-  const nodeBRawInfo = await fetchNodeInfoRaw(NODE_B_RPC_URL);
-  const minAutoAcceptHex = nodeBRawInfo.open_channel_auto_accept_min_ckb_funding_amount;
-  const minAutoAcceptShannons = hexToBigInt(minAutoAcceptHex);
-  if (minAutoAcceptShannons === undefined) {
-    fail(`Invalid open_channel_auto_accept_min_ckb_funding_amount: ${String(minAutoAcceptHex)}`);
-  }
-  const channelFundingShannons = BigInt(CHANNEL_FUNDING_CKB) * 100_000_000n;
-  if (channelFundingShannons < minAutoAcceptShannons) {
-    fail(
-      `CHANNEL_FUNDING_CKB (${CHANNEL_FUNDING_CKB}) is below Node B auto-accept minimum ` +
-        `(${shannonsToCkb(minAutoAcceptShannons)} CKB). Increase CHANNEL_FUNDING_CKB or adjust node config.`,
-    );
-  }
-  log(
-    `Node B auto-accept minimum: ${shannonsToCkb(minAutoAcceptShannons)} CKB; ` +
-      `requested funding: ${CHANNEL_FUNDING_CKB} CKB`,
-  );
+  EXPECTED_NODE_A_PEER_ID = peerA
 
-  // Convert hex pubkeys to libp2p peer IDs (base58btc)
-  const nodeAPeerId = hexPubkeyToPeerId(nodeAHexId);
-  const nodeBPeerId = hexPubkeyToPeerId(nodeBHexId);
+  await closeActiveChannels(peerB)
 
-  // Build multiaddr for Node B from local P2P port + derived peer ID.
-  // We intentionally avoid relying on node_info.addresses because it can be empty.
-  const nodeBMultiaddr = `/ip4/127.0.0.1/tcp/${NODE_B_P2P_PORT}/p2p/${nodeBPeerId}`;
+  log('Connecting peers')
+  await retry(() => fiberPayJson('A', ['peer', 'connect', multiaddrB]), {
+    retries: 5,
+    delaySec: 2,
+    label: 'peer connect A->B',
+  })
+  await retry(() => fiberPayJson('B', ['peer', 'connect', multiaddrA]), {
+    retries: 5,
+    delaySec: 2,
+    label: 'peer connect B->A',
+  })
 
-  log(`Node A: ${nodeAHexId} (peer: ${nodeAPeerId})`);
-  log(`Node B: ${nodeBHexId} (peer: ${nodeBPeerId})`);
-
-  // ---- Deposit ----
-  if (!SKIP_DEPOSIT) {
-    log(
-      `Funding via fixed source account transfer (retries=${DEPOSIT_MAX_ATTEMPTS}, delay=${DEPOSIT_RETRY_DELAY_SEC}s)`,
-    );
-    log(`Source account: ${SOURCE_ADDRESS}`);
-
-    const sourceBalance = getBalanceCkb(SOURCE_ADDRESS);
-    const requiredBalance = DEPOSIT_AMOUNT_CKB * 2;
-    if (sourceBalance === undefined) {
-      fail(`Unable to read source account balance: ${SOURCE_ADDRESS}`);
-    }
-    log(`Source balance: ${sourceBalance} CKB, required minimum: ${requiredBalance} CKB`);
-    if (sourceBalance < requiredBalance) {
-      fail(
-        `Insufficient source balance (${sourceBalance} CKB). Need at least ${requiredBalance} CKB to fund both nodes.`,
-      );
-    }
-
-    await depositWithRetry(
-      'A',
-      nodeAFundingAddr,
-      DEPOSIT_AMOUNT_CKB,
-      join(ARTIFACT_DIR, 'deposit-node-a.log'),
-      SOURCE_PRIVKEY,
-    );
-    await depositWithRetry(
-      'B',
-      nodeBFundingAddr,
-      DEPOSIT_AMOUNT_CKB,
-      join(ARTIFACT_DIR, 'deposit-node-b.log'),
-      SOURCE_PRIVKEY,
-    );
-
-    log(`Polling funding balances (timeout=${FUNDING_WAIT_TIMEOUT_SEC}s)`);
-    await waitForBalanceAtLeast(
-      'A',
-      nodeAFundingAddr,
-      DEPOSIT_AMOUNT_CKB,
-      FUNDING_WAIT_TIMEOUT_SEC,
-    );
-    await waitForBalanceAtLeast(
-      'B',
-      nodeBFundingAddr,
-      DEPOSIT_AMOUNT_CKB,
-      FUNDING_WAIT_TIMEOUT_SEC,
-    );
-  } else {
-    log('Skipping deposit step (SKIP_DEPOSIT=1)');
-  }
-
-  // ---- Peer connect (with retry — can fail right after node startup) ----
-  log('Connecting Node A to Node B');
-  const connectResult = await retry(
-    () => fiberPay('A', 'peer', 'connect', nodeBMultiaddr, '--json'),
-    { retries: 5, delaySec: 3, label: 'peer connect' },
-  );
-  writeArtifact('peer-connect.json', connectResult);
-
-  await waitForPeerConnected(nodeBPeerId, 60);
-
-  // ---- Open channel (with retry — peer Init message may still be in flight) ----
-  log(`Opening channel from A to B (funding=${CHANNEL_FUNDING_CKB} CKB)`);
-  const openRaw = await retry(
+  log('Opening channel')
+  const openResult = await retry(
     () =>
-      fiberPay(
-        'A',
+      fiberPayJson('A', [
         'channel',
         'open',
         '--peer',
-        nodeBPeerId,
+        peerB,
         '--funding',
         String(CHANNEL_FUNDING_CKB),
-        '--json',
-      ),
-    { retries: 10, delaySec: 5, label: 'channel open' },
-  );
-  writeArtifact('channel-open.json', openRaw);
+      ]),
+    {
+      retries: 8,
+      delaySec: 5,
+      label: 'channel open',
+    },
+  )
+  writeArtifact('channel-open.json', openResult.parsed)
 
-  const openJson = jsonParse(openRaw);
-  const tempChannelId = jsonGet(openJson, 'data.temporaryChannelId');
-  log(`Temporary channel id: ${tempChannelId}`);
+  const channelId = await waitForReadyChannel(peerB, CHANNEL_READY_TIMEOUT_SEC)
+  writeArtifact('channel-id.txt', channelId)
 
-  const peerSelectors = [nodeBHexId, nodeBPeerId];
-  const appearedChannelId = await waitForChannelAppear(peerSelectors, CHANNEL_APPEAR_TIMEOUT_SEC);
-  log(`Channel appeared: ${appearedChannelId}`);
-
-  // ---- Wait for channel ready ----
-  const channelId = await waitForChannelReady(peerSelectors, CHANNEL_READY_TIMEOUT_SEC);
-  log(`Channel ready: ${channelId}`);
-  writeArtifact('channel-id.txt', channelId);
-
-  // ---- Create invoice on Node B ----
-  log(`Creating invoice on Node B (amount=${INVOICE_AMOUNT_CKB} CKB)`);
-  const invoiceRaw = fiberPay(
-    'B',
+  log('Creating tiny invoice')
+  const invoiceResult = fiberPayJson('B', [
     'invoice',
     'create',
     '--amount',
     String(INVOICE_AMOUNT_CKB),
     '--description',
-    'ci-dual-node-e2e',
-    '--json',
-  );
-  writeArtifact('invoice-create.json', invoiceRaw);
+    'e2e-fixed-node-smoke',
+  ])
+  writeArtifact('invoice-create.json', invoiceResult.parsed)
 
-  const invoiceJson = jsonParse(invoiceRaw);
-  const invoiceStr = jsonGet(invoiceJson, 'data.invoice');
-  if (!invoiceStr) fail('Failed to extract invoice string');
+  const invoice = invoiceResult?.parsed?.data?.invoice
+  if (typeof invoice !== 'string' || invoice.length === 0) {
+    fail('Failed to extract invoice string from invoice create result')
+  }
 
-  // ---- Send payment ----
-  log('Sending payment from Node A');
-  const sendRaw = fiberPay('A', 'payment', 'send', invoiceStr, '--json');
-  writeArtifact('payment-send.json', sendRaw);
+  log('Sending payment with wait')
+  const paymentResult = fiberPayJson('A', [
+    'payment',
+    'send',
+    '--invoice',
+    invoice,
+    '--wait',
+    '--timeout',
+    String(PAYMENT_TIMEOUT_SEC),
+  ])
+  writeArtifact('payment-send.json', paymentResult.parsed)
 
-  const sendJson = jsonParse(sendRaw);
-  const paymentHash = jsonGet(sendJson, 'data.paymentHash');
-  if (!paymentHash) fail('Failed to extract paymentHash');
+  log('Closing channel')
+  const closeResult = fiberPayJson('A', ['channel', 'close', channelId])
+  writeArtifact('channel-close.json', closeResult.parsed)
 
-  // ---- Wait for payment ----
-  await waitForPaymentTerminal(paymentHash, PAYMENT_TIMEOUT_SEC);
-  const paymentFinal = fiberPay('A', 'payment', 'get', paymentHash, '--json');
-  writeArtifact('payment-final.json', paymentFinal);
+  await waitForChannelState({
+    nodeName: 'A',
+    channelId,
+    targetState: 'CLOSED',
+    timeoutSec: CHANNEL_CLOSE_TIMEOUT_SEC,
+  })
 
-  // ---- Close channel ----
-  log('Closing channel');
-  const closeResult = fiberPay('A', 'channel', 'close', channelId, '--json');
-  writeArtifact('channel-close.json', closeResult);
-  log('Channel close command accepted; skipping close-state wait and continuing cleanup');
+  await waitForChannelState({
+    nodeName: 'B',
+    channelId,
+    targetState: 'CLOSED',
+    timeoutSec: CHANNEL_CLOSE_TIMEOUT_SEC,
+  })
 
-  log('E2E flow completed');
+  writeArtifact('node-a.channels.json', listChannels('A', { includeClosed: true }))
+  writeArtifact('node-b.channels.json', listChannels('B', { includeClosed: true }))
+  writeOptionalJsonArtifact('node-a.jobs.json', fiberPaySafe('A', ['job', 'list', '--json']))
+  writeOptionalJsonArtifact('node-b.jobs.json', fiberPaySafe('B', ['job', 'list', '--json']))
+
+  const summary = {
+    success: true,
+    profiles: {
+      nodeA: NODE_A_DIR,
+      nodeB: NODE_B_DIR,
+    },
+    nodeIds: {
+      nodeA: statusA.nodeId,
+      nodeB: statusB.nodeId,
+    },
+    balances: {
+      nodeA: statusA?.balance?.fundingAddressTotalCkb,
+      nodeB: statusB?.balance?.fundingAddressTotalCkb,
+    },
+    channelId,
+    paymentAmountCkb: INVOICE_AMOUNT_CKB,
+  }
+  writeArtifact('summary.json', summary)
+
+  log('E2E completed', `channel=${channelId} invoiceAmount=${INVOICE_AMOUNT_CKB} CKB`)
 }
 
-// ---------------------------------------------------------------------------
-// Entry point
-// ---------------------------------------------------------------------------
+async function finalize(exitCode) {
+  try {
+    collectArtifacts()
+  } catch {}
+
+  if (STOP_NODES_ON_EXIT) {
+    try {
+      await stopNodesBestEffort()
+    } catch {}
+  }
+
+  if (exitCode === 0) {
+    log('SUCCESS', `artifacts=${ARTIFACT_DIR}`)
+  } else {
+    log('FAILED', `artifacts=${ARTIFACT_DIR}`)
+  }
+}
 
 main()
-  .then(() => {
-    cleanup(0);
-    process.exit(0);
+  .then(async () => {
+    await finalize(0)
+    process.exit(0)
   })
-  .catch((err) => {
-    log(`Unhandled error: ${err.message || err}`);
-    if (err.stack) log(err.stack);
-    cleanup(1);
-    process.exit(1);
-  });
-
-// Handle SIGINT / SIGTERM
-process.on('SIGINT', () => {
-  cleanup(130);
-  process.exit(130);
-});
-process.on('SIGTERM', () => {
-  cleanup(143);
-  process.exit(143);
-});
+  .catch(async (error) => {
+    log('Unhandled error', error?.message ?? String(error))
+    if (error?.stack) {
+      writeArtifact('error.stack.txt', error.stack)
+    }
+    await finalize(1)
+    process.exit(1)
+  })

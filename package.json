@@ -19,8 +19,8 @@
     "changeset:status": "changeset status",
     "changeset:version": "changeset version",
     "release": "pnpm build && changeset publish",
-    "e2e:testnet": "node scripts/e2e-testnet-dual-node.mjs",
-    "e2e:runtime-jobs": "node scripts/e2e-runtime-orchestration.mjs",
+    "smoke": "node scripts/ci-smoke-node-runtime.mjs",
+    "e2e": "node scripts/e2e-testnet-dual-node.mjs",
     "prepare": "husky"
   },
   "keywords": [

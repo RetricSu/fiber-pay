@@ -144,65 +144,64 @@ Workflow file: `.github/workflows/release.yml`
 - create and push tag: `vX.Y.Z` (or `vX.Y.Z-rc.N`)
 - confirm `Release` workflow passes in GitHub Actions
 
-## Core smoke workflow (runtime-backed)
+## Smoke script (no token consumption)
 
-Use this as the canonical end-to-end operator flow:
-
-```bash
-fiber-pay node start --daemon
-fiber-pay node ready --json
-fiber-pay peer connect <peer-multiaddr> --json
-fiber-pay channel open --peer <peer-multiaddr> --funding <ckb> --json
-fiber-pay channel watch --state ChannelReady --timeout 180 --on-timeout fail --json
-fiber-pay payment send <invoice> --wait --json
-fiber-pay job list --json
-```
-
-Notes:
-
-- `payment send` does not auto-open channels; verify channel readiness first.
-- Use `--json` for automation and agent parsing.
-- Use `job get/events/trace` and `logs` for diagnosis.
-
-## E2E dual-node script
-
-Run:
+Use smoke checks for startup/readiness/log health only (no channel open/payment):
 
 ```bash
-node scripts/e2e-testnet-dual-node.mjs
+pnpm smoke
 ```
 
-The script drives: peer connect → channel open → invoice create → payment send → channel close.
+Smoke validates:
+
+- node start/stop path
+- runtime start/stop path
+- persisted fnn/runtime logs availability
+- key/bootstrap integrity in temporary data dir
+
+## Canonical E2E script (single entry)
+
+Use one end-to-end script for fixed, pre-funded nodes:
+
+```bash
+pnpm e2e
+```
+
+The script validates this full flow: peer connect → channel open → tiny payment → cooperative close.
+
+By default, the script uses embedded fixed testnet keys for both nodes (no required env input), so GitHub Actions can run with one click.
+
+Built-in fixed node identities:
+
+- Node A ID: `0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798`
+- Node B ID: `02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5`
+
+Built-in fixed funding addresses (testnet):
+
+- Node A funding address: `ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqt2zn2dwwrgu7hvd5r8mts9kd07q5352mcw5mlhc`
+- Node B funding address: `ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqwt94k20mrfcps0jh942clrm6sc3sqqtdslt6u0e`
+
+One-time top-up example:
+
+```bash
+offckb deposit --network testnet ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqt2zn2dwwrgu7hvd5r8mts9kd07q5352mcw5mlhc 300
+offckb deposit --network testnet ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqwt94k20mrfcps0jh942clrm6sc3sqqtdslt6u0e 300
+```
+
+Recommended env (fixed pre-funded profiles):
+
+- `NODE_A_DIR` (default `~/.fiber-pay/profiles/e2e-a`)
+- `NODE_B_DIR` (default `~/.fiber-pay/profiles/e2e-b`)
 
 Useful env overrides:
 
 - `SKIP_BUILD=1`
-- `SKIP_DEPOSIT=1`
 - `SKIP_BINARY_DOWNLOAD=1`
 - `FIBER_BINARY_VERSION=v0.7.1`
-- `CHANNEL_FUNDING_CKB`, `INVOICE_AMOUNT_CKB`, `DEPOSIT_AMOUNT_CKB`
+- `CHANNEL_FUNDING_CKB` (default `200`)
+- `INVOICE_AMOUNT_CKB` (default `1`, keep tiny for long-term reuse)
+- `MIN_FUNDING_BALANCE_CKB`
 - `NODE_A_RPC_PORT`, `NODE_A_P2P_PORT`, `NODE_B_RPC_PORT`, `NODE_B_P2P_PORT`
-
-## E2E runtime orchestration script (job path)
-
-Reusable regression for runtime job orchestration (`/jobs/channel`, `/jobs/invoice`, `/jobs/payment`):
-
-```bash
-pnpm e2e:runtime-jobs
-```
-
-It validates this flow through runtime jobs: peer connect → channel open → invoice create → payment send → channel shutdown.
-
-Useful env overrides:
-
-- `PROFILE_A`, `PROFILE_B` (default `rt-a`, `rt-b`)
-- `PROXY_A_URL`, `PROXY_B_URL` (default `http://127.0.0.1:9729`, `http://127.0.0.1:9829`)
-- `CHANNEL_FUNDING_CKB`, `INVOICE_AMOUNT_CKB`, `INVOICE_CURRENCY`
-- `JOB_TIMEOUT_SEC`, `POLL_INTERVAL_MS`, `PEER_CONNECT_TIMEOUT_SEC`
-- `FIBER_PAY_BIN` (optional; by default script uses local `packages/cli/dist/cli.js` via current Node)
-
-Machine-readable output:
-
-```bash
-pnpm e2e:runtime-jobs -- --json
-```
+- `NODE_READY_TIMEOUT_SEC`, `CHANNEL_READY_TIMEOUT_SEC`, `PAYMENT_TIMEOUT_SEC`, `CHANNEL_CLOSE_TIMEOUT_SEC`
+- `FIXED_NODE_A_FIBER_SK_HEX`, `FIXED_NODE_B_FIBER_SK_HEX` (optional key override)
+- `FIXED_NODE_A_CKB_SK_HEX`, `FIXED_NODE_B_CKB_SK_HEX` (optional key override)
