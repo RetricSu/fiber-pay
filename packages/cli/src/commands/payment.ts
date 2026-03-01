@@ -165,9 +165,8 @@ export function createPaymentCommand(config: CliConfig): Command {
     .action(async (options) => {
       const rpc = await createReadyRpcClient(config);
       const json = Boolean(options.json);
-      const amountCkb = parseFloat(String(options.amount));
-      const maxFeeCkb =
-        options.maxFee !== undefined ? parseFloat(String(options.maxFee)) : undefined;
+      const amountCkb = parseFloat(options.amount);
+      const maxFeeCkb = options.maxFee !== undefined ? parseFloat(options.maxFee) : undefined;
       const manualHops =
         typeof options.hops === 'string'
           ? options.hops
@@ -219,79 +218,47 @@ export function createPaymentCommand(config: CliConfig): Command {
 
       const selfPubkey = (await rpc.nodeInfo()).node_id as HexString;
       const amount = ckbToShannons(amountCkb);
+      const isManual = manualHops.length > 0;
+      const dryRun = Boolean(options.dryRun);
+      let routeHopCount: number | undefined;
 
-      if (manualHops.length > 0) {
-        const hopsInfo = [
-          ...manualHops.map((pubkey: string) => ({ pubkey: pubkey as HexString })),
-          ...(manualHops[manualHops.length - 1] === selfPubkey
-            ? []
-            : [{ pubkey: selfPubkey as HexString }]),
-        ];
+      const result = isManual
+        ? await (async () => {
+            const hopsInfo = [
+              ...manualHops.map((pubkey: string) => ({ pubkey: pubkey as HexString })),
+              ...(manualHops[manualHops.length - 1] === selfPubkey
+                ? []
+                : [{ pubkey: selfPubkey as HexString }]),
+            ];
 
-        const route = await rpc.buildRouter({
-          amount,
-          hops_info: hopsInfo,
-        });
+            const route = await rpc.buildRouter({
+              amount,
+              hops_info: hopsInfo,
+            });
+            routeHopCount = route.router_hops.length;
 
-        const result = await rpc.sendPaymentWithRouter({
-          router: route.router_hops,
-          keysend: true,
-          allow_self_payment: true,
-          dry_run: options.dryRun ? true : undefined,
-        });
-
-        const payload = {
-          mode: 'manual',
-          selfPubkey,
-          amountCkb,
-          paymentHash: result.payment_hash,
-          status:
-            result.status === 'Success'
-              ? 'success'
-              : result.status === 'Failed'
-                ? 'failed'
-                : 'pending',
-          feeCkb: shannonsToCkb(result.fee),
-          failureReason: result.failed_error,
-          dryRun: Boolean(options.dryRun),
-          routeHopCount: route.router_hops.length,
-        };
-
-        if (json) {
-          printJsonSuccess(payload);
-        } else {
-          console.log(
-            options.dryRun
-              ? 'Rebalance dry-run complete (manual route)'
-              : 'Rebalance sent (manual route)',
-          );
-          console.log(`  Self:   ${payload.selfPubkey}`);
-          console.log(`  Amount: ${payload.amountCkb} CKB`);
-          console.log(`  Hops:   ${payload.routeHopCount}`);
-          console.log(`  Hash:   ${payload.paymentHash}`);
-          console.log(`  Status: ${payload.status}`);
-          console.log(`  Fee:    ${payload.feeCkb} CKB`);
-          if (payload.failureReason) {
-            console.log(`  Error:  ${payload.failureReason}`);
-          }
-        }
-        return;
-      }
-
-      const result = await rpc.sendPayment({
-        target_pubkey: selfPubkey,
-        amount,
-        keysend: true,
-        allow_self_payment: true,
-        max_fee_amount: maxFeeCkb !== undefined ? ckbToShannons(maxFeeCkb) : undefined,
-        dry_run: options.dryRun ? true : undefined,
-      });
+            return rpc.sendPaymentWithRouter({
+              router: route.router_hops,
+              keysend: true,
+              allow_self_payment: true,
+              dry_run: dryRun ? true : undefined,
+            });
+          })()
+        : await rpc.sendPayment({
+            target_pubkey: selfPubkey,
+            amount,
+            keysend: true,
+            allow_self_payment: true,
+            max_fee_amount: maxFeeCkb !== undefined ? ckbToShannons(maxFeeCkb) : undefined,
+            dry_run: dryRun ? true : undefined,
+          });
 
       const payload = {
-        mode: 'auto',
+        mode: isManual ? 'manual' : 'auto',
         selfPubkey,
         amountCkb,
-        maxFeeCkb,
+        maxFeeCkb: isManual ? undefined : maxFeeCkb,
+        routeHopCount,
         paymentHash: result.payment_hash,
         status:
           result.status === 'Success'
@@ -301,23 +268,26 @@ export function createPaymentCommand(config: CliConfig): Command {
               : 'pending',
         feeCkb: shannonsToCkb(result.fee),
         failureReason: result.failed_error,
-        dryRun: Boolean(options.dryRun),
+        dryRun,
       };
 
       if (json) {
         printJsonSuccess(payload);
       } else {
         console.log(
-          options.dryRun
-            ? 'Rebalance dry-run complete (auto route)'
-            : 'Rebalance sent (auto route)',
+          payload.dryRun
+            ? `Rebalance dry-run complete (${payload.mode} route)`
+            : `Rebalance sent (${payload.mode} route)`,
         );
         console.log(`  Self:   ${payload.selfPubkey}`);
         console.log(`  Amount: ${payload.amountCkb} CKB`);
+        if (payload.mode === 'manual' && payload.routeHopCount !== undefined) {
+          console.log(`  Hops:   ${payload.routeHopCount}`);
+        }
         console.log(`  Hash:   ${payload.paymentHash}`);
         console.log(`  Status: ${payload.status}`);
         console.log(`  Fee:    ${payload.feeCkb} CKB`);
-        if (payload.maxFeeCkb !== undefined) {
+        if (payload.mode === 'auto' && payload.maxFeeCkb !== undefined) {
           console.log(`  MaxFee: ${payload.maxFeeCkb} CKB`);
         }
         if (payload.failureReason) {
