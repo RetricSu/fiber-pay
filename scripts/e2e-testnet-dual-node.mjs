@@ -634,16 +634,33 @@ async function finalize(exitCode) {
   }
 }
 
+let shutdownInProgress = false
+
+async function finalizeAndExit(exitCode) {
+  if (shutdownInProgress) return
+  shutdownInProgress = true
+  await finalize(exitCode)
+  process.exit(exitCode)
+}
+
 main()
   .then(async () => {
-    await finalize(0)
-    process.exit(0)
+    await finalizeAndExit(0)
   })
   .catch(async (error) => {
     log('Unhandled error', error?.message ?? String(error))
     if (error?.stack) {
       writeArtifact('error.stack.txt', error.stack)
     }
-    await finalize(1)
-    process.exit(1)
+    await finalizeAndExit(1)
   })
+
+process.on('SIGINT', async () => {
+  log('Caught signal', 'SIGINT')
+  await finalizeAndExit(130)
+})
+
+process.on('SIGTERM', async () => {
+  log('Caught signal', 'SIGTERM')
+  await finalizeAndExit(143)
+})
