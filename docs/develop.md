@@ -2,6 +2,29 @@
 
 This document is the single source of truth for project development and maintainer operations (for both human and AI maintainers).
 
+## Table of contents
+
+- [Development](#development)
+	- [Table of contents](#table-of-contents)
+	- [Prerequisites and baseline checks](#prerequisites-and-baseline-checks)
+	- [Maintainer baseline (human + AI)](#maintainer-baseline-human--ai)
+	- [Required validation policy](#required-validation-policy)
+		- [Commit gate (local hook)](#commit-gate-local-hook)
+		- [CI gate](#ci-gate)
+		- [Changeset CI check](#changeset-ci-check)
+	- [Change-scope command matrix](#change-scope-command-matrix)
+	- [Release to npm (multi-package)](#release-to-npm-multi-package)
+		- [Versioning model](#versioning-model)
+		- [Changeset enforcement](#changeset-enforcement)
+		- [Release flow](#release-flow)
+		- [Notes](#notes)
+		- [Required GitHub secret](#required-github-secret)
+		- [Quick release checklist](#quick-release-checklist)
+	- [Smoke script (no token consumption)](#smoke-script-no-token-consumption)
+	- [Canonical E2E script (single entry)](#canonical-e2e-script-single-entry)
+
+## Prerequisites and baseline checks
+
 Prerequisites:
 
 - Node.js `>=20`
@@ -87,21 +110,21 @@ A CI check (`.github/workflows/changeset-check.yml`) runs on every PR:
 pnpm changeset
 ```
 
-1. Keep prerelease (`rc`) mode when needed:
+2. Keep prerelease (`rc`) mode when needed:
 
 ```bash
 pnpm changeset pre enter rc
 ```
 
-1. Consume changesets, bump versions, and generate changelogs:
+3. Consume changesets, bump versions, and generate changelogs:
 
 ```bash
 pnpm changeset:version
 ```
 
-1. Commit and push version/changelog changes to `master`.
+4. Commit and push version/changelog changes to `master`.
 
-1. Create and push a release tag (or create a GitHub Release with that tag):
+5. Create and push a release tag (or create a GitHub Release with that tag):
 
 ```bash
 git tag v0.1.1
@@ -115,7 +138,7 @@ git tag v0.1.2-rc.1
 git push origin v0.1.2-rc.1
 ```
 
-1. Exit prerelease mode when preparing stable releases:
+6. Exit prerelease mode when preparing stable releases:
 
 ```bash
 pnpm changeset pre exit
