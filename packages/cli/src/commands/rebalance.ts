@@ -263,7 +263,36 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
           process.exit(1);
         }
 
-        guidedHops = [fromChannel.peer_id, toChannel.peer_id];
+        const peers = (await rpc.listPeers()).peers;
+        const pubkeyByPeerId = new Map(peers.map((peer) => [peer.peer_id, peer.pubkey]));
+        const fromPubkey = pubkeyByPeerId.get(fromChannel.peer_id);
+        const toPubkey = pubkeyByPeerId.get(toChannel.peer_id);
+
+        if (!fromPubkey || !toPubkey) {
+          const message =
+            'Unable to resolve selected channel peer_id to pubkey for guided rebalance route.';
+          if (json) {
+            printJsonError({
+              code: 'CHANNEL_REBALANCE_INPUT_INVALID',
+              message,
+              recoverable: true,
+              suggestion:
+                'Ensure both peers are connected (`peer list --json`) and retry guided mode, or use `payment rebalance --hops`.',
+              details: {
+                fromChannel: fromChannelId,
+                toChannel: toChannelId,
+                fromPeerId: fromChannel.peer_id,
+                toPeerId: toChannel.peer_id,
+                resolvedPeers: peers.length,
+              },
+            });
+          } else {
+            console.error(`Error: ${message}`);
+          }
+          process.exit(1);
+        }
+
+        guidedHops = [fromPubkey, toPubkey];
       }
 
       await executeRebalance(config, {
