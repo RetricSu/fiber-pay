@@ -96,27 +96,16 @@ For deeper black-box diagnosis, use `references/logs-troubleshooting.md`.
 
 ## 7) Rebalance channel liquidity
 
-When one channel is outbound-heavy and another is inbound-heavy, use circular self-payment rebalance.
-
-Auto route mode (recommended first):
+Use high-level channel command:
 
 ```bash
-fiber-pay payment rebalance --amount <CKB> --max-fee <CKB> --dry-run --json
-fiber-pay payment rebalance --amount <CKB> --max-fee <CKB> --json
+fiber-pay channel rebalance --amount <CKB> --max-fee <CKB> --dry-run --json
+fiber-pay channel rebalance --amount <CKB> --max-fee <CKB> --json
 ```
 
-Manual route mode (pin preferred hops):
+For detailed concepts, route modes, and operator checklist, read:
 
-```bash
-fiber-pay payment rebalance --amount <CKB> --hops <peerA_pubkey>,<peerB_pubkey> --dry-run --json
-fiber-pay payment rebalance --amount <CKB> --hops <peerA_pubkey>,<peerB_pubkey> --json
-```
-
-If you already built a route, you can explicitly allow self-payment in route send mode:
-
-```bash
-fiber-pay payment send-route --router '<router_json>' --keysend --allow-self-payment --json
-```
+- `references/rebalance.md`
 
 ## 8) Runtime-first operations (recommended)
 
