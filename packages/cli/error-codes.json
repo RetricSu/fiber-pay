@@ -77,6 +77,11 @@
       "agentAction": "Provide invoice, or provide `--to` with `--amount`"
     },
     {
+      "code": "PAYMENT_REBALANCE_INPUT_INVALID",
+      "meaning": "Payment rebalance arguments are invalid or inconsistent",
+      "agentAction": "Provide a valid positive `--amount`; use non-empty `--hops` for manual mode; avoid `--max-fee` when `--hops` is set"
+    },
+    {
       "code": "PAYMENT_WATCH_TIMEOUT",
       "meaning": "Payment did not reach terminal state in timeout window",
       "agentAction": "Use `payment get --json` for follow-up status checks and optionally extend watch timeout"

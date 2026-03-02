@@ -112,7 +112,7 @@ fiber-pay payment rebalance --amount <CKB> --hops <peerA_pubkey>,<peerB_pubkey> 
 fiber-pay payment rebalance --amount <CKB> --hops <peerA_pubkey>,<peerB_pubkey> --json
 ```
 
-If you already built a route, you can explicitly allow self payment in route send mode:
+If you already built a route, you can explicitly allow self-payment in route send mode:
 
 ```bash
 fiber-pay payment send-route --router '<router_json>' --keysend --allow-self-payment --json

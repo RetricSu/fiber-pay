@@ -167,13 +167,13 @@ export function createPaymentCommand(config: CliConfig): Command {
       const json = Boolean(options.json);
       const amountCkb = parseFloat(options.amount);
       const maxFeeCkb = options.maxFee !== undefined ? parseFloat(options.maxFee) : undefined;
-      const manualHops =
-        typeof options.hops === 'string'
-          ? options.hops
-              .split(',')
-              .map((item: string) => item.trim())
-              .filter(Boolean)
-          : [];
+      const hasHopsOption = typeof options.hops === 'string';
+      const manualHops = hasHopsOption
+        ? options.hops
+            .split(',')
+            .map((item: string) => item.trim())
+            .filter(Boolean)
+        : [];
 
       if (!Number.isFinite(amountCkb) || amountCkb <= 0) {
         const message = 'Invalid --amount value. Expected a positive CKB amount.';
@@ -184,6 +184,23 @@ export function createPaymentCommand(config: CliConfig): Command {
             recoverable: true,
             suggestion: 'Provide a positive number, e.g. `--amount 10`.',
             details: { amount: options.amount },
+          });
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
+
+      if (hasHopsOption && manualHops.length === 0) {
+        const message =
+          'Invalid --hops value. Expected a non-empty comma-separated list of pubkeys.';
+        if (json) {
+          printJsonError({
+            code: 'PAYMENT_REBALANCE_INPUT_INVALID',
+            message,
+            recoverable: true,
+            suggestion: 'Provide pubkeys like `--hops 0xabc...,0xdef...`.',
+            details: { hops: options.hops },
           });
         } else {
           console.error(`Error: ${message}`);
