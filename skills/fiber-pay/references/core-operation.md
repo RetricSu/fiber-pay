@@ -104,6 +104,11 @@ fiber-pay channel rebalance --amount <CKB> --max-fee <CKB> --json
 fiber-pay channel rebalance --amount <CKB> --from-channel <channelA_id> --to-channel <channelB_id> --json
 ```
 
+Direction quick rule:
+
+- Increase local balance on channel `X` => set `--to-channel X`
+- Decrease local balance on channel `X` => set `--from-channel X`
+
 For detailed concepts, route modes, and operator checklist, read:
 
 - `references/rebalance.md`
