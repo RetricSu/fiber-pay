@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { type ChannelState, ckbToShannons, type HexString, shannonsToCkb } from '@fiber-pay/sdk';
+import { type ChannelState, ckbToShannons, type HexString } from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import { sleep } from '../lib/async.js';
 import type { CliConfig } from '../lib/config.js';
@@ -16,6 +16,7 @@ import {
 } from '../lib/format.js';
 import { createReadyRpcClient, resolveRpcEndpoint } from '../lib/rpc.js';
 import { tryCreateRuntimeChannelJob } from '../lib/runtime-jobs.js';
+import { registerChannelRebalanceCommand } from './rebalance.js';
 
 export function createChannelCommand(config: CliConfig): Command {
   const channel = new Command('channel').description('Channel lifecycle and status commands');
@@ -483,167 +484,7 @@ export function createChannelCommand(config: CliConfig): Command {
       }
     });
 
-  channel
-    .command('rebalance')
-    .description('Rebalance channel liquidity via circular self-payment')
-    .requiredOption('--amount <ckb>', 'Amount in CKB to rebalance')
-    .option('--max-fee <ckb>', 'Maximum fee in CKB (auto mode only)')
-    .option(
-      '--hops <pubkeys>',
-      'Comma-separated peer pubkeys for manual route mode (self pubkey appended automatically)',
-    )
-    .option('--dry-run', 'Simulate route/payment and return estimated result')
-    .option('--json')
-    .action(async (options) => {
-      const rpc = await createReadyRpcClient(config);
-      const json = Boolean(options.json);
-      const amountCkb = parseFloat(options.amount);
-      const maxFeeCkb = options.maxFee !== undefined ? parseFloat(options.maxFee) : undefined;
-      const hasHopsOption = typeof options.hops === 'string';
-      const manualHops = hasHopsOption
-        ? options.hops
-            .split(',')
-            .map((item: string) => item.trim())
-            .filter(Boolean)
-        : [];
-
-      if (!Number.isFinite(amountCkb) || amountCkb <= 0) {
-        const message = 'Invalid --amount value. Expected a positive CKB amount.';
-        if (json) {
-          printJsonError({
-            code: 'PAYMENT_REBALANCE_INPUT_INVALID',
-            message,
-            recoverable: true,
-            suggestion: 'Provide a positive number, e.g. `--amount 10`.',
-            details: { amount: options.amount },
-          });
-        } else {
-          console.error(`Error: ${message}`);
-        }
-        process.exit(1);
-      }
-
-      if (hasHopsOption && manualHops.length === 0) {
-        const message =
-          'Invalid --hops value. Expected a non-empty comma-separated list of pubkeys.';
-        if (json) {
-          printJsonError({
-            code: 'PAYMENT_REBALANCE_INPUT_INVALID',
-            message,
-            recoverable: true,
-            suggestion: 'Provide pubkeys like `--hops 0xabc...,0xdef...`.',
-            details: { hops: options.hops },
-          });
-        } else {
-          console.error(`Error: ${message}`);
-        }
-        process.exit(1);
-      }
-
-      if (
-        maxFeeCkb !== undefined &&
-        (!Number.isFinite(maxFeeCkb) || maxFeeCkb < 0 || manualHops.length > 0)
-      ) {
-        const message =
-          manualHops.length > 0
-            ? '--max-fee is only supported in auto rebalance mode (without --hops).'
-            : 'Invalid --max-fee value. Expected a non-negative CKB amount.';
-        if (json) {
-          printJsonError({
-            code: 'PAYMENT_REBALANCE_INPUT_INVALID',
-            message,
-            recoverable: true,
-            suggestion:
-              manualHops.length > 0
-                ? 'Remove `--max-fee` or run auto mode without `--hops`.'
-                : 'Provide a non-negative number, e.g. `--max-fee 0.01`.',
-            details: { maxFee: options.maxFee, hasManualHops: manualHops.length > 0 },
-          });
-        } else {
-          console.error(`Error: ${message}`);
-        }
-        process.exit(1);
-      }
-
-      const selfPubkey = (await rpc.nodeInfo()).node_id as HexString;
-      const amount = ckbToShannons(amountCkb);
-      const isManual = manualHops.length > 0;
-      const dryRun = Boolean(options.dryRun);
-      let routeHopCount: number | undefined;
-
-      const result = isManual
-        ? await (async () => {
-            const hopsInfo = [
-              ...manualHops.map((pubkey: string) => ({ pubkey: pubkey as HexString })),
-              ...(manualHops[manualHops.length - 1] === selfPubkey
-                ? []
-                : [{ pubkey: selfPubkey as HexString }]),
-            ];
-
-            const route = await rpc.buildRouter({
-              amount,
-              hops_info: hopsInfo,
-            });
-            routeHopCount = route.router_hops.length;
-
-            return rpc.sendPaymentWithRouter({
-              router: route.router_hops,
-              keysend: true,
-              allow_self_payment: true,
-              dry_run: dryRun ? true : undefined,
-            });
-          })()
-        : await rpc.sendPayment({
-            target_pubkey: selfPubkey,
-            amount,
-            keysend: true,
-            allow_self_payment: true,
-            max_fee_amount: maxFeeCkb !== undefined ? ckbToShannons(maxFeeCkb) : undefined,
-            dry_run: dryRun ? true : undefined,
-          });
-
-      const payload = {
-        mode: isManual ? 'manual' : 'auto',
-        selfPubkey,
-        amountCkb,
-        maxFeeCkb: isManual ? undefined : maxFeeCkb,
-        routeHopCount,
-        paymentHash: result.payment_hash,
-        status:
-          result.status === 'Success'
-            ? 'success'
-            : result.status === 'Failed'
-              ? 'failed'
-              : 'pending',
-        feeCkb: shannonsToCkb(result.fee),
-        failureReason: result.failed_error,
-        dryRun,
-      };
-
-      if (json) {
-        printJsonSuccess(payload);
-      } else {
-        console.log(
-          payload.dryRun
-            ? `Rebalance dry-run complete (${payload.mode} route)`
-            : `Rebalance sent (${payload.mode} route)`,
-        );
-        console.log(`  Self:   ${payload.selfPubkey}`);
-        console.log(`  Amount: ${payload.amountCkb} CKB`);
-        if (payload.mode === 'manual' && payload.routeHopCount !== undefined) {
-          console.log(`  Hops:   ${payload.routeHopCount}`);
-        }
-        console.log(`  Hash:   ${payload.paymentHash}`);
-        console.log(`  Status: ${payload.status}`);
-        console.log(`  Fee:    ${payload.feeCkb} CKB`);
-        if (payload.mode === 'auto' && payload.maxFeeCkb !== undefined) {
-          console.log(`  MaxFee: ${payload.maxFeeCkb} CKB`);
-        }
-        if (payload.failureReason) {
-          console.log(`  Error:  ${payload.failureReason}`);
-        }
-      }
-    });
+  registerChannelRebalanceCommand(channel, config);
 
   channel
     .command('update')

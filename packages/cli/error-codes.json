@@ -82,6 +82,11 @@
       "agentAction": "Provide a valid positive `--amount`; use non-empty `--hops` for manual mode; avoid `--max-fee` when `--hops` is set"
     },
     {
+      "code": "CHANNEL_REBALANCE_INPUT_INVALID",
+      "meaning": "Channel rebalance arguments are invalid or channel selection cannot map to a valid guided route",
+      "agentAction": "Provide a valid positive `--amount`; in guided mode provide both `--from-channel` and `--to-channel` with different peer ids"
+    },
+    {
       "code": "PAYMENT_WATCH_TIMEOUT",
       "meaning": "Payment did not reach terminal state in timeout window",
       "agentAction": "Use `payment get --json` for follow-up status checks and optionally extend watch timeout"

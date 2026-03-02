@@ -16,6 +16,7 @@ import {
   tryCreateRuntimePaymentJob,
   waitForRuntimeJobTerminal,
 } from '../lib/runtime-jobs.js';
+import { registerPaymentRebalanceCommand } from './rebalance.js';
 
 export function createPaymentCommand(config: CliConfig): Command {
   const payment = new Command('payment').description('Payment lifecycle and status commands');
@@ -150,6 +151,8 @@ export function createPaymentCommand(config: CliConfig): Command {
         }
       }
     });
+
+  registerPaymentRebalanceCommand(payment, config);
 
   payment
     .command('get')

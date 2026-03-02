@@ -101,6 +101,7 @@ Use high-level channel command:
 ```bash
 fiber-pay channel rebalance --amount <CKB> --max-fee <CKB> --dry-run --json
 fiber-pay channel rebalance --amount <CKB> --max-fee <CKB> --json
+fiber-pay channel rebalance --amount <CKB> --from-channel <channelA_id> --to-channel <channelB_id> --json
 ```
 
 For detailed concepts, route modes, and operator checklist, read:

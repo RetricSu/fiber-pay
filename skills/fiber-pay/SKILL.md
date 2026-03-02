@@ -62,7 +62,7 @@ Read [references/rebalance.md](references/rebalance.md) for channel liquidity re
 - **Fiber-pay config operations guide**: Read [references/configuration.md](references/configuration.md) for config source-of-truth, path operations, and profile/runtime config scope.
 - **Profile & multi-node**: Read [references/profile.md](references/profile.md) for how profiles work, data directory layout, multi-node port scheme, and what `node start` does/doesn't auto-handle.
 - **Logs & black-box debugging**: Read [references/logs-troubleshooting.md](references/logs-troubleshooting.md) first when startup/channel/payment issues are unclear. Start with section `7) Agent debugging micro-habits (logs-first)`, then pivot to `job trace <jobId>` and `job events --with-data` before guessing root causes.
-- **Rebalance operation**: Read [references/rebalance.md](references/rebalance.md) for high-level `channel rebalance` workflow and how it maps to payment primitives.
+- **Rebalance operation**: Read [references/rebalance.md](references/rebalance.md) for atomic `payment rebalance` and high-level `channel rebalance` wrapper workflow.
 - **Upgrade & migration**: Read [references/upgrade.md](references/upgrade.md) for upgrading the Fiber node binary and migrating the database between versions (`node upgrade`, migration check, backup/rollback, breaking change handling).
 - **Output contracts**: Read [references/contracts.md](references/contracts.md) for JSON envelope, NDJSON stream events, and timeout semantics.
 - **Runtime API**: Read [references/runtime-api.md](references/runtime-api.md) for `/jobs/*` and `/monitor/*` endpoints and state model.
