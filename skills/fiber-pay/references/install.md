@@ -16,13 +16,6 @@ If the task is operating/testing `fiber-pay` CLI, install from npm first. Do not
 npm install -g @fiber-pay/cli@next
 ```
 
-Then verify:
-
-```bash
-fiber-pay --version
-fiber-pay -h
-```
-
 ## Install from source
 
 Make sure you have:
@@ -44,6 +37,13 @@ git pull
 pnpm install
 pnpm build
 cd packages/cli && pnpm link --global
+```
+
+## Verify CLI is available (applies to both methods)
+
+```bash
+fiber-pay --version
+fiber-pay -h
 ```
 
 ## Notes
