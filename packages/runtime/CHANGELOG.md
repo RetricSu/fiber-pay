@@ -1,6 +1,6 @@
 # @fiber-pay/runtime
 
-## 1.0.0-rc.5
+## 0.1.0-rc.5
 
 ### Patch Changes
 
@@ -15,7 +15,7 @@
 - 5be36b4: Make force-close jobs wait for closed state by default to avoid false-positive success transitions.
 - Updated dependencies [4c1c414]
 - Updated dependencies [4438b9a]
-  - @fiber-pay/sdk@1.0.0-rc.5
+  - @fiber-pay/sdk@0.1.0-rc.5
 
 ## 0.1.0-rc.4
 
