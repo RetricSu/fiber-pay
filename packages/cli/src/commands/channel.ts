@@ -385,7 +385,7 @@ export function createChannelCommand(config: CliConfig): Command {
               channel_id: channelId as HexString,
               force: Boolean(options.force),
             },
-            waitForClosed: false,
+            waitForClosed: Boolean(options.force),
           },
           options: {
             idempotencyKey: `shutdown:channel:${channelId}`,

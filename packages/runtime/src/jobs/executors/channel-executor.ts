@@ -179,7 +179,8 @@ export async function* runChannelJob(
       });
       yield current;
 
-      if (!current.params.waitForClosed) {
+      const waitForClosed = current.params.waitForClosed ?? Boolean(shutdownParams.force);
+      if (!waitForClosed) {
         current = transitionJobState(current, channelStateMachine, 'payment_success');
         yield current;
         return;

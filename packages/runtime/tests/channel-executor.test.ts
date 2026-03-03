@@ -424,6 +424,124 @@ describe('runChannelJob', () => {
     expect(updates[updates.length - 1].error?.category).toBe('temporary_failure');
   });
 
+  it('does not transition to succeeded when force-close submit fails', async () => {
+    const rpc = {
+      shutdownChannel: async () => {
+        throw new Error(
+          'send transaction Byte32(0xf59122) failed: TransactionFailedToResolve: Resolve failed Unknown(OutPoint(...))',
+        );
+      },
+    } as unknown as FiberRpcClient;
+
+    const updates: ChannelJob[] = [];
+    for await (const updated of runChannelJob(
+      baseJob({
+        maxRetries: 0,
+        params: {
+          action: 'shutdown',
+          shutdownChannelParams: {
+            channel_id: '0xf59122' as `0x${string}`,
+            force: true,
+          },
+        },
+      }),
+      rpc,
+      defaultPaymentRetryPolicy,
+      new AbortController().signal,
+    )) {
+      updates.push(updated);
+    }
+
+    expect(updates[updates.length - 1].state).toBe('failed');
+    expect(updates.some((update) => update.state === 'succeeded')).toBe(false);
+  });
+
+  it('defaults force shutdown to wait for closed when waitForClosed is not set', async () => {
+    let listCalls = 0;
+    const rpc = {
+      shutdownChannel: async () => null,
+      listChannels: async () => {
+        listCalls++;
+        if (listCalls === 1) {
+          return {
+            channels: [
+              {
+                channel_id: '0xforce-close',
+                is_public: false,
+                is_acceptor: false,
+                is_one_way: false,
+                channel_outpoint: null,
+                peer_id: 'peer-1',
+                funding_udt_type_script: null,
+                state: { state_name: 'SHUTTING_DOWN' },
+                local_balance: '0x0',
+                offered_tlc_balance: '0x0',
+                remote_balance: '0x0',
+                received_tlc_balance: '0x0',
+                pending_tlcs: [],
+                latest_commitment_transaction_hash: null,
+                created_at: '0x0',
+                enabled: true,
+                tlc_expiry_delta: '0x0',
+                tlc_fee_proportional_millionths: '0x0',
+                shutdown_transaction_hash: null,
+              },
+            ],
+          };
+        }
+
+        return {
+          channels: [
+            {
+              channel_id: '0xforce-close',
+              is_public: false,
+              is_acceptor: false,
+              is_one_way: false,
+              channel_outpoint: null,
+              peer_id: 'peer-1',
+              funding_udt_type_script: null,
+              state: { state_name: 'CLOSED' },
+              local_balance: '0x0',
+              offered_tlc_balance: '0x0',
+              remote_balance: '0x0',
+              received_tlc_balance: '0x0',
+              pending_tlcs: [],
+              latest_commitment_transaction_hash: null,
+              created_at: '0x0',
+              enabled: true,
+              tlc_expiry_delta: '0x0',
+              tlc_fee_proportional_millionths: '0x0',
+              shutdown_transaction_hash: null,
+            },
+          ],
+        };
+      },
+    } as unknown as FiberRpcClient;
+
+    const states: string[] = [];
+    for await (const updated of runChannelJob(
+      baseJob({
+        params: {
+          action: 'shutdown',
+          shutdownChannelParams: {
+            channel_id: '0xforce-close' as `0x${string}`,
+            force: true,
+          },
+          pollIntervalMs: 1,
+        },
+      }),
+      rpc,
+      defaultPaymentRetryPolicy,
+      new AbortController().signal,
+    )) {
+      states.push(updated.state);
+    }
+
+    expect(listCalls).toBeGreaterThan(0);
+    expect(states).toContain('channel_closed');
+    expect(states[states.length - 1]).toBe('succeeded');
+  });
+
   it('abandon action transitions through channel_abandoning to succeeded', async () => {
     let called = false;
     const rpc = {
