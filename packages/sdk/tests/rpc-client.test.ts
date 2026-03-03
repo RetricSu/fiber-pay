@@ -73,6 +73,22 @@ describe('FiberRpcClient - New Methods', () => {
         'Invalid JSON-RPC response: missing result and error',
       );
     });
+
+    it('should attach Authorization Bearer header when biscuitToken is configured', async () => {
+      const fetchMock = mockFetch({});
+      globalThis.fetch = fetchMock;
+
+      const authClient = new FiberRpcClient({
+        url: 'http://127.0.0.1:8227',
+        biscuitToken: 'test-biscuit-token',
+      });
+
+      await authClient.call('node_info', []);
+
+      const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+      const headers = requestInit.headers as Record<string, string>;
+      expect(headers.Authorization).toBe('Bearer test-biscuit-token');
+    });
   });
 
   // ===========================================================================

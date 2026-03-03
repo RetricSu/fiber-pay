@@ -47,7 +47,10 @@ function resolveRuntimeProxyUrl(config: CliConfig): string | undefined {
 
 export function createRpcClient(config: CliConfig): FiberRpcClient {
   const resolved = resolveRpcEndpoint(config);
-  return new FiberRpcClient({ url: resolved.url });
+  return new FiberRpcClient({
+    url: resolved.url,
+    biscuitToken: config.rpcBiscuitToken,
+  });
 }
 
 export function resolveRpcEndpoint(config: CliConfig): ResolvedRpcEndpoint {

@@ -8,6 +8,7 @@ export interface CliConfig {
   configPath: string;
   network: FiberNetwork;
   rpcUrl: string;
+  rpcBiscuitToken?: string;
   keyPassword?: string;
   ckbRpcUrl?: string;
   runtimeProxyListen?: string;
@@ -25,6 +26,7 @@ export interface EffectiveConfigSources {
   configPath: 'derived';
   network: 'cli' | 'env' | 'config' | 'default';
   rpcUrl: 'cli' | 'env' | 'config' | 'default';
+  rpcBiscuitToken?: 'cli' | 'env' | 'unset';
   ckbRpcUrl?: 'env' | 'config' | 'unset';
   runtimeProxyListen?: 'cli' | 'env' | 'profile' | 'default';
 }
@@ -212,6 +214,20 @@ export function getEffectiveConfig(explicitFlags?: Set<string>): EffectiveConfig
         ? 'config'
         : 'default';
 
+  // RPC Biscuit token (auth bearer token)
+  const cliRpcBiscuitToken = explicitFlags?.has('rpcBiscuitToken')
+    ? process.env.FIBER_RPC_BISCUIT_TOKEN
+    : undefined;
+  const envRpcBiscuitToken = !explicitFlags?.has('rpcBiscuitToken')
+    ? process.env.FIBER_RPC_BISCUIT_TOKEN
+    : undefined;
+  const rpcBiscuitToken = cliRpcBiscuitToken || envRpcBiscuitToken || undefined;
+  const rpcBiscuitTokenSource: EffectiveConfigSources['rpcBiscuitToken'] = cliRpcBiscuitToken
+    ? 'cli'
+    : envRpcBiscuitToken
+      ? 'env'
+      : 'unset';
+
   // Binary path
   const cliBinaryPath = explicitFlags?.has('binaryPath')
     ? process.env.FIBER_BINARY_PATH
@@ -273,6 +289,7 @@ export function getEffectiveConfig(explicitFlags?: Set<string>): EffectiveConfig
       configPath,
       network,
       rpcUrl,
+      rpcBiscuitToken,
       keyPassword,
       ckbRpcUrl,
       runtimeProxyListen,
@@ -282,6 +299,7 @@ export function getEffectiveConfig(explicitFlags?: Set<string>): EffectiveConfig
       configPath: 'derived',
       network: networkSource,
       rpcUrl: rpcUrlSource,
+      rpcBiscuitToken: rpcBiscuitTokenSource,
       ckbRpcUrl: ckbRpcUrlSource,
       runtimeProxyListen: runtimeProxyListenSource,
     },

@@ -52,3 +52,5 @@ The reference file includes useful operational notes:
 - `fnn --config /path/to/config.yml` and `fnn --dir /path/to/base_dir` are supported runtime entry patterns.
 
 Use `skills/fiber-pay/references/fnn.reference.yml` when exploring advanced keys that are not yet exposed as first-class CLI flags.
+
+For RPC Biscuit authentication setup and token usage, see `skills/fiber-pay/references/auth.md`.

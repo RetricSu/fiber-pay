@@ -62,6 +62,14 @@ function applyGlobalOverrides(argv: string[]): void {
         }
         break;
       }
+      case '--rpc-biscuit-token': {
+        const value = getFlagValue(argv, index);
+        if (value) {
+          process.env.FIBER_RPC_BISCUIT_TOKEN = value;
+          explicitFlags.add('rpcBiscuitToken');
+        }
+        break;
+      }
       case '--network': {
         const value = getFlagValue(argv, index);
         if (value) {
@@ -148,6 +156,7 @@ async function main(): Promise<void> {
     .option('--profile <name>', 'Use profile at ~/.fiber-pay/profiles/<name>')
     .option('--data-dir <path>', 'Override data directory for all commands')
     .option('--rpc-url <url>', 'Override RPC URL for all commands')
+    .option('--rpc-biscuit-token <token>', 'Set RPC Authorization Bearer token for all commands')
     .option('--network <network>', 'Override network for all commands (testnet|mainnet)')
     .option('--key-password <password>', 'Override key password for all commands')
     .option('--binary-path <path>', 'Override fiber binary path for all commands')
