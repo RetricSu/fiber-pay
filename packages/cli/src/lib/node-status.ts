@@ -70,7 +70,6 @@ export async function runNodeStatusCommand(
       chainHash = nodeInfo.chain_hash;
       version = nodeInfo.version;
       peersCount = parseInt(nodeInfo.peers_count, 16);
-      pendingChannelCount = parseInt(nodeInfo.pending_channel_count, 16);
       try {
         peerId = await nodeIdToPeerId(nodeInfo.node_id);
       } catch (error) {
@@ -99,6 +98,7 @@ export async function runNodeStatusCommand(
         (channel) => channel.state?.state_name === ChannelState.ChannelReady,
       );
       channelsReady = readyChannels.length;
+      pendingChannelCount = Math.max(channelsTotal - channelsReady, 0);
       const liquidity = summarizeChannelLiquidity(readyChannels);
       canSend = liquidity.canSend;
       canReceive = liquidity.canReceive;
@@ -155,7 +155,6 @@ export async function runNodeStatusCommand(
     multiaddr,
     multiaddrError,
     multiaddrInferred,
-    channelsPending: pendingChannelCount,
     fundingLockScript,
     checks: {
       binary: {
@@ -258,7 +257,11 @@ export async function runNodeStatusCommand(
   console.log(
     `  Channels:      ${output.checks.channels.ready}/${output.checks.channels.pending}/${output.checks.channels.total} ready/pending/total`,
   );
-  console.log(`  Peers:         ${output.peersCount}`);
+  if (output.rpcResponsive) {
+    console.log(`  Peers:         ${output.peersCount}`);
+  } else {
+    console.log('  Peers:         unavailable');
+  }
   console.log(`  Can Send:      ${output.checks.channels.canSend ? 'yes' : 'no'}`);
   console.log(`  Can Receive:   ${output.checks.channels.canReceive ? 'yes' : 'no'}`);
   console.log(`  Recommendation:${output.recommendation}`);
