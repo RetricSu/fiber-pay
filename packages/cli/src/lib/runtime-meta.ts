@@ -10,6 +10,8 @@ export interface RuntimeMeta {
   alertLogFilePath?: string;
   fnnStdoutLogPath?: string;
   fnnStderrLogPath?: string;
+  /** Base logs directory for discovering daily log directories. */
+  logsBaseDir?: string;
   daemon: boolean;
 }
 

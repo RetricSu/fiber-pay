@@ -12,29 +12,35 @@ Prefer background/daemon-style operation in automation:
 
 ## 1) Know where logs live
 
-Per profile/data-dir, runtime and fnn persist logs under:
+Per profile/data-dir, runtime and fnn persist logs under daily-rotated directories:
 
-- `<data-dir>/logs/fnn.stdout.log`
-- `<data-dir>/logs/fnn.stderr.log`
-- `<data-dir>/logs/runtime.alerts.jsonl`
+- `<data-dir>/logs/<YYYY-MM-DD>/fnn.stdout.log`
+- `<data-dir>/logs/<YYYY-MM-DD>/fnn.stderr.log`
+- `<data-dir>/logs/<YYYY-MM-DD>/runtime.alerts.jsonl`
+
+Each day (UTC) gets its own subdirectory. All daily directories are kept indefinitely.
 
 Runtime metadata file:
 
-- `<data-dir>/runtime.meta.json` (contains runtime/log paths)
+- `<data-dir>/runtime.meta.json` (contains runtime/log paths and `logsBaseDir`)
 
 Prefer CLI log access first (no manual `cat` needed):
 
 ```bash
-fiber-pay logs --source all --tail 80
+fiber-pay logs --list-dates --json          # discover available log dates
+fiber-pay logs --source all --tail 80       # today's logs (default)
 fiber-pay logs --source runtime --tail 120
 fiber-pay logs --source fnn-stderr --tail 120
-fiber-pay logs --source runtime --follow
+fiber-pay logs --date 2026-03-01 --source all --tail 200  # specific date
+fiber-pay logs --source runtime --follow    # follow today's logs live
 ```
 
 Notes:
 
 - `logs` has alias `log`
-- `--follow` is human-output mode (do not combine with `--json`)
+- `--date YYYY-MM-DD` selects a specific day's logs (default: today UTC)
+- `--list-dates` lists available log date directories and exits
+- `--follow` is human-output mode (do not combine with `--json`); follows today's log files only
 
 ## 2) Quick health triage
 
@@ -140,9 +146,11 @@ Use this order for faster triage:
 Do not open raw files first. Start with CLI logs:
 
 ```bash
+fiber-pay logs --list-dates --json
 fiber-pay logs --source fnn-stderr --tail 200
 fiber-pay logs --source runtime --tail 200
 fiber-pay logs --source fnn-stdout --tail 200
+fiber-pay logs --date <YYYY-MM-DD> --source all --tail 200  # for past dates
 ```
 
 Use `--follow` only when continuous observation is needed.

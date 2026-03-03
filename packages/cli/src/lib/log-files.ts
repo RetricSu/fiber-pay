@@ -1,4 +1,14 @@
-import { closeSync, createReadStream, existsSync, openSync, readSync, statSync } from 'node:fs';
+import {
+  appendFileSync,
+  closeSync,
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readSync,
+  statSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import type { RuntimeMeta } from './runtime-meta.js';
 
@@ -17,15 +27,93 @@ export interface PersistedLogTarget {
   path: string;
 }
 
+const DATE_DIR_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Returns the current UTC date as YYYY-MM-DD string.
+ */
+export function todayDateString(): string {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(now.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Returns the path to a date-based log directory: `<data-dir>/logs/<YYYY-MM-DD>/`.
+ * Creates the directory if it does not exist.
+ */
+export function resolveLogDirForDate(dataDir: string, date?: string): string {
+  const dateStr = date ?? todayDateString();
+  const dir = join(dataDir, 'logs', dateStr);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * Resolve persisted log paths for a given date.
+ *
+ * When `date` is provided, always returns paths under `<data-dir>/logs/<date>/`.
+ * When `date` is omitted and `meta` provides explicit paths, those are used for
+ * backward compatibility.  Otherwise defaults to today's date directory.
+ */
 export function resolvePersistedLogPaths(
   dataDir: string,
   meta?: RuntimeMeta | null,
+  date?: string,
 ): PersistedLogPaths {
+  if (date) {
+    const dir = resolveLogDirForDate(dataDir, date);
+    return {
+      runtimeAlerts: join(dir, 'runtime.alerts.jsonl'),
+      fnnStdout: join(dir, 'fnn.stdout.log'),
+      fnnStderr: join(dir, 'fnn.stderr.log'),
+    };
+  }
+
+  if (meta?.alertLogFilePath || meta?.fnnStdoutLogPath || meta?.fnnStderrLogPath) {
+    return {
+      runtimeAlerts: meta.alertLogFilePath ?? join(dataDir, 'logs', 'runtime.alerts.jsonl'),
+      fnnStdout: meta.fnnStdoutLogPath ?? join(dataDir, 'logs', 'fnn.stdout.log'),
+      fnnStderr: meta.fnnStderrLogPath ?? join(dataDir, 'logs', 'fnn.stderr.log'),
+    };
+  }
+
+  const dir = resolveLogDirForDate(dataDir);
   return {
-    runtimeAlerts: meta?.alertLogFilePath ?? join(dataDir, 'logs', 'runtime.alerts.jsonl'),
-    fnnStdout: meta?.fnnStdoutLogPath ?? join(dataDir, 'logs', 'fnn.stdout.log'),
-    fnnStderr: meta?.fnnStderrLogPath ?? join(dataDir, 'logs', 'fnn.stderr.log'),
+    runtimeAlerts: join(dir, 'runtime.alerts.jsonl'),
+    fnnStdout: join(dir, 'fnn.stdout.log'),
+    fnnStderr: join(dir, 'fnn.stderr.log'),
   };
+}
+
+/**
+ * List available log dates by scanning `<data-dir>/logs/` for YYYY-MM-DD directories.
+ * Returns date strings sorted newest-first.
+ */
+export function listLogDates(dataDir: string): string[] {
+  const logsDir = join(dataDir, 'logs');
+  if (!existsSync(logsDir)) {
+    return [];
+  }
+
+  const entries = readdirSync(logsDir, { withFileTypes: true });
+  const dates = entries
+    .filter((entry) => entry.isDirectory() && DATE_DIR_PATTERN.test(entry.name))
+    .map((entry) => entry.name);
+
+  dates.sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
+  return dates;
+}
+
+/**
+ * Append text to a log file inside today's date directory.
+ * Creates the date directory on first write each day.
+ */
+export function appendToTodayLog(dataDir: string, filename: string, text: string): void {
+  const dir = resolveLogDirForDate(dataDir);
+  appendFileSync(join(dir, filename), text, 'utf-8');
 }
 
 export function resolvePersistedLogTargets(

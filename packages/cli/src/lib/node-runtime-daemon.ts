@@ -54,7 +54,7 @@ export function startRuntimeDaemonFromNode(params: {
   rpcUrl: string;
   proxyListen: string;
   stateFilePath: string;
-  alertLogFile: string;
+  alertLogsBaseDir: string;
 }): { ok: true } | { ok: false; message: string } {
   const cliEntrypoint = getCliEntrypoint();
   const result = spawnSync(
@@ -74,8 +74,8 @@ export function startRuntimeDaemonFromNode(params: {
       params.proxyListen,
       '--state-file',
       params.stateFilePath,
-      '--alert-log-file',
-      params.alertLogFile,
+      '--alert-logs-base-dir',
+      params.alertLogsBaseDir,
       '--json',
     ],
     { encoding: 'utf-8' },

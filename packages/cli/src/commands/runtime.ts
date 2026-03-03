@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { Alert, AlertPriority, AlertType, RuntimeConfigInput } from '@fiber-pay/runtime';
 import {
   alertPriorityOrder,
@@ -11,6 +11,7 @@ import {
 import { Command } from 'commander';
 import type { CliConfig } from '../lib/config.js';
 import { printJsonError, printJsonEvent, printJsonSuccess } from '../lib/format.js';
+import { resolveLogDirForDate } from '../lib/log-files.js';
 import { parseBoolOption, parseIntegerOption } from '../lib/parse-options.js';
 import { isProcessRunning } from '../lib/pid.js';
 import {
@@ -98,7 +99,8 @@ export function createRuntimeCommand(config: CliConfig): Command {
     .option('--include-closed <bool>', 'Monitor closed channels (true|false)')
     .option('--completed-ttl-seconds <seconds>', 'TTL for completed invoices/payments in tracker')
     .option('--state-file <path>', 'State file path for snapshots and history')
-    .option('--alert-log-file <path>', 'Path to runtime alert JSONL log file')
+    .option('--alert-log-file <path>', 'Path to runtime alert JSONL log file (legacy static path)')
+    .option('--alert-logs-base-dir <dir>', 'Base logs directory for daily-rotated alert files')
     .option('--flush-ms <ms>', 'State flush interval in milliseconds')
     .option('--webhook <url>', 'Webhook URL to receive alert POST payloads')
     .option('--websocket <host:port>', 'WebSocket alert broadcast listen address')
@@ -197,12 +199,24 @@ export function createRuntimeCommand(config: CliConfig): Command {
           },
         };
 
-        const alertLogFile = options.alertLogFile
-          ? resolve(String(options.alertLogFile))
-          : resolve(config.dataDir, 'logs', 'runtime.alerts.jsonl');
+        // Determine alert backend: prefer daily-file rotation, fall back to static file
+        const alertLogsBaseDir = options.alertLogsBaseDir
+          ? resolve(String(options.alertLogsBaseDir))
+          : options.alertLogFile
+            ? undefined
+            : resolve(config.dataDir, 'logs');
+        const alertLogFile = alertLogsBaseDir
+          ? undefined
+          : options.alertLogFile
+            ? resolve(String(options.alertLogFile))
+            : resolve(config.dataDir, 'logs', 'runtime.alerts.jsonl');
 
         const alerts: RuntimeConfigInput['alerts'] = [{ type: 'stdout' }];
-        alerts.push({ type: 'file', path: alertLogFile });
+        if (alertLogsBaseDir) {
+          alerts.push({ type: 'daily-file', baseLogsDir: alertLogsBaseDir });
+        } else if (alertLogFile) {
+          alerts.push({ type: 'file', path: alertLogFile });
+        }
         if (options.webhook) {
           alerts.push({ type: 'webhook', url: String(options.webhook) });
         }
@@ -228,6 +242,10 @@ export function createRuntimeCommand(config: CliConfig): Command {
         const runtime = await startRuntimeService(runtimeConfig);
         const status = runtime.service.getStatus();
 
+        const logsBaseDir = alertLogsBaseDir ?? resolve(config.dataDir, 'logs');
+        const todayLogDir = resolveLogDirForDate(config.dataDir);
+        const effectiveAlertLogPath = alertLogFile ?? join(todayLogDir, 'runtime.alerts.jsonl');
+
         writeRuntimePid(config.dataDir, process.pid);
         writeRuntimeMeta(config.dataDir, {
           pid: process.pid,
@@ -235,7 +253,8 @@ export function createRuntimeCommand(config: CliConfig): Command {
           fiberRpcUrl: status.targetUrl,
           proxyListen: status.proxyListen,
           stateFilePath: runtimeConfig.storage?.stateFilePath,
-          alertLogFilePath: alertLogFile,
+          alertLogFilePath: effectiveAlertLogPath,
+          logsBaseDir,
           daemon: daemon || isRuntimeChild,
         });
 
@@ -257,14 +276,16 @@ export function createRuntimeCommand(config: CliConfig): Command {
             fiberRpcUrl: status.targetUrl,
             proxyListen: status.proxyListen,
             stateFilePath: runtimeConfig.storage?.stateFilePath,
-            alertLogFile,
+            alertLogFile: effectiveAlertLogPath,
+            logsBaseDir,
           });
           printJsonEvent('runtime_started', status);
         } else {
           console.log(`Fiber RPC:    ${status.targetUrl}`);
           console.log(`Proxy listen: ${status.proxyListen}`);
           console.log(`State file:   ${runtimeConfig.storage?.stateFilePath}`);
-          console.log(`Alert log:    ${alertLogFile}`);
+          console.log(`Logs dir:     ${logsBaseDir}`);
+          console.log(`Alert log:    ${effectiveAlertLogPath}`);
           console.log('Runtime monitor is running. Press Ctrl+C to stop.');
         }
 

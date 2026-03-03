@@ -23,11 +23,18 @@ export interface FileAlertConfig {
   path: string;
 }
 
+export interface DailyFileAlertConfig {
+  type: 'daily-file';
+  baseLogsDir: string;
+  filename?: string;
+}
+
 export type AlertBackendConfig =
   | StdoutAlertConfig
   | WebhookAlertConfig
   | WebsocketAlertConfig
-  | FileAlertConfig;
+  | FileAlertConfig
+  | DailyFileAlertConfig;
 
 export interface RuntimeConfig {
   fiberRpcUrl: string;

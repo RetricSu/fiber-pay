@@ -1,8 +1,16 @@
-import { mkdtempSync, rmSync, writeFileSync, appendFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
-import { readAppendedLines, readLastLines } from '../src/lib/log-files.js';
+import {
+  appendToTodayLog,
+  listLogDates,
+  readAppendedLines,
+  readLastLines,
+  resolveLogDirForDate,
+  resolvePersistedLogPaths,
+  todayDateString,
+} from '../src/lib/log-files.js';
 
 const tempDirs: string[] = [];
 
@@ -50,5 +58,108 @@ describe('log-files', () => {
     expect(tailed).toHaveLength(80);
     expect(tailed[0]).toBe(`line-${totalLines - 80}`);
     expect(tailed[79]).toBe(`line-${totalLines - 1}`);
+  });
+});
+
+describe('daily log rotation', () => {
+  it('todayDateString returns a valid YYYY-MM-DD string', () => {
+    const result = todayDateString();
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('resolveLogDirForDate creates date directory and returns correct path', () => {
+    const dataDir = makeTempDir();
+    const dir = resolveLogDirForDate(dataDir, '2026-01-15');
+    expect(dir).toBe(join(dataDir, 'logs', '2026-01-15'));
+    expect(existsSync(dir)).toBe(true);
+  });
+
+  it('resolveLogDirForDate defaults to today when no date provided', () => {
+    const dataDir = makeTempDir();
+    const dir = resolveLogDirForDate(dataDir);
+    const today = todayDateString();
+    expect(dir).toBe(join(dataDir, 'logs', today));
+    expect(existsSync(dir)).toBe(true);
+  });
+
+  it('resolvePersistedLogPaths with explicit date returns date-based paths', () => {
+    const dataDir = makeTempDir();
+    const paths = resolvePersistedLogPaths(dataDir, null, '2026-02-20');
+    expect(paths.runtimeAlerts).toBe(join(dataDir, 'logs', '2026-02-20', 'runtime.alerts.jsonl'));
+    expect(paths.fnnStdout).toBe(join(dataDir, 'logs', '2026-02-20', 'fnn.stdout.log'));
+    expect(paths.fnnStderr).toBe(join(dataDir, 'logs', '2026-02-20', 'fnn.stderr.log'));
+  });
+
+  it('resolvePersistedLogPaths without date defaults to today directory', () => {
+    const dataDir = makeTempDir();
+    const paths = resolvePersistedLogPaths(dataDir);
+    const today = todayDateString();
+    expect(paths.fnnStdout).toBe(join(dataDir, 'logs', today, 'fnn.stdout.log'));
+  });
+
+  it('resolvePersistedLogPaths respects meta paths when no date given', () => {
+    const dataDir = makeTempDir();
+    const meta = {
+      pid: 1,
+      startedAt: '',
+      fiberRpcUrl: '',
+      proxyListen: '',
+      alertLogFilePath: '/custom/runtime.alerts.jsonl',
+      fnnStdoutLogPath: '/custom/fnn.stdout.log',
+      fnnStderrLogPath: '/custom/fnn.stderr.log',
+      daemon: false,
+    };
+    const paths = resolvePersistedLogPaths(dataDir, meta);
+    expect(paths.runtimeAlerts).toBe('/custom/runtime.alerts.jsonl');
+    expect(paths.fnnStdout).toBe('/custom/fnn.stdout.log');
+    expect(paths.fnnStderr).toBe('/custom/fnn.stderr.log');
+  });
+
+  it('resolvePersistedLogPaths with date overrides meta paths', () => {
+    const dataDir = makeTempDir();
+    const meta = {
+      pid: 1,
+      startedAt: '',
+      fiberRpcUrl: '',
+      proxyListen: '',
+      alertLogFilePath: '/custom/runtime.alerts.jsonl',
+      daemon: false,
+    };
+    const paths = resolvePersistedLogPaths(dataDir, meta, '2026-03-01');
+    expect(paths.runtimeAlerts).toBe(join(dataDir, 'logs', '2026-03-01', 'runtime.alerts.jsonl'));
+  });
+
+  it('listLogDates returns sorted date directories newest-first', () => {
+    const dataDir = makeTempDir();
+    const logsDir = join(dataDir, 'logs');
+    mkdirSync(join(logsDir, '2026-01-01'), { recursive: true });
+    mkdirSync(join(logsDir, '2026-03-15'), { recursive: true });
+    mkdirSync(join(logsDir, '2026-02-10'), { recursive: true });
+    // A non-date directory should be excluded
+    mkdirSync(join(logsDir, 'archive'), { recursive: true });
+    // A file that looks like a date should be excluded
+    writeFileSync(join(logsDir, '2026-04-01'), 'not a directory', 'utf8');
+
+    const dates = listLogDates(dataDir);
+    expect(dates).toEqual(['2026-03-15', '2026-02-10', '2026-01-01']);
+  });
+
+  it('listLogDates returns empty array when logs directory does not exist', () => {
+    const dataDir = makeTempDir();
+    const dates = listLogDates(dataDir);
+    expect(dates).toEqual([]);
+  });
+
+  it('appendToTodayLog writes to today date directory', () => {
+    const dataDir = makeTempDir();
+    appendToTodayLog(dataDir, 'fnn.stdout.log', 'hello\n');
+    appendToTodayLog(dataDir, 'fnn.stdout.log', 'world\n');
+
+    const today = todayDateString();
+    const filePath = join(dataDir, 'logs', today, 'fnn.stdout.log');
+    expect(existsSync(filePath)).toBe(true);
+
+    const lines = readLastLines(filePath, 10);
+    expect(lines).toEqual(['hello', 'world']);
   });
 });

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   createKeyManager,
@@ -12,6 +12,7 @@ import { startRuntimeService } from '@fiber-pay/runtime';
 import { autoConnectBootnodes, extractBootnodeAddrs } from './bootnode.js';
 import { type CliConfig, ensureNodeConfigFile } from './config.js';
 import { printJsonError, printJsonEvent } from './format.js';
+import { appendToTodayLog, resolveLogDirForDate } from './log-files.js';
 import { runMigrationGuard } from './node-migration.js';
 import {
   getBinaryVersion,
@@ -153,11 +154,10 @@ export async function runNodeStartCommand(
       ? 'profile'
       : 'default';
   const runtimeStateFilePath = join(config.dataDir, 'runtime-state.json');
-  const logsDir = join(config.dataDir, 'logs');
-  const fnnStdoutLogPath = join(logsDir, 'fnn.stdout.log');
-  const fnnStderrLogPath = join(logsDir, 'fnn.stderr.log');
-  const runtimeAlertLogPath = join(logsDir, 'runtime.alerts.jsonl');
-  mkdirSync(logsDir, { recursive: true });
+  const logsBaseDir = join(config.dataDir, 'logs');
+  mkdirSync(logsBaseDir, { recursive: true });
+  // Ensure today's date directory exists at startup
+  resolveLogDirForDate(config.dataDir);
 
   const binaryPath = config.binaryPath || getDefaultBinaryPath();
   await ensureFiberBinary();
@@ -234,11 +234,11 @@ export async function runNodeStartCommand(
     removePidFile(config.dataDir);
   });
   processManager.on('stdout', (text) => {
-    appendFileSync(fnnStdoutLogPath, text, 'utf-8');
+    appendToTodayLog(config.dataDir, 'fnn.stdout.log', text);
     emitFnnLog('stdout', text);
   });
   processManager.on('stderr', (text) => {
-    appendFileSync(fnnStderrLogPath, text, 'utf-8');
+    appendToTodayLog(config.dataDir, 'fnn.stderr.log', text);
     emitFnnLog('stderr', text);
   });
   await processManager.start();
@@ -295,7 +295,7 @@ export async function runNodeStartCommand(
         rpcUrl: config.rpcUrl,
         proxyListen: runtimeProxyListen,
         stateFilePath: runtimeStateFilePath,
-        alertLogFile: runtimeAlertLogPath,
+        alertLogsBaseDir: logsBaseDir,
       });
       if (!daemonStart.ok) {
         throw new Error(daemonStart.message);
@@ -310,7 +310,7 @@ export async function runNodeStartCommand(
         storage: {
           stateFilePath: runtimeStateFilePath,
         },
-        alerts: [{ type: 'stdout' }, { type: 'file', path: runtimeAlertLogPath }],
+        alerts: [{ type: 'stdout' }, { type: 'daily-file', baseLogsDir: logsBaseDir }],
         jobs: {
           enabled: true,
           dbPath: join(config.dataDir, 'runtime-jobs.db'),
@@ -319,15 +319,17 @@ export async function runNodeStartCommand(
 
       const runtimeStatus = runtime.service.getStatus();
       writeRuntimePid(config.dataDir, process.pid);
+      const todayLogDir = resolveLogDirForDate(config.dataDir);
       writeRuntimeMeta(config.dataDir, {
         pid: process.pid,
         startedAt: runtimeStatus.startedAt,
         fiberRpcUrl: runtimeStatus.targetUrl,
         proxyListen: runtimeStatus.proxyListen,
         stateFilePath: runtimeStateFilePath,
-        alertLogFilePath: runtimeAlertLogPath,
-        fnnStdoutLogPath,
-        fnnStderrLogPath,
+        alertLogFilePath: join(todayLogDir, 'runtime.alerts.jsonl'),
+        fnnStdoutLogPath: join(todayLogDir, 'fnn.stdout.log'),
+        fnnStderrLogPath: join(todayLogDir, 'fnn.stderr.log'),
+        logsBaseDir,
         daemon: false,
       });
     }
@@ -447,9 +449,8 @@ export async function runNodeStartCommand(
       proxyUrl: `http://${runtimeProxyListen}`,
       proxyListenSource,
       logs: {
-        fnnStdout: fnnStdoutLogPath,
-        fnnStderr: fnnStderrLogPath,
-        runtimeAlerts: runtimeAlertLogPath,
+        baseDir: logsBaseDir,
+        todayDir: resolveLogDirForDate(config.dataDir),
       },
     });
   } else {
@@ -459,7 +460,7 @@ export async function runNodeStartCommand(
       `   Runtime proxy: http://${runtimeProxyListen} (browser-safe endpoint + monitoring)`,
     );
     console.log(`   Runtime mode:  ${runtimeDaemon ? 'daemon' : 'embedded'}`);
-    console.log(`   Log files:     ${logsDir}`);
+    console.log(`   Log files:     ${logsBaseDir}`);
     console.log('   Press Ctrl+C to stop.');
   }
 
