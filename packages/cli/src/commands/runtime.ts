@@ -167,12 +167,17 @@ export function createRuntimeCommand(config: CliConfig): Command {
                 `Recovered stale runtime process on ${runtimeListen} (PID: ${discovered.pid}).`,
               );
             }
-          } else {
+          } else if (discovered.command) {
             const details = discovered.command
               ? `PID ${discovered.pid} (${discovered.command})`
               : `PID ${discovered.pid}`;
             throw new Error(
               `Runtime proxy listen ${runtimeListen} is already in use by non-fiber-pay process: ${details}`,
+            );
+          } else {
+            throw new Error(
+              `Runtime proxy listen ${runtimeListen} is already in use by process PID ${discovered.pid}. ` +
+                'Unable to determine the owning command; inspect this PID manually before retrying.',
             );
           }
         }
@@ -382,7 +387,7 @@ export function createRuntimeCommand(config: CliConfig): Command {
         if (fallback && isFiberRuntimeCommand(fallback.command)) {
           pid = fallback.pid;
           writeRuntimePid(config.dataDir, pid);
-        } else if (fallback && !isFiberRuntimeCommand(fallback.command)) {
+        } else if (fallback && fallback.command) {
           const details = fallback.command
             ? `PID ${fallback.pid} (${fallback.command})`
             : `PID ${fallback.pid}`;
@@ -391,10 +396,25 @@ export function createRuntimeCommand(config: CliConfig): Command {
               code: 'RUNTIME_PORT_IN_USE',
               message: `Runtime proxy port is in use by non-fiber-pay process: ${details}`,
               recoverable: true,
-              suggestion: 'Stop that process or use a different --runtime-proxy-listen port.',
+              suggestion: 'Stop that process or use a different --proxy-listen port.',
             });
           } else {
             console.log(`Runtime proxy port is in use by non-fiber-pay process: ${details}`);
+          }
+          process.exit(1);
+        } else if (fallback) {
+          const message =
+            `Runtime proxy port is in use by process PID ${fallback.pid}. ` +
+            'The owning command could not be determined; inspect this PID manually.';
+          if (asJson) {
+            printJsonError({
+              code: 'RUNTIME_PORT_IN_USE',
+              message,
+              recoverable: true,
+              suggestion: 'Inspect the PID owner manually or use a different --proxy-listen port.',
+            });
+          } else {
+            console.log(message);
           }
           process.exit(1);
         }
@@ -479,7 +499,7 @@ export function createRuntimeCommand(config: CliConfig): Command {
         if (fallback && isFiberRuntimeCommand(fallback.command)) {
           pid = fallback.pid;
           writeRuntimePid(config.dataDir, pid);
-        } else if (fallback && !isFiberRuntimeCommand(fallback.command)) {
+        } else if (fallback && fallback.command) {
           const details = fallback.command
             ? `PID ${fallback.pid} (${fallback.command})`
             : `PID ${fallback.pid}`;
@@ -493,6 +513,22 @@ export function createRuntimeCommand(config: CliConfig): Command {
             });
           } else {
             console.log(`Runtime proxy port is in use by non-fiber-pay process: ${details}`);
+          }
+          process.exit(1);
+        } else if (fallback) {
+          const message =
+            `Runtime proxy port is in use by process PID ${fallback.pid}. ` +
+            'The owning command could not be determined; inspect this PID manually.';
+          if (asJson) {
+            printJsonError({
+              code: 'RUNTIME_PORT_IN_USE',
+              message,
+              recoverable: true,
+              suggestion:
+                'Inspect the PID owner manually; it may not be managed by fiber-pay runtime PID files.',
+            });
+          } else {
+            console.log(message);
           }
           process.exit(1);
         }

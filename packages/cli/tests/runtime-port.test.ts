@@ -24,8 +24,9 @@ describe('runtime-port helpers', () => {
   });
 
   it('detects likely fiber runtime command line', () => {
-    expect(isFiberRuntimeCommand('node /tmp/cli.js runtime start --daemon')).toBe(true);
+    expect(isFiberRuntimeCommand('node /tmp/fiber-pay-cli.js runtime start --daemon')).toBe(true);
     expect(isFiberRuntimeCommand('fiber-pay runtime start --json')).toBe(true);
+    expect(isFiberRuntimeCommand('node cli runtime start')).toBe(false);
     expect(isFiberRuntimeCommand('node server.js')).toBe(false);
   });
 });

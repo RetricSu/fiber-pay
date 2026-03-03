@@ -79,13 +79,19 @@ export function isFiberRuntimeCommand(command: string | undefined): boolean {
   }
 
   const normalized = command.toLowerCase();
-  return (
-    (normalized.includes('fiber-pay') &&
-      normalized.includes('runtime') &&
-      normalized.includes('start')) ||
-    normalized.includes('cli.js runtime start') ||
-    normalized.includes('cli runtime start')
-  );
+  const hasFiberIdentifier =
+    normalized.includes('fiber-pay') ||
+    normalized.includes('@fiber-pay/cli') ||
+    normalized.includes('/packages/cli/dist/cli.js') ||
+    normalized.includes('\\packages\\cli\\dist\\cli.js') ||
+    normalized.includes('/dist/cli.js') ||
+    normalized.includes('\\dist\\cli.js');
+
+  if (!hasFiberIdentifier) {
+    return false;
+  }
+
+  return normalized.includes('runtime') && normalized.includes('start');
 }
 
 export async function terminateProcess(pid: number, timeoutMs = 5_000): Promise<boolean> {
@@ -95,7 +101,10 @@ export async function terminateProcess(pid: number, timeoutMs = 5_000): Promise<
 
   try {
     process.kill(pid, 'SIGTERM');
-  } catch {
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ESRCH') {
+      return true;
+    }
     return false;
   }
 
@@ -113,7 +122,10 @@ export async function terminateProcess(pid: number, timeoutMs = 5_000): Promise<
 
   try {
     process.kill(pid, 'SIGKILL');
-  } catch {
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ESRCH') {
+      return true;
+    }
     return false;
   }
 

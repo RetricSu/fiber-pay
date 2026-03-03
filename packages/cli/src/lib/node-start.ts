@@ -313,12 +313,17 @@ export async function runNodeStartCommand(
           proxyListen: runtimeProxyListen,
           cleanedStaleProcessPid: runtimePortProcess.pid,
         });
-      } else {
+      } else if (runtimePortProcess.command) {
         const details = runtimePortProcess.command
           ? `PID ${runtimePortProcess.pid} (${runtimePortProcess.command})`
           : `PID ${runtimePortProcess.pid}`;
         throw new Error(
           `Runtime proxy ${runtimeProxyListen} is already in use by non-fiber-pay process: ${details}`,
+        );
+      } else {
+        throw new Error(
+          `Runtime proxy ${runtimeProxyListen} is already in use by process PID ${runtimePortProcess.pid}. ` +
+            'Unable to determine command owner; inspect this PID manually before retrying.',
         );
       }
     }
