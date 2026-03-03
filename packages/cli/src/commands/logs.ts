@@ -11,7 +11,6 @@ import {
   readLastLines,
   resolvePersistedLogPaths,
   resolvePersistedLogTargets,
-  todayDateString,
 } from '../lib/log-files.js';
 import { readRuntimeMeta } from '../lib/runtime-meta.js';
 
@@ -21,6 +20,7 @@ const ALLOWED_SOURCES = new Set<PersistedLogSourceOption>([
   'fnn-stdout',
   'fnn-stderr',
 ]);
+const DATE_DIR_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function parseRuntimeAlertLine(line: string): Alert | null {
   try {
@@ -65,11 +65,28 @@ export function createLogsCommand(config: CliConfig): Command {
       const json = Boolean(options.json);
       const follow = Boolean(options.follow);
       const listDates = Boolean(options.listDates);
+      const date = options.date ? String(options.date).trim() : undefined;
+      const meta = readRuntimeMeta(config.dataDir);
+
+      if (follow && date) {
+        const message = "--follow cannot be used with --date. --follow only streams today's logs.";
+        if (json) {
+          printJsonError({
+            code: 'LOG_FOLLOW_DATE_UNSUPPORTED',
+            message,
+            recoverable: true,
+            suggestion: 'Remove --date or remove --follow and retry.',
+          });
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
 
       // --list-dates mode: show available log dates and exit
       if (listDates) {
-        const dates = listLogDates(config.dataDir);
-        const logsDir = join(config.dataDir, 'logs');
+        const logsDir = meta?.logsBaseDir ?? join(config.dataDir, 'logs');
+        const dates = listLogDates(config.dataDir, logsDir);
         if (json) {
           printJsonSuccess({ dates, logsDir });
         } else {
@@ -124,14 +141,31 @@ export function createLogsCommand(config: CliConfig): Command {
       const intervalInput = Number.parseInt(String(options.intervalMs ?? '1000'), 10);
       const intervalMs = Number.isFinite(intervalInput) && intervalInput > 0 ? intervalInput : 1000;
 
-      const date = options.date ? String(options.date).trim() : undefined;
-      const meta = readRuntimeMeta(config.dataDir);
-      const paths = resolvePersistedLogPaths(config.dataDir, meta, date);
+      let paths: ReturnType<typeof resolvePersistedLogPaths>;
+      try {
+        paths = resolvePersistedLogPaths(config.dataDir, meta, date);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid --date value.';
+        if (json) {
+          printJsonError({
+            code: 'LOG_DATE_INVALID',
+            message,
+            recoverable: true,
+            suggestion: 'Retry with --date in YYYY-MM-DD format.',
+            details: { date },
+          });
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
+
       const targets = resolvePersistedLogTargets(paths, source);
-      const displayDate = date ?? todayDateString();
+      const displayDate = date ?? inferDateFromPaths(paths);
 
       if (source !== 'all' && targets.length === 1 && !existsSync(targets[0].path)) {
-        const message = `Log file not found for source ${source} on ${displayDate}: ${targets[0].path}`;
+        const dateLabel = displayDate ? ` on ${displayDate}` : '';
+        const message = `Log file not found for source ${source}${dateLabel}: ${targets[0].path}`;
         if (json) {
           printJsonError({
             code: 'LOG_FILE_NOT_FOUND',
@@ -139,7 +173,7 @@ export function createLogsCommand(config: CliConfig): Command {
             recoverable: true,
             suggestion:
               'Start node/runtime or generate activity, then retry logs command. Use --list-dates to see available dates.',
-            details: { source, date: displayDate, path: targets[0].path },
+            details: { source, date: displayDate ?? null, path: targets[0].path },
           });
         } else {
           console.error(`Error: ${message}`);
@@ -196,7 +230,7 @@ export function createLogsCommand(config: CliConfig): Command {
         printJsonSuccess({
           source,
           tail,
-          date: displayDate,
+          date: displayDate ?? null,
           entries: entries.map((entry) => ({
             source: entry.source,
             title: entry.title,
@@ -209,7 +243,8 @@ export function createLogsCommand(config: CliConfig): Command {
         return;
       }
 
-      console.log(`Logs (source: ${source}, date: ${displayDate}, tail: ${tail})`);
+      const headerDate = displayDate ? `, date: ${displayDate}` : '';
+      console.log(`Logs (source: ${source}${headerDate}, tail: ${tail})`);
       for (const entry of entries) {
         console.log(`\n${entry.title}: ${entry.path}`);
         if (!entry.exists) {
@@ -305,4 +340,23 @@ export function createLogsCommand(config: CliConfig): Command {
         process.on('SIGTERM', stop);
       });
     });
+}
+
+function inferDateFromPaths(paths: {
+  runtimeAlerts: string;
+  fnnStdout: string;
+  fnnStderr: string;
+}): string | undefined {
+  const candidate = paths.runtimeAlerts.split('/').at(-2);
+  if (!candidate || !DATE_DIR_PATTERN.test(candidate)) {
+    return undefined;
+  }
+
+  const stdoutDate = paths.fnnStdout.split('/').at(-2);
+  const stderrDate = paths.fnnStderr.split('/').at(-2);
+  if (stdoutDate !== candidate || stderrDate !== candidate) {
+    return undefined;
+  }
+
+  return candidate;
 }

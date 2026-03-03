@@ -11,7 +11,7 @@ import {
 import { Command } from 'commander';
 import type { CliConfig } from '../lib/config.js';
 import { printJsonError, printJsonEvent, printJsonSuccess } from '../lib/format.js';
-import { resolveLogDirForDate } from '../lib/log-files.js';
+import { resolveLogDirForDateWithOptions } from '../lib/log-files.js';
 import { parseBoolOption, parseIntegerOption } from '../lib/parse-options.js';
 import { isProcessRunning } from '../lib/pid.js';
 import {
@@ -200,16 +200,16 @@ export function createRuntimeCommand(config: CliConfig): Command {
         };
 
         // Determine alert backend: prefer daily-file rotation, fall back to static file
-        const alertLogsBaseDir = options.alertLogsBaseDir
-          ? resolve(String(options.alertLogsBaseDir))
-          : options.alertLogFile
-            ? undefined
-            : resolve(config.dataDir, 'logs');
-        const alertLogFile = alertLogsBaseDir
-          ? undefined
-          : options.alertLogFile
-            ? resolve(String(options.alertLogFile))
-            : resolve(config.dataDir, 'logs', 'runtime.alerts.jsonl');
+        let alertLogsBaseDir: string | undefined;
+        let alertLogFile: string | undefined;
+
+        if (options.alertLogsBaseDir) {
+          alertLogsBaseDir = resolve(String(options.alertLogsBaseDir));
+        } else if (options.alertLogFile) {
+          alertLogFile = resolve(String(options.alertLogFile));
+        } else {
+          alertLogsBaseDir = resolve(config.dataDir, 'logs');
+        }
 
         const alerts: RuntimeConfigInput['alerts'] = [{ type: 'stdout' }];
         if (alertLogsBaseDir) {
@@ -243,8 +243,13 @@ export function createRuntimeCommand(config: CliConfig): Command {
         const status = runtime.service.getStatus();
 
         const logsBaseDir = alertLogsBaseDir ?? resolve(config.dataDir, 'logs');
-        const todayLogDir = resolveLogDirForDate(config.dataDir);
-        const effectiveAlertLogPath = alertLogFile ?? join(todayLogDir, 'runtime.alerts.jsonl');
+        const todayLogDir = resolveLogDirForDateWithOptions(config.dataDir, undefined, {
+          logsBaseDir,
+          ensureExists: false,
+        });
+        const effectiveAlertLogPath = alertLogsBaseDir
+          ? join(todayLogDir, 'runtime.alerts.jsonl')
+          : (alertLogFile ?? join(todayLogDir, 'runtime.alerts.jsonl'));
 
         writeRuntimePid(config.dataDir, process.pid);
         writeRuntimeMeta(config.dataDir, {

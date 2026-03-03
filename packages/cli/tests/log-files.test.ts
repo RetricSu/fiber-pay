@@ -90,6 +90,38 @@ describe('daily log rotation', () => {
     expect(paths.fnnStderr).toBe(join(dataDir, 'logs', '2026-02-20', 'fnn.stderr.log'));
   });
 
+  it('resolvePersistedLogPaths with explicit date honors meta.logsBaseDir', () => {
+    const dataDir = makeTempDir();
+    const meta = {
+      pid: 1,
+      startedAt: '',
+      fiberRpcUrl: '',
+      proxyListen: '',
+      logsBaseDir: '/custom/logs-base',
+      daemon: false,
+    };
+
+    const paths = resolvePersistedLogPaths(dataDir, meta, '2026-02-21');
+    expect(paths.runtimeAlerts).toBe('/custom/logs-base/2026-02-21/runtime.alerts.jsonl');
+    expect(paths.fnnStdout).toBe('/custom/logs-base/2026-02-21/fnn.stdout.log');
+    expect(paths.fnnStderr).toBe('/custom/logs-base/2026-02-21/fnn.stderr.log');
+  });
+
+  it('resolvePersistedLogPaths does not create date directory during read-only resolution', () => {
+    const dataDir = makeTempDir();
+    const dateDir = join(dataDir, 'logs', '2026-02-22');
+
+    resolvePersistedLogPaths(dataDir, null, '2026-02-22');
+    expect(existsSync(dateDir)).toBe(false);
+  });
+
+  it('resolvePersistedLogPaths rejects invalid date input', () => {
+    const dataDir = makeTempDir();
+    expect(() => resolvePersistedLogPaths(dataDir, null, '../../escape')).toThrow(
+      /Expected format YYYY-MM-DD/,
+    );
+  });
+
   it('resolvePersistedLogPaths without date defaults to today directory', () => {
     const dataDir = makeTempDir();
     const paths = resolvePersistedLogPaths(dataDir);
@@ -148,6 +180,16 @@ describe('daily log rotation', () => {
     const dataDir = makeTempDir();
     const dates = listLogDates(dataDir);
     expect(dates).toEqual([]);
+  });
+
+  it('listLogDates supports custom logs base directory', () => {
+    const dataDir = makeTempDir();
+    const customLogsDir = join(dataDir, 'custom-logs');
+    mkdirSync(join(customLogsDir, '2026-03-20'), { recursive: true });
+    mkdirSync(join(customLogsDir, '2026-03-01'), { recursive: true });
+
+    const dates = listLogDates(dataDir, customLogsDir);
+    expect(dates).toEqual(['2026-03-20', '2026-03-01']);
   });
 
   it('appendToTodayLog writes to today date directory', () => {

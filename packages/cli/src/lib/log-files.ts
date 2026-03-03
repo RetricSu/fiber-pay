@@ -40,14 +40,45 @@ export function todayDateString(): string {
   return `${y}-${m}-${d}`;
 }
 
+export interface ResolveLogDirOptions {
+  logsBaseDir?: string;
+  ensureExists?: boolean;
+}
+
+export function validateLogDate(date: string): string {
+  const value = date.trim();
+  if (!DATE_DIR_PATTERN.test(value)) {
+    throw new Error(`Invalid date '${value}'. Expected format YYYY-MM-DD.`);
+  }
+  if (value.includes('/') || value.includes('\\') || value.includes('..')) {
+    throw new Error(`Invalid date '${value}'. Path separators or '..' are not allowed.`);
+  }
+  return value;
+}
+
 /**
  * Returns the path to a date-based log directory: `<data-dir>/logs/<YYYY-MM-DD>/`.
  * Creates the directory if it does not exist.
  */
 export function resolveLogDirForDate(dataDir: string, date?: string): string {
+  return resolveLogDirForDateWithOptions(dataDir, date, {});
+}
+
+export function resolveLogDirForDateWithOptions(
+  dataDir: string,
+  date: string | undefined,
+  options: ResolveLogDirOptions,
+): string {
   const dateStr = date ?? todayDateString();
-  const dir = join(dataDir, 'logs', dateStr);
-  mkdirSync(dir, { recursive: true });
+  const logsBaseDir = options.logsBaseDir ?? join(dataDir, 'logs');
+  if (date !== undefined) {
+    validateLogDate(dateStr);
+  }
+  const dir = join(logsBaseDir, dateStr);
+  const ensureExists = options.ensureExists ?? true;
+  if (ensureExists) {
+    mkdirSync(dir, { recursive: true });
+  }
   return dir;
 }
 
@@ -63,8 +94,13 @@ export function resolvePersistedLogPaths(
   meta?: RuntimeMeta | null,
   date?: string,
 ): PersistedLogPaths {
+  const logsBaseDir = meta?.logsBaseDir ?? join(dataDir, 'logs');
+
   if (date) {
-    const dir = resolveLogDirForDate(dataDir, date);
+    const dir = resolveLogDirForDateWithOptions(dataDir, date, {
+      logsBaseDir,
+      ensureExists: false,
+    });
     return {
       runtimeAlerts: join(dir, 'runtime.alerts.jsonl'),
       fnnStdout: join(dir, 'fnn.stdout.log'),
@@ -80,7 +116,10 @@ export function resolvePersistedLogPaths(
     };
   }
 
-  const dir = resolveLogDirForDate(dataDir);
+  const dir = resolveLogDirForDateWithOptions(dataDir, undefined, {
+    logsBaseDir,
+    ensureExists: false,
+  });
   return {
     runtimeAlerts: join(dir, 'runtime.alerts.jsonl'),
     fnnStdout: join(dir, 'fnn.stdout.log'),
@@ -92,8 +131,8 @@ export function resolvePersistedLogPaths(
  * List available log dates by scanning `<data-dir>/logs/` for YYYY-MM-DD directories.
  * Returns date strings sorted newest-first.
  */
-export function listLogDates(dataDir: string): string[] {
-  const logsDir = join(dataDir, 'logs');
+export function listLogDates(dataDir: string, logsBaseDir?: string): string[] {
+  const logsDir = logsBaseDir ?? join(dataDir, 'logs');
   if (!existsSync(logsDir)) {
     return [];
   }

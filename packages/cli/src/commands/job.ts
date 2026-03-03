@@ -119,7 +119,24 @@ export function createJobCommand(config: CliConfig): Command {
       const tokens = collectTraceTokens(jobRecord, eventsPayload.events);
 
       const meta = readRuntimeMeta(config.dataDir);
-      const logPaths = resolvePersistedLogPaths(config.dataDir, meta, date);
+      let logPaths: ReturnType<typeof resolvePersistedLogPaths>;
+      try {
+        logPaths = resolvePersistedLogPaths(config.dataDir, meta, date);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid --date value.';
+        if (json) {
+          printJsonError({
+            code: 'JOB_TRACE_DATE_INVALID',
+            message,
+            recoverable: true,
+            suggestion: 'Retry with --date in YYYY-MM-DD format.',
+            details: { date },
+          });
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
       const runtimeAlertMatches = collectRelatedLines(logPaths.runtimeAlerts, tokens, tail);
       const fnnStdoutMatches = collectRelatedLines(logPaths.fnnStdout, tokens, tail);
       const fnnStderrMatches = collectRelatedLines(logPaths.fnnStderr, tokens, tail);
