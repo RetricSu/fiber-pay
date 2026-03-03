@@ -1,14 +1,12 @@
-import {
-  DEFAULT_FIBER_VERSION,
-  type DownloadProgress,
-  downloadFiberBinary,
-  getFiberBinaryInfo,
-} from '@fiber-pay/node';
+import { DEFAULT_FIBER_VERSION, type DownloadProgress, downloadFiberBinary } from '@fiber-pay/node';
 import { Command } from 'commander';
-import { resolveBinaryPath } from '../lib/binary-path.js';
+import {
+  getBinaryDetails,
+  getBinaryManagerInstallDirOrThrow,
+  resolveBinaryPath,
+} from '../lib/binary-path.js';
 import type { CliConfig } from '../lib/config.js';
-import { printJsonSuccess } from '../lib/format.js';
-import { getCustomBinaryState } from '../lib/node-runtime-daemon.js';
+import { printJsonError, printJsonSuccess } from '../lib/format.js';
 
 function showProgress(progress: DownloadProgress): void {
   const percent = progress.percent !== undefined ? ` (${progress.percent}%)` : '';
@@ -28,8 +26,27 @@ export function createBinaryCommand(config: CliConfig): Command {
     .option('--json')
     .action(async (options) => {
       const resolvedBinary = resolveBinaryPath(config);
+      let installDir: string;
+      try {
+        installDir = getBinaryManagerInstallDirOrThrow(resolvedBinary);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (options.json) {
+          printJsonError({
+            code: 'BINARY_PATH_INCOMPATIBLE',
+            message,
+            recoverable: true,
+            suggestion:
+              'Use `fiber-pay config profile unset binaryPath` or set binaryPath to a standard fnn filename in the target directory.',
+          });
+        } else {
+          console.error(`❌ ${message}`);
+        }
+        process.exit(1);
+      }
+
       const info = await downloadFiberBinary({
-        installDir: resolvedBinary.installDir,
+        installDir,
         version: options.version,
         force: Boolean(options.force),
         onProgress: options.json ? undefined : showProgress,
@@ -53,10 +70,7 @@ export function createBinaryCommand(config: CliConfig): Command {
     .command('info')
     .option('--json')
     .action(async (options) => {
-      const resolvedBinary = resolveBinaryPath(config);
-      const info = config.binaryPath
-        ? getCustomBinaryState(resolvedBinary.binaryPath)
-        : await getFiberBinaryInfo(resolvedBinary.installDir);
+      const { resolvedBinary, info } = await getBinaryDetails(config);
 
       if (options.json) {
         printJsonSuccess({

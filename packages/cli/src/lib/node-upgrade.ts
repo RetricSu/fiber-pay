@@ -3,7 +3,7 @@
  */
 
 import { BinaryManager, type DownloadProgress, MigrationManager } from '@fiber-pay/node';
-import { resolveBinaryPath } from './binary-path.js';
+import { getBinaryManagerInstallDirOrThrow, resolveBinaryPath } from './binary-path.js';
 import type { CliConfig } from './config.js';
 import { printJsonError, printJsonSuccess } from './format.js';
 import { normalizeMigrationCheck, replaceRawMigrateHint } from './migration-utils.js';
@@ -22,7 +22,26 @@ export async function runNodeUpgradeCommand(
   options: NodeUpgradeOptions,
 ): Promise<void> {
   const json = Boolean(options.json);
-  const installDir = resolveBinaryPath(config).installDir;
+  const resolvedBinary = resolveBinaryPath(config);
+  let installDir: string;
+  try {
+    installDir = getBinaryManagerInstallDirOrThrow(resolvedBinary);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (json) {
+      printJsonError({
+        code: 'BINARY_PATH_INCOMPATIBLE',
+        message,
+        recoverable: true,
+        suggestion:
+          'Use `fiber-pay config profile unset binaryPath` or set binaryPath to a standard fnn filename in the target directory.',
+      });
+    } else {
+      console.error(`❌ ${message}`);
+    }
+    process.exit(1);
+  }
+
   const binaryManager = new BinaryManager(installDir);
 
   // Step 1: Check if node is running — must be stopped before upgrade

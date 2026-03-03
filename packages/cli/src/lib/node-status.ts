@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs';
-import { getFiberBinaryInfo } from '@fiber-pay/node';
 import {
   buildMultiaddrFromNodeId,
   buildMultiaddrFromRpcUrl,
@@ -8,7 +7,7 @@ import {
   type Script,
   scriptToAddress,
 } from '@fiber-pay/sdk';
-import { getProfileManagedBinaryPath, resolveBinaryPath } from './binary-path.js';
+import { getBinaryDetails } from './binary-path.js';
 import type { CliConfig } from './config.js';
 import { printJsonSuccess } from './format.js';
 import {
@@ -18,7 +17,6 @@ import {
   summarizeChannelLiquidity,
 } from './node-recommendation.js';
 import { getLockBalanceShannons } from './node-rpc.js';
-import { getCustomBinaryState } from './node-runtime-daemon.js';
 import { isProcessRunning, readPidFile, removePidFile } from './pid.js';
 import { createReadyRpcClient, resolveRpcEndpoint } from './rpc.js';
 
@@ -33,10 +31,7 @@ export async function runNodeStatusCommand(
   const json = Boolean(options.json);
   const pid = readPidFile(config.dataDir);
   const resolvedRpc = resolveRpcEndpoint(config);
-  const resolvedBinary = resolveBinaryPath(config);
-  const binaryInfo = config.binaryPath
-    ? getCustomBinaryState(resolvedBinary.binaryPath)
-    : await getFiberBinaryInfo(resolvedBinary.installDir);
+  const { resolvedBinary, info: binaryInfo } = await getBinaryDetails(config);
   const configExists = existsSync(config.configPath);
   const nodeRunning = Boolean(pid && isProcessRunning(pid));
 
@@ -153,7 +148,7 @@ export async function runNodeStatusCommand(
         ready: binaryInfo.ready,
         version: binaryInfo.version,
         source: resolvedBinary.source,
-        managedPath: getProfileManagedBinaryPath(config.dataDir),
+        managedPath: resolvedBinary.managedPath,
         resolvedPath: resolvedBinary.binaryPath,
       },
       config: {

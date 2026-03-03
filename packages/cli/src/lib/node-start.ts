@@ -8,7 +8,7 @@ import {
   ProcessManager,
 } from '@fiber-pay/node';
 import { startRuntimeService } from '@fiber-pay/runtime';
-import { resolveBinaryPath } from './binary-path.js';
+import { getBinaryManagerInstallDirOrThrow, resolveBinaryPath } from './binary-path.js';
 import { autoConnectBootnodes, extractBootnodeAddrs } from './bootnode.js';
 import { type CliConfig, ensureNodeConfigFile } from './config.js';
 import { printJsonError, printJsonEvent } from './format.js';
@@ -162,7 +162,8 @@ export async function runNodeStartCommand(
   const resolvedBinary = resolveBinaryPath(config);
   const binaryPath = resolvedBinary.binaryPath;
   if (resolvedBinary.source === 'profile-managed') {
-    await ensureFiberBinary({ installDir: resolvedBinary.installDir });
+    const installDir = getBinaryManagerInstallDirOrThrow(resolvedBinary);
+    await ensureFiberBinary({ installDir });
   }
   const binaryVersion = getBinaryVersion(binaryPath);
   const configFilePath = ensureNodeConfigFile(config.dataDir, config.network);
