@@ -38,6 +38,7 @@ Compatibility alias:
 
 - `binaryPath`
 - `keyPassword`
+- `runtimeProxyListen`
 
 Runtime node settings (`fiber.*`, `rpc.*`, `ckb.*`) belong in `config.yml`.
 

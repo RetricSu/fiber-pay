@@ -3,6 +3,7 @@
  */
 
 import { BinaryManager, type DownloadProgress, MigrationManager } from '@fiber-pay/node';
+import { resolveBinaryPath } from './binary-path.js';
 import type { CliConfig } from './config.js';
 import { printJsonError, printJsonSuccess } from './format.js';
 import { normalizeMigrationCheck, replaceRawMigrateHint } from './migration-utils.js';
@@ -21,7 +22,7 @@ export async function runNodeUpgradeCommand(
   options: NodeUpgradeOptions,
 ): Promise<void> {
   const json = Boolean(options.json);
-  const installDir = `${config.dataDir}/bin`;
+  const installDir = resolveBinaryPath(config).installDir;
   const binaryManager = new BinaryManager(installDir);
 
   // Step 1: Check if node is running — must be stopped before upgrade

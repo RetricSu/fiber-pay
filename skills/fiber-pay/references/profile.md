@@ -80,6 +80,11 @@ fiber-pay --profile b node start
 - Keys: generates `fiber/sk` if missing
 - Runtime: starts embedded runtime proxy + job orchestration
 
+### Binary path observability
+
+- `fiber-pay --profile <name> node status` prints `Diagnostics -> Binary Path` so you can confirm the resolved `fnn` path.
+- `fiber-pay binary download` and `fiber-pay node upgrade` operate on the resolved binary location for the current profile/config context.
+
 ### What `node start` does NOT auto-handle
 
 - **Port conflicts**: auto-generated config uses default ports, so the second node will collide. Always run `config init --rpc-port --p2p-port` first for additional profiles.

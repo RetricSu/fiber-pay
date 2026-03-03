@@ -5,8 +5,10 @@ import {
   getFiberBinaryInfo,
 } from '@fiber-pay/node';
 import { Command } from 'commander';
+import { resolveBinaryPath } from '../lib/binary-path.js';
 import type { CliConfig } from '../lib/config.js';
 import { printJsonSuccess } from '../lib/format.js';
+import { getCustomBinaryState } from '../lib/node-runtime-daemon.js';
 
 function showProgress(progress: DownloadProgress): void {
   const percent = progress.percent !== undefined ? ` (${progress.percent}%)` : '';
@@ -25,15 +27,20 @@ export function createBinaryCommand(config: CliConfig): Command {
     .option('--force', 'Force re-download')
     .option('--json')
     .action(async (options) => {
+      const resolvedBinary = resolveBinaryPath(config);
       const info = await downloadFiberBinary({
-        installDir: `${config.dataDir}/bin`,
+        installDir: resolvedBinary.installDir,
         version: options.version,
         force: Boolean(options.force),
         onProgress: options.json ? undefined : showProgress,
       });
 
       if (options.json) {
-        printJsonSuccess(info);
+        printJsonSuccess({
+          ...info,
+          source: resolvedBinary.source,
+          resolvedPath: resolvedBinary.binaryPath,
+        });
       } else {
         console.log('\n✅ Binary installed successfully!');
         console.log(`  Path:    ${info.path}`);
@@ -46,10 +53,17 @@ export function createBinaryCommand(config: CliConfig): Command {
     .command('info')
     .option('--json')
     .action(async (options) => {
-      const info = await getFiberBinaryInfo(`${config.dataDir}/bin`);
+      const resolvedBinary = resolveBinaryPath(config);
+      const info = config.binaryPath
+        ? getCustomBinaryState(resolvedBinary.binaryPath)
+        : await getFiberBinaryInfo(resolvedBinary.installDir);
 
       if (options.json) {
-        printJsonSuccess(info);
+        printJsonSuccess({
+          ...info,
+          source: resolvedBinary.source,
+          resolvedPath: resolvedBinary.binaryPath,
+        });
       } else {
         console.log(info.ready ? '✅ Binary is ready' : '❌ Binary not found or not executable');
         console.log(`  Path:    ${info.path}`);
