@@ -87,6 +87,11 @@ function shouldPrintAlert(alert: Alert, filter: RuntimeLogFilter): boolean {
   return true;
 }
 
+function resolveRuntimeRecoveryListen(config: CliConfig): string {
+  const meta = readRuntimeMeta(config.dataDir);
+  return meta?.proxyListen ?? config.runtimeProxyListen ?? '127.0.0.1:8229';
+}
+
 export function createRuntimeCommand(config: CliConfig): Command {
   const runtime = new Command('runtime').description('Polling monitor and alert runtime service');
 
@@ -370,9 +375,10 @@ export function createRuntimeCommand(config: CliConfig): Command {
       const asJson = Boolean(options.json);
       let pid = readRuntimePid(config.dataDir);
       const meta = readRuntimeMeta(config.dataDir);
+      const recoveryListen = resolveRuntimeRecoveryListen(config);
 
       if (!pid) {
-        const fallback = findListeningProcessByPort(config.runtimeProxyListen ?? '127.0.0.1:8229');
+        const fallback = findListeningProcessByPort(recoveryListen);
         if (fallback && isFiberRuntimeCommand(fallback.command)) {
           pid = fallback.pid;
           writeRuntimePid(config.dataDir, pid);
@@ -426,9 +432,11 @@ export function createRuntimeCommand(config: CliConfig): Command {
       }
 
       let rpcStatus: unknown;
-      if (meta?.proxyListen) {
+      if (meta?.proxyListen ?? recoveryListen) {
         try {
-          const response = await fetch(`http://${meta.proxyListen}/monitor/status`);
+          const response = await fetch(
+            `http://${meta?.proxyListen ?? recoveryListen}/monitor/status`,
+          );
           if (response.ok) {
             rpcStatus = await response.json();
           }
@@ -464,11 +472,13 @@ export function createRuntimeCommand(config: CliConfig): Command {
     .action(async (options) => {
       const asJson = Boolean(options.json);
       let pid = readRuntimePid(config.dataDir);
+      const recoveryListen = resolveRuntimeRecoveryListen(config);
 
       if (!pid) {
-        const fallback = findListeningProcessByPort(config.runtimeProxyListen ?? '127.0.0.1:8229');
+        const fallback = findListeningProcessByPort(recoveryListen);
         if (fallback && isFiberRuntimeCommand(fallback.command)) {
           pid = fallback.pid;
+          writeRuntimePid(config.dataDir, pid);
         } else if (fallback && !isFiberRuntimeCommand(fallback.command)) {
           const details = fallback.command
             ? `PID ${fallback.pid} (${fallback.command})`

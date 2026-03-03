@@ -42,7 +42,7 @@ export function readProcessCommand(pid: number): string | undefined {
   const result = spawnSync('ps', ['-p', String(pid), '-o', 'command='], {
     encoding: 'utf-8',
   });
-  if (result.status !== 0) {
+  if (result.error || result.status !== 0) {
     return undefined;
   }
   const command = (result.stdout ?? '').trim();
@@ -58,7 +58,7 @@ export function findListeningProcessByPort(listen: string): PortProcessInfo | un
   const result = spawnSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-Fp'], {
     encoding: 'utf-8',
   });
-  if (result.status !== 0) {
+  if (result.error || result.status !== 0) {
     return undefined;
   }
 
@@ -115,6 +115,14 @@ export async function terminateProcess(pid: number, timeoutMs = 5_000): Promise<
     process.kill(pid, 'SIGKILL');
   } catch {
     return false;
+  }
+
+  const killDeadline = Date.now() + 1_000;
+  while (Date.now() < killDeadline) {
+    if (!isProcessRunning(pid)) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
 
   return !isProcessRunning(pid);
