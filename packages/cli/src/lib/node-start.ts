@@ -22,6 +22,11 @@ import {
 import { isProcessRunning, readPidFile, removePidFile, writePidFile } from './pid.js';
 import { createRpcClient } from './rpc.js';
 import { removeRuntimeFiles, writeRuntimeMeta, writeRuntimePid } from './runtime-meta.js';
+import {
+  findListeningProcessByPort,
+  isFiberRuntimeCommand,
+  terminateProcess,
+} from './runtime-port.js';
 
 export interface NodeStartOptions {
   daemon?: boolean;
@@ -294,6 +299,30 @@ export async function runNodeStartCommand(
   }
 
   try {
+    const runtimePortProcess = findListeningProcessByPort(runtimeProxyListen);
+    if (runtimePortProcess) {
+      if (isFiberRuntimeCommand(runtimePortProcess.command)) {
+        const terminated = await terminateProcess(runtimePortProcess.pid);
+        if (!terminated) {
+          throw new Error(
+            `Runtime proxy ${runtimeProxyListen} is occupied by stale fiber-pay runtime PID ${runtimePortProcess.pid}, but termination failed`,
+          );
+        }
+        removeRuntimeFiles(config.dataDir);
+        emitStage('runtime_preflight', 'ok', {
+          proxyListen: runtimeProxyListen,
+          cleanedStaleProcessPid: runtimePortProcess.pid,
+        });
+      } else {
+        const details = runtimePortProcess.command
+          ? `PID ${runtimePortProcess.pid} (${runtimePortProcess.command})`
+          : `PID ${runtimePortProcess.pid}`;
+        throw new Error(
+          `Runtime proxy ${runtimeProxyListen} is already in use by non-fiber-pay process: ${details}`,
+        );
+      }
+    }
+
     if (runtimeDaemon) {
       const daemonStart = startRuntimeDaemonFromNode({
         dataDir: config.dataDir,
