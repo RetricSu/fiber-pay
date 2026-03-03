@@ -184,4 +184,67 @@ describe('FiberMonitorService job observability bridge', () => {
     expect(trackedPayments.some((item) => item.paymentHash === '0xpaymenthash')).toBe(true);
     expect(trackedInvoices.some((item) => item.paymentHash === '0xinvoicehash')).toBe(true);
   });
+
+  it('includes channel peer and temporary identifiers in channel job alerts', async () => {
+    const service = await createService();
+    const manager = (
+      service as unknown as {
+        jobManager: { emit: (event: string, ...args: unknown[]) => void } | null;
+      }
+    ).jobManager;
+
+    expect(manager).toBeTruthy();
+
+    manager?.emit(
+      'job:created',
+      makeJob('channel', {
+        params: {
+          action: 'open',
+          peerId: 'peer-open-1',
+          openChannelParams: {
+            peer_id: 'peer-open-1',
+            funding_amount: '0x64',
+          },
+        },
+      }),
+    );
+
+    manager?.emit(
+      'job:succeeded',
+      makeJob('channel', {
+        state: 'succeeded',
+        params: {
+          action: 'open',
+          peerId: 'peer-open-1',
+          openChannelParams: {
+            peer_id: 'peer-open-1',
+            funding_amount: '0x64',
+          },
+        },
+        result: {
+          temporaryChannelId: '0xtmp-open-1',
+          channelId: '0xchannel-open-1',
+          state: 'CHANNEL_READY',
+        },
+      }),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const started = service.listAlerts().find((alert) => alert.type === 'channel_job_started');
+    expect(started?.data).toMatchObject({
+      action: 'open',
+      peerId: 'peer-open-1',
+      fundingAmount: '0x64',
+    });
+
+    const succeeded = service.listAlerts().find((alert) => alert.type === 'channel_job_succeeded');
+    expect(succeeded?.data).toMatchObject({
+      action: 'open',
+      peerId: 'peer-open-1',
+      temporaryChannelId: '0xtmp-open-1',
+      channelId: '0xchannel-open-1',
+      fundingAmount: '0x64',
+    });
+  });
 });

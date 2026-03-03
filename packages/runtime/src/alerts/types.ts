@@ -170,7 +170,10 @@ export interface ChannelJobAlertData {
   idempotencyKey: string;
   retryCount: number;
   action?: string;
+  peerId?: string;
+  temporaryChannelId?: `0x${string}`;
   channelId?: `0x${string}`;
+  fundingAmount?: string;
   error?: string;
 }
 

@@ -344,7 +344,10 @@ export class FiberMonitorService extends EventEmitter {
       idempotencyKey: channelJob.idempotencyKey,
       retryCount: channelJob.retryCount,
       action: channelJob.params.action,
+      peerId: this.extractChannelPeerId(channelJob),
+      temporaryChannelId: this.extractTemporaryChannelId(channelJob),
       channelId: this.extractChannelId(channelJob),
+      fundingAmount: this.extractChannelFundingAmount(channelJob),
       error,
     };
   }
@@ -387,6 +390,20 @@ export class FiberMonitorService extends EventEmitter {
         job.params.channelId ??
         job.params.shutdownChannelParams?.channel_id,
     );
+  }
+
+  private extractChannelPeerId(job: ChannelJob): string | undefined {
+    return job.params.peerId ?? job.params.openChannelParams?.peer_id;
+  }
+
+  private extractTemporaryChannelId(job: ChannelJob): `0x${string}` | undefined {
+    return this.normalizeHash(
+      job.result?.temporaryChannelId ?? job.params.acceptChannelParams?.temporary_channel_id,
+    );
+  }
+
+  private extractChannelFundingAmount(job: ChannelJob): string | undefined {
+    return job.params.openChannelParams?.funding_amount;
   }
 
   private normalizeHash(value: string | undefined): `0x${string}` | undefined {
