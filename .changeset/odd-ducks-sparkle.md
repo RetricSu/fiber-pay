@@ -1,5 +1,5 @@
 ---
-'@fiber-pay/cli': patch
+"@fiber-pay/cli": patch
 ---
 
 Fix log path resolution for fnn sources when runtime metadata is partially populated, ensuring date-based daily log directories are used consistently.

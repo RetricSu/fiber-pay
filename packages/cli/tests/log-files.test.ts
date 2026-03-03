@@ -179,6 +179,26 @@ describe('daily log rotation', () => {
     expect(paths.fnnStderr).toBe(join(dataDir, 'logs', today, 'fnn.stderr.log'));
   });
 
+  it('resolvePersistedLogPaths with partial meta paths honors logsBaseDir for fallback', () => {
+    const dataDir = makeTempDir();
+    const customLogsBase = join(dataDir, 'custom-logs');
+    const meta = {
+      pid: 1,
+      startedAt: '',
+      fiberRpcUrl: '',
+      proxyListen: '',
+      alertLogFilePath: '/custom/runtime.alerts.jsonl',
+      logsBaseDir: customLogsBase,
+      daemon: false,
+    };
+
+    const paths = resolvePersistedLogPaths(dataDir, meta);
+    const today = todayDateString();
+    expect(paths.runtimeAlerts).toBe('/custom/runtime.alerts.jsonl');
+    expect(paths.fnnStdout).toBe(join(customLogsBase, today, 'fnn.stdout.log'));
+    expect(paths.fnnStderr).toBe(join(customLogsBase, today, 'fnn.stderr.log'));
+  });
+
   it('listLogDates returns sorted date directories newest-first', () => {
     const dataDir = makeTempDir();
     const logsDir = join(dataDir, 'logs');
