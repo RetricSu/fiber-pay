@@ -11,9 +11,9 @@ pnpm add @fiber-pay/sdk
 ## Usage
 
 ```ts
-import { createFiberRpcClient } from '@fiber-pay/sdk';
+import { FiberRpcClient } from '@fiber-pay/sdk';
 
-const client = createFiberRpcClient({
+const client = new FiberRpcClient({
 	url: 'http://127.0.0.1:8227',
 	biscuitToken: process.env.FIBER_RPC_BISCUIT_TOKEN,
 });
@@ -24,7 +24,7 @@ console.log(info.node_id);
 
 ## RPC Authentication (Biscuit)
 
-- Pass `biscuitToken` to `createFiberRpcClient` / `new FiberRpcClient(...)`.
+- Pass `biscuitToken` to `new FiberRpcClient(...)`.
 - SDK sends `Authorization: Bearer <token>` on every JSON-RPC request.
 - Keep tokens on trusted backend/server side; avoid embedding privileged tokens in browser bundles.
 

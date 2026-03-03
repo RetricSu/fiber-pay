@@ -13,6 +13,19 @@ export type { LiquidityReport } from './funds/liquidity-analyzer.js';
 export { LiquidityAnalyzer } from './funds/liquidity-analyzer.js';
 // RPC client
 export { FiberRpcClient, FiberRpcError } from './rpc/index.js';
+export type {
+  BiscuitAction,
+  BiscuitMethodRule,
+  BiscuitPermission,
+} from './security/biscuit-policy.js';
+// Security components
+export {
+  collectBiscuitPermissions,
+  getBiscuitRuleForMethod,
+  listSupportedBiscuitMethods,
+  renderBiscuitFactsForMethods,
+  renderBiscuitPermissionFacts,
+} from './security/biscuit-policy.js';
 // Crypto utilities
 export {
   AUTH_TAG_LENGTH,
@@ -28,7 +41,6 @@ export {
   SCRYPT_P,
   SCRYPT_R,
 } from './security/crypto.js';
-// Security components
 export { PolicyEngine } from './security/policy-engine.js';
 export type * from './types/index.js';
 // Types - Re-export all types from types module

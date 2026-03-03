@@ -42,6 +42,12 @@ describe('biscuit policy helper', () => {
     expect(output).toBe('read("peers");\nwrite("payments");');
   });
 
+  it('escapes special characters in resource names', () => {
+    const output = renderBiscuitPermissionFacts([{ action: 'read', resource: 'chan"nel\\ops' }]);
+
+    expect(output).toBe('read("chan\\"nel\\\\ops");');
+  });
+
   it('renders facts directly from methods', () => {
     const output = renderBiscuitFactsForMethods(['open_channel', 'list_channels']);
     expect(output).toBe('read("channels");\nwrite("channels");');
