@@ -182,7 +182,7 @@ This quickly separates "process not started" from "process started but unhealthy
 In multi-profile workflows, always confirm that logs and status belong to the intended profile:
 
 ```bash
-fiber-pay --profile <name> node info --json
+fiber-pay --profile <name> node status --json
 fiber-pay --profile <name> runtime status --json
 ```
 

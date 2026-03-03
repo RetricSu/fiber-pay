@@ -37,18 +37,24 @@ export async function runNodeStatusCommand(
 
   let rpcResponsive = false;
   let nodeId: string | null = null;
+  let addresses: string[] = [];
+  let chainHash: string | null = null;
+  let version: string | null = null;
   let peerId: string | null = null;
+  let peersCount = 0;
   let peerIdError: string | null = null;
   let multiaddr: string | null = null;
   let multiaddrError: string | null = null;
   let multiaddrInferred = false;
   let channelsTotal = 0;
   let channelsReady = 0;
+  let pendingChannelCount = 0;
   let canSend = false;
   let canReceive = false;
   let localCkb = 0;
   let remoteCkb = 0;
   let fundingAddress: string | null = null;
+  let fundingLockScript: Script | null = null;
   let fundingCkb = 0;
   let fundingBalanceError: string | null = null;
 
@@ -60,6 +66,11 @@ export async function runNodeStatusCommand(
       rpcResponsive = true;
 
       nodeId = nodeInfo.node_id;
+      addresses = nodeInfo.addresses;
+      chainHash = nodeInfo.chain_hash;
+      version = nodeInfo.version;
+      peersCount = parseInt(nodeInfo.peers_count, 16);
+      pendingChannelCount = parseInt(nodeInfo.pending_channel_count, 16);
       try {
         peerId = await nodeIdToPeerId(nodeInfo.node_id);
       } catch (error) {
@@ -95,12 +106,10 @@ export async function runNodeStatusCommand(
       remoteCkb = liquidity.remoteCkb;
 
       fundingAddress = scriptToAddress(nodeInfo.default_funding_lock_script, config.network);
+      fundingLockScript = nodeInfo.default_funding_lock_script as Script;
       if (config.ckbRpcUrl) {
         try {
-          const fundingBalance = await getLockBalanceShannons(
-            config.ckbRpcUrl,
-            nodeInfo.default_funding_lock_script as Script,
-          );
+          const fundingBalance = await getLockBalanceShannons(config.ckbRpcUrl, fundingLockScript);
           fundingCkb = Number(fundingBalance) / 1e8;
         } catch (error) {
           fundingBalanceError =
@@ -137,11 +146,17 @@ export async function runNodeStatusCommand(
     rpcTarget: resolvedRpc.target,
     resolvedRpcUrl: resolvedRpc.url,
     nodeId,
+    addresses,
+    chainHash,
+    version,
     peerId,
+    peersCount,
     peerIdError,
     multiaddr,
     multiaddrError,
     multiaddrInferred,
+    channelsPending: pendingChannelCount,
+    fundingLockScript,
     checks: {
       binary: {
         path: binaryInfo.path,
@@ -167,6 +182,7 @@ export async function runNodeStatusCommand(
       channels: {
         total: channelsTotal,
         ready: channelsReady,
+        pending: pendingChannelCount,
         canSend,
         canReceive,
       },
@@ -195,6 +211,12 @@ export async function runNodeStatusCommand(
     console.log(`✅ Node is running (PID: ${output.pid})`);
     if (output.rpcResponsive) {
       console.log(`   Node ID: ${String(output.nodeId)}`);
+      if (output.version) {
+        console.log(`   Version: ${String(output.version)}`);
+      }
+      if (output.chainHash) {
+        console.log(`   Chain Hash: ${String(output.chainHash)}`);
+      }
       if (output.peerId) {
         console.log(`   Peer ID: ${String(output.peerId)}`);
       } else if (output.peerIdError) {
@@ -212,6 +234,12 @@ export async function runNodeStatusCommand(
       } else {
         console.log('   Multiaddr: unavailable');
       }
+      if (output.addresses.length > 0) {
+        console.log('   Addresses:');
+        for (const address of output.addresses) {
+          console.log(`     - ${address}`);
+        }
+      }
     } else {
       console.log('   ⚠️  RPC not responding');
     }
@@ -228,8 +256,9 @@ export async function runNodeStatusCommand(
   console.log(`  Config:        ${output.checks.config.exists ? 'present' : 'missing'}`);
   console.log(`  RPC:           ${output.checks.node.rpcReachable ? 'reachable' : 'unreachable'}`);
   console.log(
-    `  Channels:      ${output.checks.channels.ready}/${output.checks.channels.total} ready/total`,
+    `  Channels:      ${output.checks.channels.ready}/${output.checks.channels.pending}/${output.checks.channels.total} ready/pending/total`,
   );
+  console.log(`  Peers:         ${output.peersCount}`);
   console.log(`  Can Send:      ${output.checks.channels.canSend ? 'yes' : 'no'}`);
   console.log(`  Can Receive:   ${output.checks.channels.canReceive ? 'yes' : 'no'}`);
   console.log(`  Recommendation:${output.recommendation}`);

@@ -378,28 +378,3 @@ export function printPeerListHuman(
     console.log(`${peerId} ${pubkey} ${peer.address}`);
   }
 }
-
-export function printNodeInfoHuman(data: {
-  nodeId: string;
-  addresses: string[];
-  chainHash: string;
-  fundingAddress: string;
-  version: string;
-  channelCount: number;
-  pendingChannelCount: number;
-  peersCount: number;
-}): void {
-  console.log('Node Info');
-  console.log(`  Node ID:              ${data.nodeId}`);
-  console.log(`  Version:              ${data.version}`);
-  console.log(`  Chain Hash:           ${data.chainHash}`);
-  console.log(`  Funding Address:      ${data.fundingAddress}`);
-  console.log(`  Channels:             ${data.channelCount} (${data.pendingChannelCount} pending)`);
-  console.log(`  Peers:                ${data.peersCount}`);
-  if (data.addresses.length > 0) {
-    console.log('  Addresses:');
-    for (const addr of data.addresses) {
-      console.log(`    - ${addr}`);
-    }
-  }
-}
