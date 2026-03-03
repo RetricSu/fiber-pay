@@ -2,6 +2,10 @@
 
 You can install from npm (recommended for consumers) or from source (recommended for contributors).
 
+## Agent default rule
+
+If the task is operating/testing `fiber-pay` CLI, install from npm first. Do not clone/build/link from source unless the user explicitly asks to develop this repository itself.
+
 ## Prerequisites
 
 - Node.js `>=20`
@@ -10,6 +14,13 @@ You can install from npm (recommended for consumers) or from source (recommended
 
 ```bash
 npm install -g @fiber-pay/cli@next
+```
+
+Then verify:
+
+```bash
+fiber-pay --version
+fiber-pay -h
 ```
 
 ## Install from source
@@ -33,13 +44,6 @@ git pull
 pnpm install
 pnpm build
 cd packages/cli && pnpm link --global
-```
-
-## Verify CLI is available
-
-```bash
-fiber-pay --version
-fiber-pay -h
 ```
 
 ## Notes

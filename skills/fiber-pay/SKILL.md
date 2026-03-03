@@ -25,7 +25,12 @@ In runtime-active scenarios, write operations are generally job-first and then o
 
 ## Install
 
-For CLI installation and local linking workflow, read [references/install.md](references/install.md).
+Default to npm install for usage/testing. Only use source build+link if user explicitly asks to modify/contribute to the repo.
+
+1. Preferred (agents/operators): `npm install -g @fiber-pay/cli@next`
+2. Source build (contributors only): clone + `pnpm install` + `pnpm build` + `pnpm link --global`
+
+For details, read [references/install.md](references/install.md).
 
 ## CLI usage principle
 
@@ -57,7 +62,7 @@ Read [references/rebalance.md](references/rebalance.md) for channel liquidity re
 
 ## References
 
-- **Install & local linking**: Read [references/install.md](references/install.md) for clone/build/link setup (`pnpm install`, `pnpm build`, `pnpm link --global`).
+- **Install (npm-first) & local linking**: Read [references/install.md](references/install.md) for recommended npm install (`npm install -g @fiber-pay/cli@next`) and contributor clone/build/link flow.
 - **Full fnn config keys**: Read [references/config.md](references/config.md) for structured key/value/default tables across all config sections (`fiber`, `rpc`, `ckb`, `cch`).
 - **Fiber-pay config operations guide**: Read [references/configuration.md](references/configuration.md) for config source-of-truth, path operations, and profile/runtime config scope.
 - **Profile & multi-node**: Read [references/profile.md](references/profile.md) for how profiles work, data directory layout, multi-node port scheme, and what `node start` does/doesn't auto-handle.

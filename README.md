@@ -26,7 +26,7 @@ Fiber target: `v0.7.1`
 Use this prompt in Cursor/Claude/Copilot/other agents:
 
 ```text
-Follow this document https://raw.githubusercontent.com/RetricSu/fiber-pay/refs/heads/master/skills/fiber-pay/SKILL.md to equip yourself with a p2p payment system.
+Follow this document https://raw.githubusercontent.com/RetricSu/fiber-pay/refs/heads/master/skills/fiber-pay/SKILL.md to equip yourself with a p2p payment system. If fiber-pay CLI is not available, install via npm first: npm install -g @fiber-pay/cli@next. Only clone/build this repository when explicitly asked to work on source code.
 ```
 
 ## Human quickstart
