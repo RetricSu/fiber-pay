@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import type { CliConfig } from '../lib/config.js';
+import { runNodeInfoCommand } from '../lib/node-info.js';
 import { runNodeStartCommand } from '../lib/node-start.js';
 import { runNodeReadyCommand, runNodeStatusCommand } from '../lib/node-status.js';
 import { runNodeStopCommand } from '../lib/node-stop.js';
@@ -31,6 +32,13 @@ export function createNodeCommand(config: CliConfig): Command {
     .option('--json')
     .action(async (options) => {
       await runNodeStatusCommand(config, options);
+    });
+
+  node
+    .command('info')
+    .option('--json')
+    .action(async (options) => {
+      await runNodeInfoCommand(config, options);
     });
 
   node
