@@ -122,6 +122,9 @@ export class FiberMonitorService extends EventEmitter {
       this.emit('alert', alert);
     });
 
+    const jobManager = this.jobManager;
+    const jobStore = this.jobStore;
+
     this.proxy = new RpcMonitorProxy(
       {
         listen: this.config.proxy.listen,
@@ -138,19 +141,19 @@ export class FiberMonitorService extends EventEmitter {
         listTrackedPayments: () => this.store.listTrackedPayments(),
         listAlerts: (filters) => this.store.listAlerts(filters),
         getStatus: () => this.getStatus(),
-        createPaymentJob: this.jobManager
-          ? (params, options) => this.jobManager!.ensurePayment(params, options)
+        createPaymentJob: jobManager
+          ? (params, options) => jobManager.ensurePayment(params, options)
           : undefined,
-        createInvoiceJob: this.jobManager
-          ? (params, options) => this.jobManager!.manageInvoice(params, options)
+        createInvoiceJob: jobManager
+          ? (params, options) => jobManager.manageInvoice(params, options)
           : undefined,
-        createChannelJob: this.jobManager
-          ? (params, options) => this.jobManager!.manageChannel(params, options)
+        createChannelJob: jobManager
+          ? (params, options) => jobManager.manageChannel(params, options)
           : undefined,
-        getJob: this.jobManager ? (id) => this.jobManager!.getJob(id) : undefined,
-        listJobs: this.jobManager ? (filter) => this.jobManager!.listJobs(filter) : undefined,
-        cancelJob: this.jobManager ? (id) => this.jobManager!.cancelJob(id) : undefined,
-        listJobEvents: this.jobStore ? (jobId) => this.jobStore!.listJobEvents(jobId) : undefined,
+        getJob: jobManager ? (id) => jobManager.getJob(id) : undefined,
+        listJobs: jobManager ? (filter) => jobManager.listJobs(filter) : undefined,
+        cancelJob: jobManager ? (id) => jobManager.cancelJob(id) : undefined,
+        listJobEvents: jobStore ? (jobId) => jobStore.listJobEvents(jobId) : undefined,
       },
     );
   }

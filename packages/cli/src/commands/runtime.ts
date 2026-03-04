@@ -387,7 +387,7 @@ export function createRuntimeCommand(config: CliConfig): Command {
         if (fallback && isFiberRuntimeCommand(fallback.command)) {
           pid = fallback.pid;
           writeRuntimePid(config.dataDir, pid);
-        } else if (fallback && fallback.command) {
+        } else if (fallback?.command) {
           const details = fallback.command
             ? `PID ${fallback.pid} (${fallback.command})`
             : `PID ${fallback.pid}`;
@@ -499,7 +499,7 @@ export function createRuntimeCommand(config: CliConfig): Command {
         if (fallback && isFiberRuntimeCommand(fallback.command)) {
           pid = fallback.pid;
           writeRuntimePid(config.dataDir, pid);
-        } else if (fallback && fallback.command) {
+        } else if (fallback?.command) {
           const details = fallback.command
             ? `PID ${fallback.pid} (${fallback.command})`
             : `PID ${fallback.pid}`;
