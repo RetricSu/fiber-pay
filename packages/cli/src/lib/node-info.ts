@@ -24,9 +24,9 @@ export async function runNodeInfoCommand(
   console.log(`  Commit: ${nodeInfo.commit_hash}`);
   console.log(`  Name: ${nodeInfo.node_name ?? '-'}`);
   console.log(`  Chain Hash: ${nodeInfo.chain_hash}`);
-  console.log(`  Peers: ${parseInt(nodeInfo.peers_count, 16)}`);
-  console.log(`  Channels: ${parseInt(nodeInfo.channel_count, 16)}`);
-  console.log(`  Pending Channels: ${parseInt(nodeInfo.pending_channel_count, 16)}`);
+  console.log(`  Peers: ${BigInt(nodeInfo.peers_count)}`);
+  console.log(`  Channels: ${BigInt(nodeInfo.channel_count)}`);
+  console.log(`  Pending Channels: ${BigInt(nodeInfo.pending_channel_count)}`);
   if (nodeInfo.addresses.length > 0) {
     console.log('  Addresses:');
     for (const address of nodeInfo.addresses) {

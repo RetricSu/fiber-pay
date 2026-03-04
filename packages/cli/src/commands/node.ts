@@ -36,6 +36,7 @@ export function createNodeCommand(config: CliConfig): Command {
 
   node
     .command('info')
+    .description('Display information about the running node')
     .option('--json')
     .action(async (options) => {
       await runNodeInfoCommand(config, options);
