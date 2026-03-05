@@ -7,11 +7,73 @@ import {
   toHex,
 } from '@fiber-pay/sdk';
 
+const SHANNONS_PER_CKB = 100_000_000n;
+
 export function truncateMiddle(value: string, start = 10, end = 8): string {
   if (!value || value.length <= start + end + 3) {
     return value;
   }
   return `${value.slice(0, start)}...${value.slice(-end)}`;
+}
+
+export function sanitizeForTerminal(value: unknown): string {
+  const input = String(value ?? '');
+  let output = '';
+
+  for (let i = 0; i < input.length; i++) {
+    const code = input.charCodeAt(i);
+
+    // Strip ANSI escape sequences, including CSI forms like ESC [ ... m.
+    if (code === 0x1b) {
+      i++;
+      if (i >= input.length) break;
+
+      if (input.charCodeAt(i) === 0x5b) {
+        i++;
+        while (i < input.length) {
+          const csiCode = input.charCodeAt(i);
+          if (csiCode >= 0x40 && csiCode <= 0x7e) {
+            break;
+          }
+          i++;
+        }
+      }
+      continue;
+    }
+
+    // Normalize tabs/newlines and drop other control characters.
+    if (code === 0x09 || code === 0x0a || code === 0x0d) {
+      output += ' ';
+      continue;
+    }
+    if ((code >= 0x00 && code <= 0x08) || (code >= 0x0b && code <= 0x1f)) {
+      continue;
+    }
+    if (code >= 0x7f && code <= 0x9f) {
+      continue;
+    }
+
+    output += input[i];
+  }
+
+  return output;
+}
+
+export function formatShannonsAsCkb(shannons: bigint | string, fractionDigits = 8): string {
+  const value = typeof shannons === 'bigint' ? shannons : BigInt(shannons);
+  const sign = value < 0n ? '-' : '';
+  const abs = value < 0n ? -value : value;
+  const safeDigits = Math.max(0, Math.min(8, Math.trunc(fractionDigits)));
+  const multiplier = 10n ** BigInt(safeDigits);
+  const scaled = (abs * multiplier + SHANNONS_PER_CKB / 2n) / SHANNONS_PER_CKB;
+  const whole = scaled / multiplier;
+
+  if (safeDigits === 0) {
+    return `${sign}${whole}`;
+  }
+
+  const fraction = (scaled % multiplier).toString().padStart(safeDigits, '0');
+  return `${sign}${whole}.${fraction}`;
 }
 
 export function parseHexTimestampMs(hexTimestamp: string): number | null {

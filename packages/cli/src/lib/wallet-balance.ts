@@ -1,5 +1,5 @@
 import type { CliConfig } from './config.js';
-import { printJsonSuccess } from './format.js';
+import { formatShannonsAsCkb, printJsonSuccess } from './format.js';
 import { getLockBalanceShannons } from './node-rpc.js';
 import { createReadyRpcClient } from './rpc.js';
 
@@ -26,18 +26,18 @@ export async function runWalletBalanceCommand(
     nodeInfo.default_funding_lock_script,
   );
 
-  // Convert shannons to CKB (1 CKB = 10^8 shannons)
-  const balanceCkb = Number(balanceShannons) / 100_000_000;
+  // Convert shannons to CKB using BigInt-safe string formatting.
+  const balanceCkb = formatShannonsAsCkb(balanceShannons, 8);
 
   if (options.json) {
     printJsonSuccess({
-      balance_ckb: balanceCkb.toString(),
+      balance_ckb: balanceCkb,
       balance_shannons: balanceShannons.toString(),
     });
     return;
   }
 
   console.log('✅ CKB balance retrieved');
-  console.log(`  Balance: ${balanceCkb.toFixed(8)} CKB`);
+  console.log(`  Balance: ${balanceCkb} CKB`);
   console.log(`  Balance (shannons): ${balanceShannons.toString()}`);
 }

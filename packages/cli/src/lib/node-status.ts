@@ -9,7 +9,7 @@ import {
 } from '@fiber-pay/sdk';
 import { getBinaryDetails } from './binary-path.js';
 import type { CliConfig } from './config.js';
-import { printJsonSuccess } from './format.js';
+import { printJsonSuccess, sanitizeForTerminal } from './format.js';
 import {
   buildReadyRecommendation,
   buildStalePidRecommendation,
@@ -214,10 +214,10 @@ export async function runNodeStatusCommand(
     if (output.rpcResponsive) {
       console.log(`   Node ID: ${String(output.nodeId)}`);
       if (output.nodeName) {
-        console.log(`   Name: ${String(output.nodeName)}`);
+        console.log(`   Name: ${sanitizeForTerminal(output.nodeName)}`);
       }
       if (output.version) {
-        console.log(`   Version: ${String(output.version)}`);
+        console.log(`   Version: ${sanitizeForTerminal(output.version)}`);
       }
       if (output.chainHash) {
         console.log(`   Chain Hash: ${String(output.chainHash)}`);
@@ -242,7 +242,7 @@ export async function runNodeStatusCommand(
       if (output.addresses.length > 0) {
         console.log('   Addresses:');
         for (const address of output.addresses) {
-          console.log(`     - ${address}`);
+          console.log(`     - ${sanitizeForTerminal(address)}`);
         }
       }
     } else {

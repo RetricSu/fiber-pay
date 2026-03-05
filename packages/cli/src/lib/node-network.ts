@@ -1,7 +1,12 @@
 import type { Channel, GraphChannelInfo, GraphNodeInfo, PeerInfo } from '@fiber-pay/sdk';
 import { shannonsToCkb, toHex } from '@fiber-pay/sdk';
 import type { CliConfig } from './config.js';
-import { printJsonSuccess, truncateMiddle } from './format.js';
+import {
+  formatShannonsAsCkb,
+  printJsonSuccess,
+  sanitizeForTerminal,
+  truncateMiddle,
+} from './format.js';
 import { createReadyRpcClient } from './rpc.js';
 
 export interface NodeNetworkOptions {
@@ -26,7 +31,7 @@ export interface NodeNetworkData {
   summary: {
     connectedPeers: number;
     activeChannels: number;
-    totalChannelCapacity: number;
+    totalChannelCapacity: string;
   };
 }
 
@@ -93,12 +98,13 @@ export async function runNodeNetworkCommand(
 
   // Calculate summary statistics
   const activeChannels = enrichedChannels.filter((ch) => ch.state?.state_name === 'CHANNEL_READY');
-  const totalChannelCapacity = activeChannels.reduce((sum, ch) => {
+  const totalChannelCapacityShannons = activeChannels.reduce((sum, ch) => {
     const capacity = ch.graphChannelInfo?.capacity
       ? ch.graphChannelInfo.capacity
       : toHex(BigInt(ch.local_balance) + BigInt(ch.remote_balance));
-    return sum + shannonsToCkb(capacity);
-  }, 0);
+    return sum + BigInt(capacity);
+  }, 0n);
+  const totalChannelCapacity = formatShannonsAsCkb(totalChannelCapacityShannons, 1);
 
   const networkData: NodeNetworkData = {
     localNodeId: nodeInfo.node_id,
@@ -128,7 +134,7 @@ function printNodeNetworkHuman(data: NodeNetworkData): void {
   console.log('');
   console.log(`Connected Peers: ${data.summary.connectedPeers}`);
   console.log(`Active Channels: ${data.summary.activeChannels}`);
-  console.log(`Total Channel Capacity: ${data.summary.totalChannelCapacity.toFixed(1)} CKB`);
+  console.log(`Total Channel Capacity: ${data.summary.totalChannelCapacity} CKB`);
   console.log('');
 
   // Print peers table
@@ -141,9 +147,13 @@ function printNodeNetworkHuman(data: NodeNetworkData): void {
 
     for (const peer of data.peers) {
       const peerId = truncateMiddle(peer.peer_id, 10, 8).padEnd(22, ' ');
-      const alias = (peer.nodeInfo?.node_name || '(unnamed)').slice(0, 20).padEnd(20, ' ');
-      const address = truncateMiddle(peer.address, 15, 8).padEnd(25, ' ');
-      const version = (peer.nodeInfo?.version || '?').slice(0, 8).padEnd(8, ' ');
+      const alias = sanitizeForTerminal(peer.nodeInfo?.node_name || '(unnamed)')
+        .slice(0, 20)
+        .padEnd(20, ' ');
+      const address = truncateMiddle(sanitizeForTerminal(peer.address), 15, 8).padEnd(25, ' ');
+      const version = sanitizeForTerminal(peer.nodeInfo?.version || '?')
+        .slice(0, 8)
+        .padEnd(8, ' ');
       console.log(`  ${peerId} ${alias} ${address} ${version}`);
     }
     console.log('');
@@ -161,7 +171,7 @@ function printNodeNetworkHuman(data: NodeNetworkData): void {
 
     for (const channel of data.channels) {
       const channelId = truncateMiddle(channel.channel_id, 10, 8).padEnd(22, ' ');
-      const peerAlias = (channel.peerNodeInfo?.node_name || '(unnamed)')
+      const peerAlias = sanitizeForTerminal(channel.peerNodeInfo?.node_name || '(unnamed)')
         .slice(0, 18)
         .padEnd(18, ' ');
       const state = (channel.state?.state_name || 'UNKNOWN').slice(0, 13).padEnd(13, ' ');
