@@ -1,5 +1,5 @@
 import type { Channel, GraphChannelInfo, GraphNodeInfo, PeerInfo } from '@fiber-pay/sdk';
-import { shannonsToCkb } from '@fiber-pay/sdk';
+import { shannonsToCkb, toHex } from '@fiber-pay/sdk';
 import type { CliConfig } from './config.js';
 import { printJsonSuccess, truncateMiddle } from './format.js';
 import { createReadyRpcClient } from './rpc.js';
@@ -96,8 +96,8 @@ export async function runNodeNetworkCommand(
   const totalChannelCapacity = activeChannels.reduce((sum, ch) => {
     const capacity = ch.graphChannelInfo?.capacity
       ? ch.graphChannelInfo.capacity
-      : `0x${(BigInt(ch.local_balance) + BigInt(ch.remote_balance)).toString(16)}`;
-    return sum + shannonsToCkb(capacity as any);
+      : toHex(BigInt(ch.local_balance) + BigInt(ch.remote_balance));
+    return sum + shannonsToCkb(capacity);
   }, 0);
 
   const networkData: NodeNetworkData = {
@@ -168,12 +168,8 @@ function printNodeNetworkHuman(data: NodeNetworkData): void {
       const localBal = shannonsToCkb(channel.local_balance).toFixed(1).padStart(11, ' ');
       const remoteBal = shannonsToCkb(channel.remote_balance).toFixed(1).padStart(11, ' ');
       const capacity = channel.graphChannelInfo?.capacity
-        ? shannonsToCkb(channel.graphChannelInfo.capacity as any)
-            .toFixed(1)
-            .padStart(8, ' ')
-        : shannonsToCkb(
-            `0x${(BigInt(channel.local_balance) + BigInt(channel.remote_balance)).toString(16)}` as any,
-          )
+        ? shannonsToCkb(channel.graphChannelInfo.capacity).toFixed(1).padStart(8, ' ')
+        : shannonsToCkb(toHex(BigInt(channel.local_balance) + BigInt(channel.remote_balance)))
             .toFixed(1)
             .padStart(8, ' ');
 
