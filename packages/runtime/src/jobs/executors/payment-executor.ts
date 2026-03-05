@@ -100,6 +100,22 @@ export async function* runPaymentJob(
         }
 
         // Status is 'Created' or 'Inflight' — move to polling state
+        // Dry-run payments are never persisted by the node, so polling
+        // getPayment would loop forever with "Payment session not found".
+        if (current.params.sendPaymentParams.dry_run) {
+          current = transitionJobState(current, paymentStateMachine, 'payment_success', {
+            patch: {
+              result: {
+                paymentHash: sendResult.payment_hash,
+                status: 'DryRunSuccess',
+                fee: sendResult.fee,
+              },
+            },
+          });
+          yield current;
+          return;
+        }
+
         current = transitionJobState(current, paymentStateMachine, 'payment_inflight');
         if (paymentHash) {
           current = {

@@ -3,22 +3,29 @@ import { isObject } from './json.js';
 interface JsonRpcMessage {
   id?: string | number;
   method?: string;
+  params?: unknown[];
   result?: unknown;
   error?: unknown;
 }
 
-export function collectJsonRpcMethods(requestBody: unknown): Map<string | number, string> {
-  const methods = new Map<string | number, string>();
+export interface RequestMeta {
+  method: string;
+  dryRun: boolean;
+}
+
+export function collectJsonRpcMethods(requestBody: unknown): Map<string | number, RequestMeta> {
+  const methods = new Map<string | number, RequestMeta>();
   for (const item of normalizeJsonRpcRequest(requestBody)) {
     if (item.id !== undefined && typeof item.method === 'string') {
-      methods.set(item.id, item.method);
+      const dryRun = isDryRunRequest(item);
+      methods.set(item.id, { method: item.method, dryRun });
     }
   }
   return methods;
 }
 
 export function captureTrackedHashes(
-  methodById: Map<string | number, string>,
+  methodById: Map<string | number, RequestMeta>,
   responseBody: unknown,
   handlers: {
     onInvoiceTracked: (paymentHash: string) => void;
@@ -31,19 +38,21 @@ export function captureTrackedHashes(
     if (message.error || message.id === undefined) {
       continue;
     }
-    const method = methodById.get(message.id);
-    if (!method) {
+    const meta = methodById.get(message.id);
+    if (!meta) {
       continue;
     }
 
-    if (method === 'new_invoice') {
+    if (meta.method === 'new_invoice') {
       const paymentHash = extractInvoicePaymentHash(message.result);
       if (paymentHash) {
         handlers.onInvoiceTracked(paymentHash);
       }
     }
 
-    if (method === 'send_payment') {
+    // Skip tracking dry-run payments — the node never persists them,
+    // so the tracker would poll getPayment forever.
+    if (meta.method === 'send_payment' && !meta.dryRun) {
       const paymentHash = extractPaymentHash(message.result);
       if (paymentHash) {
         handlers.onPaymentTracked(paymentHash);
@@ -101,4 +110,12 @@ function extractPaymentHash(result: unknown): string | undefined {
     return undefined;
   }
   return typeof result.payment_hash === 'string' ? result.payment_hash : undefined;
+}
+
+function isDryRunRequest(message: JsonRpcMessage): boolean {
+  if (!Array.isArray(message.params) || message.params.length === 0) {
+    return false;
+  }
+  const firstParam = message.params[0];
+  return isObject(firstParam) && firstParam.dry_run === true;
 }
