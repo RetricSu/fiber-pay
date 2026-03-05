@@ -1,5 +1,11 @@
 # @fiber-pay/node
 
+## 0.1.0-rc.6
+
+### Patch Changes
+
+- @fiber-pay/sdk@0.1.0-rc.6
+
 ## 0.1.0-rc.5
 
 ### Patch Changes

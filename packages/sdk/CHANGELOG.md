@@ -1,5 +1,7 @@
 # @fiber-pay/sdk
 
+## 0.1.0-rc.6
+
 ## 0.1.0-rc.5
 
 ### Minor Changes

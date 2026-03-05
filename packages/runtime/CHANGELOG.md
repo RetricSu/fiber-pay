@@ -1,5 +1,14 @@
 # @fiber-pay/runtime
 
+## 0.1.0-rc.6
+
+### Patch Changes
+
+- eea4e63: Fix dry-run payments causing infinite polling. The payment executor now short-circuits dry_run payments to `DryRunSuccess` instead of entering the inflight polling loop, and the RPC proxy no longer auto-tracks dry_run payment hashes.
+- d4b2112: Fix infinite polling when tracked payment/invoice not found on Fiber node. Split `isExpectedTrackerError` to distinguish permanent not-found errors from transient network errors, marking not-found items as terminal and emitting alerts.
+- 2e051f6: Fix lint warnings in runtime command fallback checks and restore runtime DTS build compatibility by avoiding optional-chain return type widening in proxy job hooks.
+  - @fiber-pay/sdk@0.1.0-rc.6
+
 ## 0.1.0-rc.5
 
 ### Patch Changes

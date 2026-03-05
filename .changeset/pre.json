@@ -9,9 +9,13 @@
     "@fiber-pay/sdk": "0.1.0-rc.3"
   },
   "changesets": [
+    "bright-dingos-sing",
     "calm-bears-study",
     "calm-worms-walk",
     "clever-oranges-obey",
+    "feat-cli-wallet-network",
+    "fix-dry-run-payment-poll",
+    "fix-tracker-not-found-poll",
     "flat-pets-wave",
     "fuzzy-eggs-approve",
     "green-keys-smoke",
@@ -19,6 +23,7 @@
     "odd-ducks-sparkle",
     "olive-lions-tap",
     "quick-melons-build",
+    "shy-plants-shop",
     "small-mangos-wave",
     "tiny-lamps-bow"
   ]

@@ -1,5 +1,32 @@
 # @fiber-pay/cli
 
+## 0.1.0-rc.6
+
+### Patch Changes
+
+- 20f4323: Add `fiber-pay node info` command to fetch node metadata via Fiber `node_info` RPC.
+
+  - CLI: add `node info` subcommand under `fiber-pay node`
+  - RPC: call existing SDK `nodeInfo()` method (mapped to `node_info`)
+  - Output: support both human-readable output and `--json` mode
+
+- b8026bc: Add new CLI capabilities for wallet and node network visibility.
+
+  - Add `fiber-pay wallet address` to print the default funding address (human and `--json` output)
+  - Add `fiber-pay wallet balance` to query CKB balance from the funding lock script
+  - Add explicit error when `ckbRpcUrl` is missing for wallet balance lookup
+  - Add BigInt-safe CKB formatting for wallet/network capacity output to avoid precision loss
+  - Sanitize node/network-derived terminal strings to prevent escape-sequence injection in human output
+  - Add aggregated `node network` output and clean up related typing/lint issues
+
+- 2e051f6: Fix lint warnings in runtime command fallback checks and restore runtime DTS build compatibility by avoiding optional-chain return type widening in proxy job hooks.
+- Updated dependencies [eea4e63]
+- Updated dependencies [d4b2112]
+- Updated dependencies [2e051f6]
+  - @fiber-pay/runtime@0.1.0-rc.6
+  - @fiber-pay/sdk@0.1.0-rc.6
+  - @fiber-pay/node@0.1.0-rc.6
+
 ## 0.1.0-rc.5
 
 ### Major Changes
