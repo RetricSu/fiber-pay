@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FiberRpcClient } from '@fiber-pay/sdk';
+import { FiberRpcError } from '@fiber-pay/sdk';
 import { describe, expect, it } from 'vitest';
 import { AlertManager } from '../src/alerts/alert-manager.js';
 import type { Alert, AlertBackend } from '../src/alerts/types.js';
@@ -101,6 +102,46 @@ describe('PaymentTracker', () => {
 
     await (tracker as unknown as { poll: () => Promise<void> }).poll();
 
+    expect(emitted.some((item) => item.type === 'outgoing_payment_failed')).toBe(true);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('marks payment as Failed when RPC not-found appears in error data payload', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'fiber-payment-tracker-'));
+    const store = new MemoryStore({
+      stateFilePath: join(dir, 'runtime-state.json'),
+      flushIntervalMs: 1000,
+      maxAlertHistory: 100,
+    });
+    store.addTrackedPayment('0xpay-missing', 'Created');
+
+    const emitted: Alert[] = [];
+    const alerts = new AlertManager({
+      backends: [new CaptureAlertBackend(emitted)],
+      store,
+    });
+
+    const client = {
+      getPayment: async () => {
+        throw new FiberRpcError(-32602, 'InvalidParameter', {
+          details: 'Payment session not found: Hash256(0xpay-missing)',
+        });
+      },
+    };
+
+    const tracker = new PaymentTracker({
+      client: client as unknown as FiberRpcClient,
+      store,
+      alerts,
+      config: {
+        intervalMs: 1000,
+        completedItemTtlSeconds: 60,
+      },
+    });
+
+    await (tracker as unknown as { poll: () => Promise<void> }).poll();
+
+    expect(store.getTrackedPayment('0xpay-missing')?.status).toBe('Failed');
     expect(emitted.some((item) => item.type === 'outgoing_payment_failed')).toBe(true);
     await rm(dir, { recursive: true, force: true });
   });
