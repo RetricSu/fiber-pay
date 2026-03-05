@@ -12,6 +12,7 @@ import { createPaymentCommand } from './commands/payment.js';
 import { createPeerCommand } from './commands/peer.js';
 import { createRuntimeCommand } from './commands/runtime.js';
 import { createVersionCommand } from './commands/version.js';
+import { createWalletCommand } from './commands/wallet.js';
 import { isTopLevelVersionRequest } from './lib/argv.js';
 import { CLI_COMMIT, CLI_VERSION } from './lib/build-info.js';
 import { getEffectiveConfig } from './lib/config.js';
@@ -185,6 +186,7 @@ async function main(): Promise<void> {
   program.addCommand(createConfigCommand(config));
   program.addCommand(createRuntimeCommand(config));
   program.addCommand(createVersionCommand());
+  program.addCommand(createWalletCommand(config));
 
   await program.parseAsync(argv);
 }
