@@ -37,6 +37,7 @@ export async function runNodeStatusCommand(
 
   let rpcResponsive = false;
   let nodeId: string | null = null;
+  let nodeName: string | null = null;
   let addresses: string[] = [];
   let chainHash: string | null = null;
   let version: string | null = null;
@@ -66,6 +67,7 @@ export async function runNodeStatusCommand(
       rpcResponsive = true;
 
       nodeId = nodeInfo.node_id;
+      nodeName = nodeInfo.node_name;
       addresses = nodeInfo.addresses;
       chainHash = nodeInfo.chain_hash;
       version = nodeInfo.version;
@@ -146,6 +148,7 @@ export async function runNodeStatusCommand(
     rpcTarget: resolvedRpc.target,
     resolvedRpcUrl: resolvedRpc.url,
     nodeId,
+    nodeName,
     addresses,
     chainHash,
     version,
@@ -210,6 +213,9 @@ export async function runNodeStatusCommand(
     console.log(`✅ Node is running (PID: ${output.pid})`);
     if (output.rpcResponsive) {
       console.log(`   Node ID: ${String(output.nodeId)}`);
+      if (output.nodeName) {
+        console.log(`   Name: ${String(output.nodeName)}`);
+      }
       if (output.version) {
         console.log(`   Version: ${String(output.version)}`);
       }

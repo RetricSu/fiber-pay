@@ -26,7 +26,6 @@ export function createChannelCommand(config: CliConfig): Command {
     .option('--state <state>')
     .option('--peer <peerId>')
     .option('--include-closed')
-    .option('--raw')
     .option('--json')
     .action(async (options) => {
       const rpc = await createReadyRpcClient(config);
@@ -40,7 +39,7 @@ export function createChannelCommand(config: CliConfig): Command {
         ? response.channels.filter((item) => item.state.state_name === stateFilter)
         : response.channels;
 
-      if (options.raw || options.json) {
+      if (options.json) {
         printJsonSuccess({ channels, count: channels.length });
       } else {
         printChannelListHuman(channels);
@@ -50,7 +49,6 @@ export function createChannelCommand(config: CliConfig): Command {
   channel
     .command('get')
     .argument('<channelId>')
-    .option('--raw')
     .option('--json')
     .action(async (channelId, options) => {
       const rpc = await createReadyRpcClient(config);
@@ -71,7 +69,7 @@ export function createChannelCommand(config: CliConfig): Command {
         process.exit(1);
       }
 
-      if (options.raw || options.json) {
+      if (options.json) {
         printJsonSuccess(found);
       } else {
         printChannelDetailHuman(found);
