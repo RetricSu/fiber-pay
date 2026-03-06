@@ -117,6 +117,16 @@ export function generatePrivateKey(): Uint8Array {
   return bytes;
 }
 
+/**
+ * Generate a random preimage for hold invoice
+ * @returns Hex-encoded random 32-byte preimage
+ */
+export function generatePreimage(): HexString {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return `0x${bytesToHex(bytes)}` as HexString;
+}
+
 // =============================================================================
 // Payment Hash Utilities
 // =============================================================================
@@ -145,7 +155,20 @@ export function sha256Hash(data: Uint8Array): Uint8Array {
  * @param hex - Hex string (with or without 0x prefix)
  */
 function hexToBytes(hex: string): Uint8Array {
-  const cleanHex = hex.replace(/^0x/, '');
+  const cleanHex = hex.replace(/^0x/i, '');
+
+  if (cleanHex.length === 0) {
+    return new Uint8Array(0);
+  }
+
+  if (!/^[0-9a-fA-F]*$/.test(cleanHex)) {
+    throw new Error('Invalid hex string: contains non-hex characters');
+  }
+
+  if (cleanHex.length % 2 !== 0) {
+    throw new Error('Invalid hex string: odd length');
+  }
+
   const bytes = new Uint8Array(cleanHex.length / 2);
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(cleanHex.slice(i * 2, i * 2 + 2), 16);
@@ -197,5 +220,18 @@ export function verifyPreimageHash(
   algorithm: HashAlgorithm,
 ): boolean {
   const computedHash = hashPreimage(preimageHex, algorithm);
-  return computedHash.toLowerCase() === paymentHash.toLowerCase();
+
+  // Constant-time comparison to prevent timing attacks
+  const computed = hexToBytes(computedHash);
+  const expected = hexToBytes(paymentHash);
+
+  if (computed.length !== expected.length) {
+    return false;
+  }
+
+  let result = 0;
+  for (let i = 0; i < computed.length; i++) {
+    result |= computed[i] ^ expected[i];
+  }
+  return result === 0;
 }

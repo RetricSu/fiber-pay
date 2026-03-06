@@ -33,6 +33,7 @@ export {
   decryptKey,
   derivePublicKey,
   ENCRYPTED_MAGIC,
+  generatePreimage,
   generatePrivateKey,
   hashPreimage,
   IV_LENGTH,
