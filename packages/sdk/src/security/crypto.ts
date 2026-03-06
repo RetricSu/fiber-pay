@@ -122,7 +122,9 @@ export function generatePrivateKey(): Uint8Array {
 // =============================================================================
 
 /** CKB blake2b-256 personalization string */
-const CKB_HASH_PERSONALIZATION = new Uint8Array(Buffer.from('ckb-default-hash'));
+const CKB_HASH_PERSONALIZATION = new Uint8Array([
+  99, 107, 98, 45, 100, 101, 102, 97, 117, 108, 116, 45, 104, 97, 115, 104,
+]);
 
 /**
  * Compute CKB hash (blake2b-256 with "ckb-default-hash" personalization)
@@ -139,20 +141,44 @@ export function sha256Hash(data: Uint8Array): Uint8Array {
 }
 
 /**
+ * Decode a hex string to Uint8Array (browser-compatible)
+ * @param hex - Hex string (with or without 0x prefix)
+ */
+function hexToBytes(hex: string): Uint8Array {
+  const cleanHex = hex.replace(/^0x/, '');
+  const bytes = new Uint8Array(cleanHex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(cleanHex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+/**
+ * Assert that a value is never (exhaustiveness check for switch statements)
+ */
+function assertNever(x: never): never {
+  throw new Error(`Unexpected value: ${String(x)}`);
+}
+
+/**
  * Compute payment hash from preimage using specified algorithm
  * @param preimageHex - Hex-encoded preimage (0x-prefixed)
  * @param algorithm - Hash algorithm: 'CkbHash' or 'Sha256'
- * @returns Hex-encoded payment hash (0x-prefixed, 64 chars)
+ * @returns Hex-encoded payment hash (0x-prefixed, 64 hex chars)
  */
 export function hashPreimage(preimageHex: HexString, algorithm: HashAlgorithm): Hash256 {
-  const hexString = preimageHex.replace(/^0x/, '');
-  const data = Uint8Array.from(Buffer.from(hexString, 'hex'));
+  const data = hexToBytes(preimageHex);
 
   let hashBytes: Uint8Array;
-  if (algorithm === 'Sha256') {
-    hashBytes = sha256Hash(data);
-  } else {
-    hashBytes = ckbHash(data);
+  switch (algorithm) {
+    case 'Sha256':
+      hashBytes = sha256Hash(data);
+      break;
+    case 'CkbHash':
+      hashBytes = ckbHash(data);
+      break;
+    default:
+      return assertNever(algorithm);
   }
 
   return `0x${bytesToHex(hashBytes)}` as Hash256;
