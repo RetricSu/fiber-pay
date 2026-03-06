@@ -296,7 +296,10 @@ describe('FiberRpcClient - New Methods', () => {
       expect(body.params[0].payment_preimage).toBeUndefined();
     });
 
-    it('should map PascalCase hash_algorithm to snake_case for RPC', async () => {
+    it.each([
+      { sdkValue: 'Sha256', rpcValue: 'sha256' },
+      { sdkValue: 'CkbHash', rpcValue: 'ckb_hash' },
+    ] as const)('should map $sdkValue to $rpcValue for RPC', async ({ sdkValue, rpcValue }) => {
       const fetchMock = mockFetch({
         invoice_address: 'fibt1testinvoice',
         invoice: {
@@ -315,42 +318,13 @@ describe('FiberRpcClient - New Methods', () => {
         amount: '0x5f5e100' as HexString,
         currency: 'Fibt',
         payment_hash: '0xdeadbeef' as HexString,
-        hash_algorithm: 'Sha256',
+        hash_algorithm: sdkValue,
       };
 
       await client.newInvoice(params);
 
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-      // Should send snake_case to RPC
-      expect(body.params[0].hash_algorithm).toBe('sha256');
-    });
-
-    it('should map CkbHash to ckb_hash for RPC', async () => {
-      const fetchMock = mockFetch({
-        invoice_address: 'fibt1testinvoice',
-        invoice: {
-          currency: 'Fibt',
-          amount: '0x5f5e100' as HexString,
-          data: {
-            timestamp: '0x0' as HexString,
-            payment_hash: '0xdeadbeef' as HexString,
-            attrs: [],
-          },
-        },
-      });
-      globalThis.fetch = fetchMock;
-
-      const params: NewInvoiceParams = {
-        amount: '0x5f5e100' as HexString,
-        currency: 'Fibt',
-        payment_hash: '0xdeadbeef' as HexString,
-        hash_algorithm: 'CkbHash',
-      };
-
-      await client.newInvoice(params);
-
-      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-      expect(body.params[0].hash_algorithm).toBe('ckb_hash');
+      expect(body.params[0].hash_algorithm).toBe(rpcValue);
     });
 
     it('should work without hash_algorithm', async () => {
