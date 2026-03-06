@@ -6,6 +6,7 @@ import {
   sha256Hash,
   verifyPreimageHash,
 } from '../src/security/crypto.js';
+import type { Hash256 } from '../src/types/index.js';
 
 describe('Payment Hash Utilities', () => {
   describe('hashPreimage', () => {
@@ -34,7 +35,7 @@ describe('Payment Hash Utilities', () => {
 
     it('should handle 0x prefix', () => {
       const withPrefix = '0x1234abcd';
-      const withoutPrefix = '0x1234abcd' as const;
+      const withoutPrefix = '1234abcd' as const;
       const result1 = hashPreimage(withPrefix, 'Sha256');
       const result2 = hashPreimage(withoutPrefix, 'Sha256');
       expect(result1).toBe(result2);
@@ -89,6 +90,11 @@ describe('Payment Hash Utilities', () => {
       const preimage = '0x1234abcd';
       const sha256Hash = hashPreimage(preimage, 'Sha256');
       expect(verifyPreimageHash(preimage, sha256Hash, 'CkbHash')).toBe(false);
+    });
+
+    it('should return false for malformed input hash', () => {
+      const preimage = '0x1234abcd';
+      expect(verifyPreimageHash(preimage, '0xGG' as Hash256, 'Sha256')).toBe(false);
     });
   });
 

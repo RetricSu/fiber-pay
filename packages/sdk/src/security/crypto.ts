@@ -219,19 +219,24 @@ export function verifyPreimageHash(
   paymentHash: Hash256,
   algorithm: HashAlgorithm,
 ): boolean {
-  const computedHash = hashPreimage(preimageHex, algorithm);
+  try {
+    const computedHash = hashPreimage(preimageHex, algorithm);
 
-  // Constant-time comparison to prevent timing attacks
-  const computed = hexToBytes(computedHash);
-  const expected = hexToBytes(paymentHash);
+    // Compare all bytes to reduce timing side channels for equal-length hashes.
+    const computed = hexToBytes(computedHash);
+    const expected = hexToBytes(paymentHash);
 
-  if (computed.length !== expected.length) {
+    if (computed.length !== expected.length) {
+      return false;
+    }
+
+    let result = 0;
+    for (let i = 0; i < computed.length; i++) {
+      result |= computed[i] ^ expected[i];
+    }
+    return result === 0;
+  } catch {
+    // Treat malformed inputs as non-matching in this boolean helper.
     return false;
   }
-
-  let result = 0;
-  for (let i = 0; i < computed.length; i++) {
-    result |= computed[i] ^ expected[i];
-  }
-  return result === 0;
 }
