@@ -31,7 +31,7 @@ function makeInvoiceResult(status: 'Open' | 'Received' | 'Paid' | 'Expired' | 'C
         final_htlc_timeout: '0x9',
       },
       hrp: 'fibt',
-      hash_algorithm: 'sha256',
+      hash_algorithm: 'Sha256',
       attrs: [],
       is_expired: status === 'Expired',
       payee_pub_key: null,
