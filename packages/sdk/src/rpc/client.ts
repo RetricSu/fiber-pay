@@ -54,6 +54,7 @@ import type {
   UpdateChannelParams,
 } from '../types/index.js';
 import { ChannelState, type HashAlgorithm } from '../types/index.js';
+<<<<<<< HEAD
 
 // =============================================================================
 // Constants
@@ -71,6 +72,8 @@ const HASH_ALGORITHM_MAP: Record<HashAlgorithm, string> = {
   CkbHash: 'ckb_hash',
   Sha256: 'sha256',
 };
+=======
+>>>>>>> 4ed4728 (fix(sdk): HashAlgorithm casing mismatch with FNN RPC (#67))
 
 // =============================================================================
 // RPC Client Configuration
@@ -347,7 +350,8 @@ export class FiberRpcClient {
     const rpcParams: Record<string, unknown> = { ...rest };
 
     if (hash_algorithm) {
-      rpcParams.hash_algorithm = HASH_ALGORITHM_MAP[hash_algorithm] ?? hash_algorithm;
+      // Map PascalCase HashAlgorithm values to snake_case for RPC
+      rpcParams.hash_algorithm = HASH_ALGORITHM_MAP[hash_algorithm];
     }
 
     return this.call<NewInvoiceResult>('new_invoice', [rpcParams]);
