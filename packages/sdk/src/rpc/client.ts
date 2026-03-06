@@ -328,14 +328,18 @@ export class FiberRpcClient {
   async newInvoice(params: NewInvoiceParams): Promise<NewInvoiceResult> {
     // Map PascalCase HashAlgorithm to snake_case for FNN RPC compatibility
     // See: https://github.com/RetricSu/fiber-pay/issues/66
-    const rpcParams = { ...params };
-    if (params.hash_algorithm) {
+    const { hash_algorithm, ...rest } = params;
+    const rpcParams: Record<string, unknown> = { ...rest };
+
+    if (hash_algorithm) {
       const hashAlgorithmMap: Record<HashAlgorithm, string> = {
         CkbHash: 'ckb_hash',
         Sha256: 'sha256',
       };
-      rpcParams.hash_algorithm = hashAlgorithmMap[params.hash_algorithm] as HashAlgorithm;
+      // Map known PascalCase values to snake_case, pass through others as-is
+      rpcParams.hash_algorithm = hashAlgorithmMap[hash_algorithm] ?? hash_algorithm;
     }
+
     return this.call<NewInvoiceResult>('new_invoice', [rpcParams]);
   }
 
