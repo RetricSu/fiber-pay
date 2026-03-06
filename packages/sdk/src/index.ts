@@ -29,10 +29,12 @@ export {
 // Crypto utilities
 export {
   AUTH_TAG_LENGTH,
+  ckbHash,
   decryptKey,
   derivePublicKey,
   ENCRYPTED_MAGIC,
   generatePrivateKey,
+  hashPreimage,
   IV_LENGTH,
   isEncryptedKey,
   KEY_LENGTH,
@@ -40,6 +42,8 @@ export {
   SCRYPT_N,
   SCRYPT_P,
   SCRYPT_R,
+  sha256Hash,
+  verifyPreimageHash,
 } from './security/crypto.js';
 export { PolicyEngine } from './security/policy-engine.js';
 export type * from './types/index.js';

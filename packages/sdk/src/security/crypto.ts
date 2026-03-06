@@ -4,8 +4,10 @@
  * Browser-compatible — uses Web Crypto API and @noble/hashes.
  */
 
+import { blake2b } from '@noble/hashes/blake2.js';
 import { scrypt } from '@noble/hashes/scrypt.js';
-import type { HexString } from '../types/index.js';
+import { sha256 } from '@noble/hashes/sha2.js';
+import type { Hash256, HashAlgorithm, HexString } from '../types/index.js';
 
 // =============================================================================
 // Constants
@@ -113,4 +115,61 @@ export function generatePrivateKey(): Uint8Array {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return bytes;
+}
+
+// =============================================================================
+// Payment Hash Utilities
+// =============================================================================
+
+/** CKB blake2b-256 personalization string */
+const CKB_HASH_PERSONALIZATION = new Uint8Array(Buffer.from('ckb-default-hash'));
+
+/**
+ * Compute CKB hash (blake2b-256 with "ckb-default-hash" personalization)
+ */
+export function ckbHash(data: Uint8Array): Uint8Array {
+  return blake2b(data, { dkLen: 32, personalization: CKB_HASH_PERSONALIZATION });
+}
+
+/**
+ * Compute SHA-256 hash
+ */
+export function sha256Hash(data: Uint8Array): Uint8Array {
+  return sha256(data);
+}
+
+/**
+ * Compute payment hash from preimage using specified algorithm
+ * @param preimageHex - Hex-encoded preimage (0x-prefixed)
+ * @param algorithm - Hash algorithm: 'CkbHash' or 'Sha256'
+ * @returns Hex-encoded payment hash (0x-prefixed, 64 chars)
+ */
+export function hashPreimage(preimageHex: HexString, algorithm: HashAlgorithm): Hash256 {
+  const hexString = preimageHex.replace(/^0x/, '');
+  const data = Uint8Array.from(Buffer.from(hexString, 'hex'));
+
+  let hashBytes: Uint8Array;
+  if (algorithm === 'Sha256') {
+    hashBytes = sha256Hash(data);
+  } else {
+    hashBytes = ckbHash(data);
+  }
+
+  return `0x${bytesToHex(hashBytes)}` as Hash256;
+}
+
+/**
+ * Verify that a preimage matches the given payment hash
+ * @param preimageHex - Hex-encoded preimage
+ * @param paymentHash - Expected payment hash
+ * @param algorithm - Hash algorithm used
+ * @returns true if preimage hashes to paymentHash
+ */
+export function verifyPreimageHash(
+  preimageHex: HexString,
+  paymentHash: Hash256,
+  algorithm: HashAlgorithm,
+): boolean {
+  const computedHash = hashPreimage(preimageHex, algorithm);
+  return computedHash.toLowerCase() === paymentHash.toLowerCase();
 }
