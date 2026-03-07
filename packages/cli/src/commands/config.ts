@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Command } from 'commander';
 import { parseDocument, stringify as yamlStringify } from 'yaml';
@@ -538,27 +539,39 @@ export function createConfigCommand(_config: CliConfig): Command {
     .description('List all available Fiber profiles')
     .option('--json')
     .action(async (options) => {
-      const homeDir = process.env.HOME ?? process.cwd();
+      const homeDir = homedir();
       const profilesDir = join(homeDir, '.fiber-pay', 'profiles');
       const defaultDir = join(homeDir, '.fiber-pay');
       const defaultConfigPath = join(defaultDir, 'config.yml');
 
       const profiles: string[] = [];
+      const hasDefaultConfig = existsSync(defaultConfigPath);
 
-      if (existsSync(defaultConfigPath)) {
+      if (hasDefaultConfig) {
         profiles.push('default');
       }
 
       if (existsSync(profilesDir)) {
-        const entries = readdirSync(profilesDir);
-        for (const entry of entries) {
-          const entryPath = join(profilesDir, entry);
-          try {
-            const stat = statSync(entryPath);
-            if (stat.isDirectory()) {
-              profiles.push(entry);
+        try {
+          const entries = readdirSync(profilesDir, { withFileTypes: true });
+          for (const entry of entries) {
+            if (entry.isDirectory() && entry.name !== 'default') {
+              profiles.push(entry.name);
             }
-          } catch {}
+          }
+        } catch (error) {
+          if (options.json) {
+            printJsonError({
+              code: 'PROFILE_LIST_ERROR',
+              message: `Failed to read profiles directory: ${error instanceof Error ? error.message : String(error)}`,
+              recoverable: true,
+            });
+            process.exit(1);
+          } else {
+            console.error(
+              `Warning: Could not read profiles directory: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
         }
       }
 
