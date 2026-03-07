@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Command } from 'commander';
 import { parseDocument, stringify as yamlStringify } from 'yaml';
 import {
@@ -527,6 +528,54 @@ export function createConfigCommand(_config: CliConfig): Command {
         for (const key of PROFILE_KEYS) {
           if (profileData[key] !== undefined) {
             console.log(`  ${key}: ${profileData[key]}`);
+          }
+        }
+      }
+    });
+
+  profile
+    .command('list')
+    .description('List all available Fiber profiles')
+    .option('--json')
+    .action(async (options) => {
+      const homeDir = process.env.HOME ?? process.cwd();
+      const profilesDir = join(homeDir, '.fiber-pay', 'profiles');
+      const defaultDir = join(homeDir, '.fiber-pay');
+      const defaultConfigPath = join(defaultDir, 'config.yml');
+
+      const profiles: string[] = [];
+
+      if (existsSync(defaultConfigPath)) {
+        profiles.push('default');
+      }
+
+      if (existsSync(profilesDir)) {
+        const entries = readdirSync(profilesDir);
+        for (const entry of entries) {
+          const entryPath = join(profilesDir, entry);
+          try {
+            const stat = statSync(entryPath);
+            if (stat.isDirectory()) {
+              profiles.push(entry);
+            }
+          } catch {}
+        }
+      }
+
+      profiles.sort((a, b) => {
+        if (a === 'default') return -1;
+        if (b === 'default') return 1;
+        return a.localeCompare(b);
+      });
+
+      if (options.json) {
+        printJsonSuccess({ profiles, count: profiles.length });
+      } else {
+        if (profiles.length === 0) {
+          console.log('No profiles found.');
+        } else {
+          for (const profileName of profiles) {
+            console.log(profileName);
           }
         }
       }
