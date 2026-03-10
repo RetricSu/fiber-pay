@@ -1,5 +1,4 @@
 import {
-  appendFileSync,
   closeSync,
   createReadStream,
   existsSync,
@@ -10,6 +9,7 @@ import {
   statSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { LogWriter } from './log-writer.js';
 import type { RuntimeMeta } from './runtime-meta.js';
 
 export interface PersistedLogPaths {
@@ -150,13 +150,35 @@ export function listLogDates(dataDir: string, logsBaseDir?: string): string[] {
   return dates;
 }
 
+// Cache for LogWriter instances per dataDir/filename
+const logWriters = new Map<string, LogWriter>();
+
+function getLogWriter(dataDir: string, filename: string): LogWriter {
+  const key = `${dataDir}:${filename}`;
+  if (!logWriters.has(key)) {
+    logWriters.set(key, new LogWriter(dataDir, filename));
+  }
+  return logWriters.get(key)!;
+}
+
 /**
  * Append text to a log file inside today's date directory.
  * Creates the date directory on first write each day.
  */
-export function appendToTodayLog(dataDir: string, filename: string, text: string): void {
-  const dir = resolveLogDirForDate(dataDir);
-  appendFileSync(join(dir, filename), text, 'utf-8');
+export async function appendToTodayLog(
+  dataDir: string,
+  filename: string,
+  text: string,
+): Promise<void> {
+  const writer = getLogWriter(dataDir, filename);
+  await writer.append(text);
+}
+
+/**
+ * Flush all pending log writes. Call during shutdown for clean exit.
+ */
+export async function flushPendingLogs(): Promise<void> {
+  await Promise.all(Array.from(logWriters.values()).map((w) => w.flush()));
 }
 
 export function resolvePersistedLogTargets(

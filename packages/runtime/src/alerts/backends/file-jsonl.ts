@@ -1,17 +1,21 @@
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { Alert, AlertBackend } from '../types.js';
 
 export class JsonlFileAlertBackend implements AlertBackend {
   private readonly path: string;
+  private initialized = false;
 
   constructor(path: string) {
     this.path = path;
-    mkdirSync(dirname(path), { recursive: true });
   }
 
   async send(alert: Alert): Promise<void> {
-    appendFileSync(this.path, `${JSON.stringify(alert)}\n`, 'utf-8');
+    if (!this.initialized) {
+      await mkdir(dirname(this.path), { recursive: true });
+      this.initialized = true;
+    }
+    await appendFile(this.path, `${JSON.stringify(alert)}\n`, 'utf-8');
   }
 }
 
@@ -38,7 +42,7 @@ export class DailyJsonlFileAlertBackend implements AlertBackend {
 
   async send(alert: Alert): Promise<void> {
     const dateDir = join(this.baseLogsDir, todayDateString());
-    mkdirSync(dateDir, { recursive: true });
-    appendFileSync(join(dateDir, this.filename), `${JSON.stringify(alert)}\n`, 'utf-8');
+    await mkdir(dateDir, { recursive: true });
+    await appendFile(join(dateDir, this.filename), `${JSON.stringify(alert)}\n`, 'utf-8');
   }
 }

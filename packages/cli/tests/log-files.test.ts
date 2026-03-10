@@ -1,9 +1,10 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   appendToTodayLog,
+  flushPendingLogs,
   listLogDates,
   readAppendedLines,
   readLastLines,
@@ -51,7 +52,8 @@ describe('log-files', () => {
     const filePath = join(dir, 'fnn.stdout.log');
 
     const totalLines = 120_000;
-    const payload = Array.from({ length: totalLines }, (_, index) => `line-${index}`).join('\n') + '\n';
+    const payload =
+      Array.from({ length: totalLines }, (_, index) => `line-${index}`).join('\n') + '\n';
     writeFileSync(filePath, payload, 'utf8');
 
     const tailed = readLastLines(filePath, 80);
@@ -230,10 +232,11 @@ describe('daily log rotation', () => {
     expect(dates).toEqual(['2026-03-20', '2026-03-01']);
   });
 
-  it('appendToTodayLog writes to today date directory', () => {
+  it('appendToTodayLog writes to today date directory', async () => {
     const dataDir = makeTempDir();
-    appendToTodayLog(dataDir, 'fnn.stdout.log', 'hello\n');
-    appendToTodayLog(dataDir, 'fnn.stdout.log', 'world\n');
+    await appendToTodayLog(dataDir, 'fnn.stdout.log', 'hello\n');
+    await appendToTodayLog(dataDir, 'fnn.stdout.log', 'world\n');
+    await flushPendingLogs();
 
     const today = todayDateString();
     const filePath = join(dataDir, 'logs', today, 'fnn.stdout.log');

@@ -12,7 +12,7 @@ import { getBinaryManagerInstallDirOrThrow, resolveBinaryPath } from './binary-p
 import { autoConnectBootnodes, extractBootnodeAddrs } from './bootnode.js';
 import { type CliConfig, ensureNodeConfigFile } from './config.js';
 import { printJsonError, printJsonEvent } from './format.js';
-import { appendToTodayLog, resolveLogDirForDate } from './log-files.js';
+import { appendToTodayLog, flushPendingLogs, resolveLogDirForDate } from './log-files.js';
 import { runMigrationGuard } from './node-migration.js';
 import {
   getBinaryVersion,
@@ -244,11 +244,11 @@ export async function runNodeStartCommand(
     removePidFile(config.dataDir);
   });
   processManager.on('stdout', (text) => {
-    appendToTodayLog(config.dataDir, 'fnn.stdout.log', text);
+    appendToTodayLog(config.dataDir, 'fnn.stdout.log', text).catch(() => {});
     emitFnnLog('stdout', text);
   });
   processManager.on('stderr', (text) => {
-    appendToTodayLog(config.dataDir, 'fnn.stderr.log', text);
+    appendToTodayLog(config.dataDir, 'fnn.stderr.log', text).catch(() => {});
     emitFnnLog('stderr', text);
   });
   await processManager.start();
@@ -510,6 +510,27 @@ export async function runNodeStartCommand(
     if (!json) {
       console.log('\n🛑 Shutting down...');
     }
+
+    // Flush pending log writes with 5-second timeout
+    let flushTimeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        flushPendingLogs(),
+        new Promise<never>((_, reject) => {
+          flushTimeout = setTimeout(() => reject(new Error('Flush timeout')), 5000);
+        }),
+      ]);
+    } catch (err) {
+      // Log timeout but continue shutdown
+      if (!json) {
+        console.log('⚠️ Log flush timed out, continuing shutdown...');
+      }
+    } finally {
+      if (flushTimeout !== undefined) {
+        clearTimeout(flushTimeout);
+      }
+    }
+
     if (runtimeDaemon) {
       stopRuntimeDaemonFromNode({ dataDir: config.dataDir, rpcUrl: config.rpcUrl });
     } else if (runtime) {
