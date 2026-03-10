@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LogWriter } from '../src/lib/log-writer.js';
 
 const tempDirs: string[] = [];
@@ -172,5 +172,37 @@ describe('LogWriter', () => {
 
     expect(content1).toBe('content for file1\n');
     expect(content2).toBe('content for file2\n');
+  });
+
+  it('rotates to new date directory when date changes', async () => {
+    const baseDir = makeTempDir();
+    const writer = new LogWriter(baseDir, 'test.log');
+
+    const date1 = '2024-01-15';
+    const date2 = '2024-01-16';
+
+    const spy = vi.spyOn(writer as unknown as { todayDateString(): string }, 'todayDateString');
+
+    spy.mockReturnValue(date1);
+    await writer.append('before midnight\n');
+
+    spy.mockReturnValue(date2);
+    await writer.append('after midnight\n');
+
+    await writer.flush();
+
+    const date1Dir = join(baseDir, 'logs', date1);
+    const date2Dir = join(baseDir, 'logs', date2);
+
+    expect(existsSync(date1Dir)).toBe(true);
+    expect(existsSync(date2Dir)).toBe(true);
+
+    const content1 = readFileSync(join(date1Dir, 'test.log'), 'utf8');
+    const content2 = readFileSync(join(date2Dir, 'test.log'), 'utf8');
+
+    expect(content1).toBe('before midnight\n');
+    expect(content2).toBe('after midnight\n');
+
+    spy.mockRestore();
   });
 });

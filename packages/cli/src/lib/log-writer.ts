@@ -9,6 +9,7 @@ export class LogWriter {
   private readonly errorRateLimitMs = 1000;
   private isClosing = false;
   private waitingForDrain = false;
+  private currentDate: string | null = null;
 
   constructor(
     private readonly baseDir: string,
@@ -89,10 +90,18 @@ export class LogWriter {
   }
 
   private async ensureStream(): Promise<void> {
+    const today = this.todayDateString();
+
+    if (this.stream && this.currentDate !== today && !this.isClosing) {
+      await this.flush();
+      this.stream = null;
+    }
+
     if (this.stream && !this.isClosing) {
       return;
     }
 
+    this.currentDate = today;
     const logPath = this.resolveLogPath();
     await this.ensureDirectory(logPath);
 
@@ -103,6 +112,8 @@ export class LogWriter {
 
     this.stream.on('error', (err: Error) => {
       this.handleError(err);
+      this.stream = null;
+      this.isClosing = true;
     });
 
     this.isClosing = false;
