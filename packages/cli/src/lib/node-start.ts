@@ -244,11 +244,11 @@ export async function runNodeStartCommand(
     removePidFile(config.dataDir);
   });
   processManager.on('stdout', (text) => {
-    appendToTodayLog(config.dataDir, 'fnn.stdout.log', text);
+    appendToTodayLog(config.dataDir, 'fnn.stdout.log', text).catch(() => {});
     emitFnnLog('stdout', text);
   });
   processManager.on('stderr', (text) => {
-    appendToTodayLog(config.dataDir, 'fnn.stderr.log', text);
+    appendToTodayLog(config.dataDir, 'fnn.stderr.log', text).catch(() => {});
     emitFnnLog('stderr', text);
   });
   await processManager.start();
@@ -512,15 +512,22 @@ export async function runNodeStartCommand(
     }
 
     // Flush pending log writes with 5-second timeout
+    let flushTimeout: ReturnType<typeof setTimeout> | undefined;
     try {
       await Promise.race([
         flushPendingLogs(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Flush timeout')), 5000)),
+        new Promise<never>((_, reject) => {
+          flushTimeout = setTimeout(() => reject(new Error('Flush timeout')), 5000);
+        }),
       ]);
     } catch (err) {
       // Log timeout but continue shutdown
       if (!json) {
         console.log('⚠️ Log flush timed out, continuing shutdown...');
+      }
+    } finally {
+      if (flushTimeout !== undefined) {
+        clearTimeout(flushTimeout);
       }
     }
 
