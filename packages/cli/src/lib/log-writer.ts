@@ -90,6 +90,8 @@ export class LogWriter {
   }
 
   private async ensureStream(): Promise<void> {
+    this.isClosing = false; // Reset to allow recovery after error/flush
+
     const today = this.todayDateString();
 
     if (this.stream && this.currentDate !== today && !this.isClosing) {
