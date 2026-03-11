@@ -386,27 +386,27 @@ Wave 2 (After Wave 1 — 并行添加引用):
 
 > 4 review agents run in PARALLEL. ALL must APPROVE. Rejection → fix → re-run.
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
   检查所有文档修改是否按计划完成：
   - 新文件是否包含所有规划章节
   - 所有引用链接是否正确
   - profile.md 是否协调一致
   - Evidence: `.sisyphus/evidence/final-verification.md`
 
-- [ ] F2. **Link Verification** — `quick`
+- [x] F2. **Link Verification** — `quick`
   验证所有链接可正常跳转：
   - 检查相对路径是否正确
   - 验证 markdown 链接语法
   - Evidence: `.sisyphus/evidence/link-check.md`
 
-- [ ] F3. **Content Quality Review** — `writing`
+- [x] F3. **Content Quality Review** — `writing`
   检查文档质量：
   - 语法和拼写检查
   - 格式一致性
   - 清晰度评估
   - Evidence: `.sisyphus/evidence/content-review.md`
 
-- [ ] F4. **Scope Fidelity Check** — `deep`
+- [x] F4. **Scope Fidelity Check** — `deep`
   检查是否有过度修改：
   - 验证 profile.md 现有内容未被删除
   - 验证 quickstart 步骤未被修改
