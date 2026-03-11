@@ -1,10 +1,11 @@
 import { scriptToAddress } from '@fiber-pay/sdk';
 import type { CliConfig } from './config.js';
-import { printJsonSuccess } from './format.js';
+import { printJsonSuccess, truncateMiddle } from './format.js';
 import { createReadyRpcClient } from './rpc.js';
 
 export interface WalletAddressOptions {
   json?: boolean;
+  qrcode?: boolean;
 }
 
 export async function runWalletAddressCommand(
@@ -21,6 +22,15 @@ export async function runWalletAddressCommand(
 
   if (options.json) {
     printJsonSuccess({ address });
+    return;
+  }
+
+  if (options.qrcode) {
+    const qrcode = await import('qrcode');
+    console.log('✅ Funding address retrieved\n');
+    const qrString = await qrcode.toString(address, { type: 'terminal', small: true });
+    console.log(qrString);
+    console.log(`  ${truncateMiddle(address, 8, 6)}`);
     return;
   }
 

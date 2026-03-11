@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import type { CliConfig } from '../lib/config.js';
 import { runWalletAddressCommand } from '../lib/wallet-address.js';
 import { runWalletBalanceCommand } from '../lib/wallet-balance.js';
@@ -9,7 +9,8 @@ export function createWalletCommand(config: CliConfig): Command {
   wallet
     .command('address')
     .description('Display the funding address')
-    .option('--json')
+    .addOption(new Option('--json', 'Output as JSON').conflicts('qrcode'))
+    .option('--qrcode', 'Display address as QR code in terminal')
     .action(async (options) => {
       await runWalletAddressCommand(config, options);
     });
