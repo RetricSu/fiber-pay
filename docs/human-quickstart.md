@@ -7,7 +7,7 @@ This guide is for human operators using `fiber-pay` manually (not through an AI 
 Prerequisite: Node.js `>=20`
 
 ```bash
-npm install -g @fiber-pay/cli@next
+npm install -g @fiber-pay/cli
 fiber-pay --version
 fiber-pay -h
 ```
