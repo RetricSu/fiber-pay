@@ -29,6 +29,8 @@ fiber-pay node ready --json
 fiber-pay runtime status --json
 ```
 
+> **Note**: For configuring the keystore password, please refer to the [Password Management Guide](../skills/fiber-pay/references/password-management.md).
+
 This initializes binary/config/key/runtime automatically for first-time local bootstrap.
 
 ## 3) Connect peer and open a channel
