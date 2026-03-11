@@ -61,8 +61,8 @@ Private keys are stored in specific locations within your data directory:
 
 ### CKB Key
 
-- CKB keys follow similar storage patterns
-- Encrypted using the same password mechanism
+- **Path**: `<data-dir>/ckb/key`
+- CKB keys follow similar storage patterns and are encrypted using the same password mechanism.
 
 ### File Permissions
 
@@ -141,13 +141,12 @@ Avoid storing passwords in version control or configuration files that might be 
 
 Use separate profiles for different environments:
 
-```bash
-# Production profile
-fiber-pay --profile prod config profile set keyPassword "$PROD_PASSWORD"
+# For a production profile, provide the password via an environment variable
+export FIBER_KEY_PASSWORD="$PROD_PASSWORD"
+fiber-pay --profile prod node start
 
-# Development profile (can use default or weak password)
+# For a development profile, you can use the default password
 fiber-pay --profile dev node start
-```
 
 ### 5. Key Backup
 
