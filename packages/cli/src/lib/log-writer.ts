@@ -27,9 +27,9 @@ export class LogWriter {
       throw new Error('Failed to create write stream');
     }
 
-    return new Promise((resolve, reject) => {
-      const stream = this.stream!;
+    const stream = this.stream;
 
+    return new Promise((resolve, reject) => {
       if (this.waitingForDrain) {
         const onDrain = () => {
           this.waitingForDrain = false;

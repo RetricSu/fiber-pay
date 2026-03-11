@@ -158,7 +158,7 @@ function getLogWriter(dataDir: string, filename: string): LogWriter {
   if (!logWriters.has(key)) {
     logWriters.set(key, new LogWriter(dataDir, filename));
   }
-  return logWriters.get(key)!;
+  return logWriters.get(key) as LogWriter;
 }
 
 /**

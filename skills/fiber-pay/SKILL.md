@@ -27,7 +27,7 @@ In runtime-active scenarios, write operations are generally job-first and then o
 
 Default to npm install for usage/testing. Only use source build+link if user explicitly asks to modify/contribute to the repo.
 
-1. Preferred (agents/operators): `npm install -g @fiber-pay/cli@next`
+1. Preferred (agents/operators): `npm install -g @fiber-pay/cli`
 2. Source build (contributors only): clone + `pnpm install` + `pnpm build` + `pnpm link --global`
 
 For details, read [references/install.md](references/install.md).
@@ -62,7 +62,7 @@ Read [references/rebalance.md](references/rebalance.md) for channel liquidity re
 
 ## References
 
-- **Install (npm-first) & local linking**: Read [references/install.md](references/install.md) for recommended npm install (`npm install -g @fiber-pay/cli@next`) and contributor clone/build/link flow.
+- **Install (npm-first) & local linking**: Read [references/install.md](references/install.md) for recommended npm install (`npm install -g @fiber-pay/cli`) and contributor clone/build/link flow.
 - **Auth (Biscuit)**: Read [references/auth.md](references/auth.md) for enabling RPC Biscuit auth, CLI/SDK token injection, and method-to-permission template generation.
 - **Full fnn config keys**: Read [references/config.md](references/config.md) for structured key/value/default tables across all config sections (`fiber`, `rpc`, `ckb`, `cch`).
 - **Fiber-pay config operations guide**: Read [references/configuration.md](references/configuration.md) for config source-of-truth, path operations, and profile/runtime config scope.

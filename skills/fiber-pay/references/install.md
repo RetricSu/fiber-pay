@@ -13,7 +13,7 @@ If the task is operating/testing `fiber-pay` CLI, install from npm first. Do not
 ## Install from npm
 
 ```bash
-npm install -g @fiber-pay/cli@next
+npm install -g @fiber-pay/cli
 ```
 
 ## Install from source
