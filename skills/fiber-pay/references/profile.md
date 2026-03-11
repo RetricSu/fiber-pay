@@ -29,7 +29,7 @@ Three CLI-level keys:
 | Key | Description |
 |-----|-------------|
 | `binaryPath` | Path to fnn binary (overrides default `<data-dir>/bin/fnn`) |
-| `keyPassword` | Keystore encryption password |
+| `keyPassword` | Keystore encryption password — [see password-management.md](password-management.md) for details |
 | `runtimeProxyListen` | Runtime proxy `host:port` (overrides default `127.0.0.1:8229`) |
 
 Manage with:
@@ -51,6 +51,8 @@ fiber-pay config profile unset <key>
 | `network` | CLI flag → env `FIBER_NETWORK` → config.yml → default `testnet` |
 | `rpcUrl` | CLI flag → env `FIBER_RPC_URL` → config.yml → default `127.0.0.1:8227` |
 | `dataDir` | CLI flag → env `FIBER_DATA_DIR` → default `~/.fiber-pay` |
+
+关于密码配置的详细信息，请参考 [密码管理指南](password-management.md)。
 
 ## Default (no profile)
 

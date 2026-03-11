@@ -29,6 +29,8 @@ fiber-pay node ready --json
 fiber-pay runtime status --json
 ```
 
+> **Note**: 如需配置密钥密码，请参考 [密码管理指南](../skills/fiber-pay/references/password-management.md)。
+
 This initializes binary/config/key/runtime automatically for first-time local bootstrap.
 
 ## 3) Connect peer and open a channel

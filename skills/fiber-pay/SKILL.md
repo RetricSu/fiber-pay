@@ -72,3 +72,4 @@ Read [references/rebalance.md](references/rebalance.md) for channel liquidity re
 - **Upgrade & migration**: Read [references/upgrade.md](references/upgrade.md) for upgrading the Fiber node binary and migrating the database between versions (`node upgrade`, migration check, backup/rollback, breaking change handling).
 - **Output contracts**: Read [references/contracts.md](references/contracts.md) for JSON envelope, NDJSON stream events, and timeout semantics.
 - **Runtime API**: Read [references/runtime-api.md](references/runtime-api.md) for `/jobs/*` and `/monitor/*` endpoints and state model.
+- **Password Management**: Read [references/password-management.md](references/password-management.md) for keystore encryption, password configuration, and security best practices.

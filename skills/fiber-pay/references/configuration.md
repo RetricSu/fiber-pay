@@ -40,6 +40,8 @@ Compatibility alias:
 - `keyPassword`
 - `runtimeProxyListen`
 
+See [password-management.md](password-management.md) for detailed keystore password configuration.
+
 Runtime node settings (`fiber.*`, `rpc.*`, `ckb.*`) belong in `config.yml`.
 
 ## FNN binary/runtime notes (from reference config)

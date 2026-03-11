@@ -193,7 +193,7 @@ Wave 2 (After Wave 1 — 并行添加引用):
 
 ---
 
-- [ ] 2. 在 human-quickstart.md 中添加密码文档引用
+- [x] 2. 在 human-quickstart.md 中添加密码文档引用
 
   **What to do**:
   在 `docs/human-quickstart.md` 的启动节点步骤后添加引用：
@@ -241,7 +241,7 @@ Wave 2 (After Wave 1 — 并行添加引用):
 
 ---
 
-- [ ] 3. 在 profile.md 中添加密码文档引用
+- [x] 3. 在 profile.md 中添加密码文档引用
 
   **What to do**:
   在 `skills/fiber-pay/references/profile.md` 的 keyPassword 说明后添加引用：
@@ -292,7 +292,7 @@ Wave 2 (After Wave 1 — 并行添加引用):
 
 ---
 
-- [ ] 4. 在 configuration.md 中添加密码文档引用
+- [x] 4. 在 configuration.md 中添加密码文档引用
 
   **What to do**:
   在 `skills/fiber-pay/references/configuration.md` 的 profile.json scope 部分添加引用：
@@ -335,7 +335,7 @@ Wave 2 (After Wave 1 — 并行添加引用):
 
 ---
 
-- [ ] 5. 在 SKILL.md 中添加 References 条目
+- [x] 5. 在 SKILL.md 中添加 References 条目
 
   **What to do**:
   在 `skills/fiber-pay/SKILL.md` 的 References 部分添加新条目：
