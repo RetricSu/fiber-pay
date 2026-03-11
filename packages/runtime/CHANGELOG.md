@@ -1,5 +1,25 @@
 # @fiber-pay/runtime
 
+## 0.1.0
+
+### Patch Changes
+
+- 3a7ea1b: Fix synchronous file I/O blocking in FNN log handling
+
+  - Replace `appendFileSync` with async `WriteStream`-based `LogWriter` class
+  - Add `flushPendingLogs()` for graceful shutdown coordination
+  - Convert runtime alert file backends to async I/O
+  - Improves performance under high-volume log output
+  - Prevents event loop blocking that could stall FNN process
+
+  Fixes #73
+
+- Updated dependencies [cfcfcea]
+- Updated dependencies [d0451e9]
+- Updated dependencies [4c1c414]
+- Updated dependencies [4438b9a]
+  - @fiber-pay/sdk@0.1.0
+
 ## 0.1.0-rc.7
 
 ### Patch Changes

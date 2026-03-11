@@ -1,5 +1,42 @@
 # @fiber-pay/cli
 
+## 0.1.0
+
+### Patch Changes
+
+- 0f8cac4: Add `--qrcode` flag to `wallet address` command.
+
+  - Add `--qrcode` option to display the funding address as a QR code in the terminal
+  - Show truncated address (e.g., `ckt1qzda...9z7s0v0t`) below the QR code for reference
+  - Add `qrcode` library as a dependency
+
+- 3a7ea1b: Fix synchronous file I/O blocking in FNN log handling
+
+  - Replace `appendFileSync` with async `WriteStream`-based `LogWriter` class
+  - Add `flushPendingLogs()` for graceful shutdown coordination
+  - Convert runtime alert file backends to async I/O
+  - Improves performance under high-volume log output
+  - Prevents event loop blocking that could stall FNN process
+
+  Fixes #73
+
+- Updated dependencies [bd992dd]
+- Updated dependencies [cabeae2]
+- Updated dependencies [3a7ea1b]
+- Updated dependencies [eea4e63]
+- Updated dependencies [cfcfcea]
+- Updated dependencies [d4b2112]
+- Updated dependencies [077ec13]
+- Updated dependencies [d0451e9]
+- Updated dependencies [4c1c414]
+- Updated dependencies [2e051f6]
+- Updated dependencies [374a7e6]
+- Updated dependencies [4438b9a]
+- Updated dependencies [5be36b4]
+  - @fiber-pay/runtime@0.1.0
+  - @fiber-pay/node@0.1.0
+  - @fiber-pay/sdk@0.1.0
+
 ## 0.1.0-rc.7
 
 ### Patch Changes
