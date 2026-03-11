@@ -37,6 +37,10 @@
     "@fiber-pay/runtime": "workspace:*",
     "@fiber-pay/sdk": "workspace:*",
     "commander": "^13.1.0",
+    "qrcode": "^1.5.4",
     "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6"
   }
 }

@@ -10,6 +10,7 @@ export function createWalletCommand(config: CliConfig): Command {
     .command('address')
     .description('Display the funding address')
     .option('--json')
+    .option('--qrcode', 'Display address as QR code in terminal')
     .action(async (options) => {
       await runWalletAddressCommand(config, options);
     });
