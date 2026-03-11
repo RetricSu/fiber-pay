@@ -1,8 +1,8 @@
 # @fiber-pay/cli
 
-## 1.0.0
+## 0.1.0
 
-### Major Changes
+### Minor Changes
 
 - 9855bf3: Remove `fiber-pay node info` and standardize on `fiber-pay node status`.
 
@@ -10,8 +10,6 @@
   - merge node identity/details fields into `node status` output (human + `--json`)
   - keep `node ready` focused on automation-readiness summary
   - update docs/examples to use `node status` for node diagnostics and identity checks
-
-### Minor Changes
 
 - 4c1c414: Add Biscuit auth support for CLI RPC calls and introduce SDK Biscuit policy helpers.
 
@@ -113,9 +111,9 @@
 - Updated dependencies [374a7e6]
 - Updated dependencies [4438b9a]
 - Updated dependencies [5be36b4]
-  - @fiber-pay/runtime@1.0.0
-  - @fiber-pay/node@1.0.0
-  - @fiber-pay/sdk@1.0.0
+  - @fiber-pay/runtime@0.1.0
+  - @fiber-pay/node@0.1.0
+  - @fiber-pay/sdk@0.1.0
 
 ## 0.1.0-rc.7
 
