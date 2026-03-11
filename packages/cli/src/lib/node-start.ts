@@ -520,7 +520,7 @@ export async function runNodeStartCommand(
           flushTimeout = setTimeout(() => reject(new Error('Flush timeout')), 5000);
         }),
       ]);
-    } catch (err) {
+    } catch (_err) {
       // Log timeout but continue shutdown
       if (!json) {
         console.log('⚠️ Log flush timed out, continuing shutdown...');
