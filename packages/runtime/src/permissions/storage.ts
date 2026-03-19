@@ -81,16 +81,18 @@ export class PermissionStorage {
       revocation_id: fullGrant.revocation_id ?? null,
       scopes: JSON.stringify(fullGrant.scopes),
       daily_payment_limit:
-        fullGrant.daily_payment_limit !== undefined ? Number(fullGrant.daily_payment_limit) : null,
+        fullGrant.daily_payment_limit !== undefined
+          ? fullGrant.daily_payment_limit.toString()
+          : null,
       per_payment_limit:
-        fullGrant.per_payment_limit !== undefined ? Number(fullGrant.per_payment_limit) : null,
+        fullGrant.per_payment_limit !== undefined ? fullGrant.per_payment_limit.toString() : null,
       daily_count_limit: fullGrant.daily_count_limit ?? null,
       hourly_count_limit: fullGrant.hourly_count_limit ?? null,
       min_interval_seconds: fullGrant.min_interval_seconds ?? null,
       channel_opening_allowed: fullGrant.channel_opening_allowed ? 1 : 0,
       channel_funding_limit:
         fullGrant.channel_funding_limit !== undefined
-          ? Number(fullGrant.channel_funding_limit)
+          ? fullGrant.channel_funding_limit.toString()
           : null,
       can_close_channels: fullGrant.can_close_channels ? 1 : 0,
       can_force_close: fullGrant.can_force_close ? 1 : 0,
@@ -100,7 +102,7 @@ export class PermissionStorage {
         ? JSON.stringify(fullGrant.time_window_days)
         : null,
       total_payments_made: fullGrant.total_payments_made ?? 0,
-      total_amount_paid: Number(fullGrant.total_amount_paid ?? 0n),
+      total_amount_paid: (fullGrant.total_amount_paid ?? 0n).toString(),
       last_used_at: fullGrant.last_used_at?.getTime() ?? null,
       status: fullGrant.status,
     });
@@ -215,22 +217,22 @@ export class PermissionStorage {
       revocation_id: merged.revocation_id ?? null,
       scopes: JSON.stringify(merged.scopes),
       daily_payment_limit:
-        merged.daily_payment_limit !== undefined ? Number(merged.daily_payment_limit) : null,
+        merged.daily_payment_limit !== undefined ? merged.daily_payment_limit.toString() : null,
       per_payment_limit:
-        merged.per_payment_limit !== undefined ? Number(merged.per_payment_limit) : null,
+        merged.per_payment_limit !== undefined ? merged.per_payment_limit.toString() : null,
       daily_count_limit: merged.daily_count_limit ?? null,
       hourly_count_limit: merged.hourly_count_limit ?? null,
       min_interval_seconds: merged.min_interval_seconds ?? null,
       channel_opening_allowed: merged.channel_opening_allowed ? 1 : 0,
       channel_funding_limit:
-        merged.channel_funding_limit !== undefined ? Number(merged.channel_funding_limit) : null,
+        merged.channel_funding_limit !== undefined ? merged.channel_funding_limit.toString() : null,
       can_close_channels: merged.can_close_channels ? 1 : 0,
       can_force_close: merged.can_force_close ? 1 : 0,
       time_window_start: merged.time_window_start ?? null,
       time_window_end: merged.time_window_end ?? null,
       time_window_days: merged.time_window_days ? JSON.stringify(merged.time_window_days) : null,
       total_payments_made: merged.total_payments_made ?? 0,
-      total_amount_paid: Number(merged.total_amount_paid ?? 0n),
+      total_amount_paid: (merged.total_amount_paid ?? 0n).toString(),
       last_used_at: merged.last_used_at?.getTime() ?? null,
       status: merged.status,
     });
@@ -291,7 +293,7 @@ export class PermissionStorage {
         .run({
           grant_id: grantId,
           date: dateStr,
-          amount: Number(amount),
+          amount: amount.toString(),
         });
 
       // Update or insert hourly usage
@@ -318,7 +320,7 @@ export class PermissionStorage {
         `)
         .run({
           id: grantId,
-          amount: Number(amount),
+          amount: amount.toString(),
           last_used_at: now.getTime(),
         });
     })();

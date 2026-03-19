@@ -198,20 +198,20 @@ export interface PermissionGrantRow {
   revoked_at: number | null;
   revocation_id: string | null;
   scopes: string;
-  daily_payment_limit: number | null;
-  per_payment_limit: number | null;
+  daily_payment_limit: string | null;
+  per_payment_limit: string | null;
   daily_count_limit: number | null;
   hourly_count_limit: number | null;
   min_interval_seconds: number | null;
   channel_opening_allowed: number;
-  channel_funding_limit: number | null;
+  channel_funding_limit: string | null;
   can_close_channels: number;
   can_force_close: number;
   time_window_start: string | null;
   time_window_end: string | null;
   time_window_days: string | null;
   total_payments_made: number;
-  total_amount_paid: number;
+  total_amount_paid: string;
   last_used_at: number | null;
   status: string;
 }

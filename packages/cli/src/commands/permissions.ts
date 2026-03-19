@@ -33,21 +33,20 @@ export function createPermissionsCommand(config: CliConfig): Command {
       const asJson = Boolean(options.json);
       const reason = options.reason;
 
+      const dbPath = resolve(config.dataDir, 'permissions.db');
+      const nodeId = 'cli-node';
+
+      const manager = new PermissionManager({
+        dbPath,
+        nodeId,
+        keyPair: {
+          privateKey: new Uint8Array(32),
+          publicKey: new Uint8Array(32),
+        },
+      });
+
       try {
-        const dbPath = resolve(config.dataDir, 'permissions.db');
-        const nodeId = 'cli-node';
-
-        const manager = new PermissionManager({
-          dbPath,
-          nodeId,
-          keyPair: {
-            privateKey: new Uint8Array(32),
-            publicKey: new Uint8Array(32),
-          },
-        });
-
         await manager.reject(grantId, reason);
-        manager.close();
 
         if (asJson) {
           printJsonSuccess({
@@ -71,6 +70,8 @@ export function createPermissionsCommand(config: CliConfig): Command {
           console.error(`Error: ${message}`);
         }
         process.exit(1);
+      } finally {
+        manager.close();
       }
     });
 
@@ -294,49 +295,51 @@ export function createPermissionsCommand(config: CliConfig): Command {
             },
           });
 
-          // Approve the permission request
-          const approvedGrant = await manager.approve(requestId, grantLimits);
+          try {
+            // Approve the permission request
+            const approvedGrant = await manager.approve(requestId, grantLimits);
 
-          // Extract the token from the grant
-          const token = new TextDecoder().decode(approvedGrant.token_ciphertext);
+            // Extract the token from the grant
+            const token = new TextDecoder().decode(approvedGrant.token_ciphertext);
 
-          if (asJson) {
-            printJsonSuccess({
-              grantId: approvedGrant.id,
-              appId: approvedGrant.app_id,
-              appName: approvedGrant.app_name,
-              status: approvedGrant.status,
-              expiresAt: approvedGrant.expires_at?.toISOString(),
-              dailyPaymentLimit: approvedGrant.daily_payment_limit?.toString(),
-              perPaymentLimit: approvedGrant.per_payment_limit?.toString(),
-              channelOpeningAllowed: approvedGrant.channel_opening_allowed,
-              token: token,
-            });
-          } else {
-            console.log('\n✅ Permission request approved!\n');
-            console.log('📋 Grant Details:');
-            console.log(`   Grant ID:             ${approvedGrant.id}`);
-            console.log(`   App ID:               ${approvedGrant.app_id}`);
-            console.log(`   App Name:             ${approvedGrant.app_name}`);
-            console.log(`   Status:               ${approvedGrant.status}`);
-            if (approvedGrant.expires_at) {
-              console.log(`   Expires At:           ${approvedGrant.expires_at.toISOString()}`);
+            if (asJson) {
+              printJsonSuccess({
+                grantId: approvedGrant.id,
+                appId: approvedGrant.app_id,
+                appName: approvedGrant.app_name,
+                status: approvedGrant.status,
+                expiresAt: approvedGrant.expires_at?.toISOString(),
+                dailyPaymentLimit: approvedGrant.daily_payment_limit?.toString(),
+                perPaymentLimit: approvedGrant.per_payment_limit?.toString(),
+                channelOpeningAllowed: approvedGrant.channel_opening_allowed,
+                token: token,
+              });
+            } else {
+              console.log('\n✅ Permission request approved!\n');
+              console.log('📋 Grant Details:');
+              console.log(`   Grant ID:             ${approvedGrant.id}`);
+              console.log(`   App ID:               ${approvedGrant.app_id}`);
+              console.log(`   App Name:             ${approvedGrant.app_name}`);
+              console.log(`   Status:               ${approvedGrant.status}`);
+              if (approvedGrant.expires_at) {
+                console.log(`   Expires At:           ${approvedGrant.expires_at.toISOString()}`);
+              }
+              console.log(
+                `   Daily Limit:          ${approvedGrant.daily_payment_limit?.toString() || 'Not set'}`,
+              );
+              console.log(
+                `   Per-Payment Limit:    ${approvedGrant.per_payment_limit?.toString() || 'Not set'}`,
+              );
+              console.log(
+                `   Channel Opening:      ${approvedGrant.channel_opening_allowed ? 'Allowed' : 'Not allowed'}`,
+              );
+              console.log('\n🔑 Generated Token:');
+              console.log(`   ${token}`);
+              console.log('\n⚠️  Store this token securely. It will not be shown again.\n');
             }
-            console.log(
-              `   Daily Limit:          ${approvedGrant.daily_payment_limit?.toString() || 'Not set'}`,
-            );
-            console.log(
-              `   Per-Payment Limit:    ${approvedGrant.per_payment_limit?.toString() || 'Not set'}`,
-            );
-            console.log(
-              `   Channel Opening:      ${approvedGrant.channel_opening_allowed ? 'Allowed' : 'Not allowed'}`,
-            );
-            console.log('\n🔑 Generated Token:');
-            console.log(`   ${token}`);
-            console.log('\n⚠️  Store this token securely. It will not be shown again.\n');
+          } finally {
+            manager.close();
           }
-
-          manager.close();
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
 
@@ -364,11 +367,13 @@ export function createPermissionsCommand(config: CliConfig): Command {
     .action(async (grantId: string, options: { json?: boolean }) => {
       const asJson = Boolean(options.json);
 
+      let manager: PermissionManager | undefined;
+
       try {
         const dbPath = resolve(config.dataDir, 'permissions.db');
         const nodeId = 'cli-node';
 
-        const manager = new PermissionManager({
+        manager = new PermissionManager({
           dbPath,
           nodeId,
           keyPair: {
@@ -377,87 +382,91 @@ export function createPermissionsCommand(config: CliConfig): Command {
           },
         });
 
-        const grant = await manager.getGrant(grantId);
-        if (!grant) {
-          throw new Error(`Grant not found: ${grantId}`);
-        }
-
-        const limitTracker = manager.getLimitTracker();
-        const today = new Date();
-        const _dateStr = formatDate(today);
-        const dailyUsage = limitTracker.checkDailyLimit(grant, 0n);
-        const dailyCount = limitTracker.checkDailyCount(grant);
-
-        manager.close();
-
-        if (asJson) {
-          printJsonSuccess({
-            grantId: grant.id,
-            appId: grant.app_id,
-            appName: grant.app_name,
-            status: grant.status,
-            dailyLimit: grant.daily_payment_limit?.toString() ?? null,
-            dailyUsed:
-              grant.daily_payment_limit && dailyUsage.remaining !== undefined
-                ? (grant.daily_payment_limit - dailyUsage.remaining).toString()
-                : '0',
-            dailyRemaining: dailyUsage.remaining?.toString() ?? null,
-            dailyCountLimit: grant.daily_count_limit ?? null,
-            dailyCountUsed: dailyCount.count,
-            totalPayments: grant.total_payments_made,
-            totalAmountPaid: grant.total_amount_paid.toString(),
-            expiresAt: grant.expires_at?.toISOString() ?? null,
-          });
-        } else {
-          console.log(`Usage Statistics for Grant ${truncateMiddle(grantId, 8, 8)}`);
-          console.log('');
-          console.log(`  App:        ${grant.app_name ?? grant.app_id}`);
-          console.log(`  Status:     ${grant.status}`);
-          console.log('');
-          console.log('  Daily Payment Limit:');
-          if (grant.daily_payment_limit) {
-            const used = grant.daily_payment_limit - (dailyUsage.remaining ?? 0n);
-            const usedBigInt = BigInt(used.toString());
-            const percentage = Number((usedBigInt * 100n) / grant.daily_payment_limit);
-            console.log(`    Limit:  ${formatShannonsAsCkb(grant.daily_payment_limit)} CKB`);
-            console.log(`    Used:   ${formatShannonsAsCkb(usedBigInt)} CKB`);
-            console.log(`    Remain: ${formatShannonsAsCkb(dailyUsage.remaining ?? 0n)} CKB`);
-            console.log(`    ${renderProgressBar(percentage)} ${percentage}%`);
-          } else {
-            console.log('    No daily limit set');
+        try {
+          const grant = await manager.getGrant(grantId);
+          if (!grant) {
+            throw new Error(`Grant not found: ${grantId}`);
           }
-          console.log('');
-          console.log('  Daily Count Limit:');
-          if (grant.daily_count_limit) {
-            const countPercentage = Math.round((dailyCount.count / grant.daily_count_limit) * 100);
-            console.log(`    Limit:  ${grant.daily_count_limit} payments`);
-            console.log(`    Used:   ${dailyCount.count} payments`);
-            console.log(`    Remain: ${grant.daily_count_limit - dailyCount.count} payments`);
-            console.log(`    ${renderProgressBar(countPercentage)} ${countPercentage}%`);
+
+          const limitTracker = manager.getLimitTracker();
+          const today = new Date();
+          const _dateStr = formatDate(today);
+          const dailyUsage = limitTracker.checkDailyLimit(grant, 0n);
+          const dailyCount = limitTracker.checkDailyCount(grant);
+
+          if (asJson) {
+            printJsonSuccess({
+              grantId: grant.id,
+              appId: grant.app_id,
+              appName: grant.app_name,
+              status: grant.status,
+              dailyLimit: grant.daily_payment_limit?.toString() ?? null,
+              dailyUsed:
+                grant.daily_payment_limit && dailyUsage.remaining !== undefined
+                  ? (grant.daily_payment_limit - dailyUsage.remaining).toString()
+                  : '0',
+              dailyRemaining: dailyUsage.remaining?.toString() ?? null,
+              dailyCountLimit: grant.daily_count_limit ?? null,
+              dailyCountUsed: dailyCount.count,
+              totalPayments: grant.total_payments_made,
+              totalAmountPaid: grant.total_amount_paid.toString(),
+              expiresAt: grant.expires_at?.toISOString() ?? null,
+            });
           } else {
-            console.log('    No daily count limit set');
-          }
-          console.log('');
-          console.log('  Totals:');
-          console.log(`    Payments: ${grant.total_payments_made}`);
-          console.log(`    Amount:   ${formatShannonsAsCkb(grant.total_amount_paid)} CKB`);
-          console.log('');
-          console.log('  Expiration:');
-          if (grant.expires_at) {
-            const now = new Date();
-            const exp = grant.expires_at;
-            const diff = exp.getTime() - now.getTime();
-            if (diff > 0) {
-              const days = Math.floor(diff / (24 * 60 * 60 * 1000));
-              const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-              console.log(`    Expires: ${exp.toISOString()}`);
-              console.log(`    In:      ${days}d ${hours}h`);
+            console.log(`Usage Statistics for Grant ${truncateMiddle(grantId, 8, 8)}`);
+            console.log('');
+            console.log(`  App:        ${grant.app_name ?? grant.app_id}`);
+            console.log(`  Status:     ${grant.status}`);
+            console.log('');
+            console.log('  Daily Payment Limit:');
+            if (grant.daily_payment_limit) {
+              const used = grant.daily_payment_limit - (dailyUsage.remaining ?? 0n);
+              const usedBigInt = BigInt(used.toString());
+              const percentage = Number((usedBigInt * 100n) / grant.daily_payment_limit);
+              console.log(`    Limit:  ${formatShannonsAsCkb(grant.daily_payment_limit)} CKB`);
+              console.log(`    Used:   ${formatShannonsAsCkb(usedBigInt)} CKB`);
+              console.log(`    Remain: ${formatShannonsAsCkb(dailyUsage.remaining ?? 0n)} CKB`);
+              console.log(`    ${renderProgressBar(percentage)} ${percentage}%`);
             } else {
-              console.log('    Expired');
+              console.log('    No daily limit set');
             }
-          } else {
-            console.log('    No expiration');
+            console.log('');
+            console.log('  Daily Count Limit:');
+            if (grant.daily_count_limit) {
+              const countPercentage = Math.round(
+                (dailyCount.count / grant.daily_count_limit) * 100,
+              );
+              console.log(`    Limit:  ${grant.daily_count_limit} payments`);
+              console.log(`    Used:   ${dailyCount.count} payments`);
+              console.log(`    Remain: ${grant.daily_count_limit - dailyCount.count} payments`);
+              console.log(`    ${renderProgressBar(countPercentage)} ${countPercentage}%`);
+            } else {
+              console.log('    No daily count limit set');
+            }
+            console.log('');
+            console.log('  Totals:');
+            console.log(`    Payments: ${grant.total_payments_made}`);
+            console.log(`    Amount:   ${formatShannonsAsCkb(grant.total_amount_paid)} CKB`);
+            console.log('');
+            console.log('  Expiration:');
+            if (grant.expires_at) {
+              const now = new Date();
+              const exp = grant.expires_at;
+              const diff = exp.getTime() - now.getTime();
+              if (diff > 0) {
+                const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+                const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+                console.log(`    Expires: ${exp.toISOString()}`);
+                console.log(`    In:      ${days}d ${hours}h`);
+              } else {
+                console.log('    Expired');
+              }
+            } else {
+              console.log('    No expiration');
+            }
           }
+        } finally {
+          manager.close();
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
