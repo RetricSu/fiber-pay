@@ -11,6 +11,28 @@ export { scriptToAddress } from './address.js';
 export type { LiquidityReport } from './funds/liquidity-analyzer.js';
 // Funds management
 export { LiquidityAnalyzer } from './funds/liquidity-analyzer.js';
+export type {
+  ChallengeStore,
+  L402Challenge,
+  L402Config,
+  L402Invoice,
+  L402MiddlewareConfig,
+  L402Request,
+  L402Token,
+  MacaroonCaveat,
+  MintParams,
+  ProtectedResourceInfo,
+  ResourceResolver,
+  ResourceResolverRegistry,
+  VerifyResult,
+} from './l402/index.js';
+// L402 protocol
+export {
+  createL402Middleware,
+  DefaultResourceResolverRegistry,
+  L402Middleware,
+  MacaroonService,
+} from './l402/index.js';
 // RPC client
 export { FiberRpcClient, FiberRpcError } from './rpc/index.js';
 export type {
