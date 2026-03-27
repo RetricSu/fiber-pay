@@ -48,7 +48,17 @@ console.log(facts);
 This helper aligns with upstream Fiber Biscuit permission mapping (method -> read/write resource),
 and can be used to prepare `permissions.bc` inputs before signing tokens.
 
+## L402 Protocol
+
+The SDK includes L402 payment-gating primitives for Express APIs:
+
+- `MacaroonService` — mint and verify L402 tokens
+- `createL402Middleware()` — Express middleware for 402 challenge-response flow
+
+See [docs/l402-agent-guide.md](../../docs/l402-agent-guide.md) for usage.
+
 ## Compatibility
 
 - Node.js `>=20`
 - Fiber target: `v0.7.1`
+

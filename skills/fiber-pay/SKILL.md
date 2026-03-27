@@ -17,7 +17,7 @@ fiber-pay primarily controls the local `fnn` binary and interacts through RPC; m
 
 Think in layers:
 
-1. **Atomic command layer**: grouped commands (`node/channel/invoice/payment/job/...`) provide user/operator entry points.
+1. **Atomic command layer**: grouped commands (`node/channel/invoice/payment/job/peer/binary/config/graph/runtime/l402/agent`) provide user/operator entry points.
 2. **Runtime orchestration layer**: job lifecycle, retries, event history, and monitoring.
 3. **Runtime proxy API layer**: HTTP API used by runtime-backed command paths.
 
@@ -73,3 +73,4 @@ Read [references/rebalance.md](references/rebalance.md) for channel liquidity re
 - **Output contracts**: Read [references/contracts.md](references/contracts.md) for JSON envelope, NDJSON stream events, and timeout semantics.
 - **Runtime API**: Read [references/runtime-api.md](references/runtime-api.md) for `/jobs/*` and `/monitor/*` endpoints and state model.
 - **Password Management**: Read [references/password-management.md](references/password-management.md) for keystore encryption, password configuration, and security best practices.
+- **L402 & Agent Service**: Read [references/l402-agent.md](references/l402-agent.md) for L402 payment-gated APIs, `l402 proxy`, `agent serve`, and `agent call` commands.
