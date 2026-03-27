@@ -58,9 +58,9 @@ export class L402Middleware {
     } = {},
   ) {
     this.config = {
-      rootKey: config.rootKey || process.env.L402_ROOT_KEY || 'default-key',
+      rootKey: config.rootKey || process.env.L402_ROOT_KEY,
       expirySeconds: config.expirySeconds || 3600,
-      priceCkb: config.priceCkb || 100,
+      priceCkb: config.priceCkb || 0.1,
       rateLimitWindowMs: config.rateLimitWindowMs || 60000,
       rateLimitMaxRequests: config.rateLimitMaxRequests || 100,
     };

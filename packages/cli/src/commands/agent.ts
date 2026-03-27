@@ -9,7 +9,7 @@ export function createAgentCommand(config: CliConfig): Command {
   agent
     .command('serve')
     .description('Start an L402-gated AI agent HTTP service')
-    .requiredOption('--agent <name>', 'Agent to use (codex|claude|opencode|gemini|pi|...)')
+    .requiredOption('--agent <name>', 'Agent to use (see acpx documentation for supported agents)')
     .option('--port <port>', 'Listen port', '8402')
     .option('--host <host>', 'Listen host', '127.0.0.1')
     .option('--price <ckb>', 'Price per request in CKB', '0.1')

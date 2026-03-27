@@ -91,7 +91,7 @@ fiber-pay agent serve \
   --approve-all
 ```
 
-This starts an HTTP server on `:8402` with:
+This starts an HTTP server on the default port `:8402` (configurable via `--port`) with:
 - `POST /` — accepts `{"prompt": "..."}`, invokes `acpx <agent> exec` and returns the response
 - L402 payment gate — every request requires payment before the agent runs
 

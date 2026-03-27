@@ -36,8 +36,8 @@ export interface L402Challenge {
 // ─── L402 Config ───────────────────────────────────────────
 /** Core L402 configuration. */
 export interface L402Config {
-  /** Hex string for macaroon signing (32 bytes / 64 hex chars). */
-  rootKey: string;
+  /** Hex string for macaroon signing (32 bytes / 64 hex chars). Falls back to L402_ROOT_KEY env or a secure random key. */
+  rootKey?: string;
   /** Default expiry for macaroon + invoice in seconds. Default: 3600. */
   expirySeconds: number;
   /** Default price in CKB. */
