@@ -6,7 +6,7 @@
  * Node.js built-in `crypto` for SHA-256 hashing.
  */
 
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import * as macaroon from 'macaroon';
 
 // ─── Types ─────────────────────────────────────────────────
