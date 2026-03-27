@@ -1,0 +1,39 @@
+import { Command } from 'commander';
+import { runAgentCallCommand } from '../lib/agent-call.js';
+import { runAgentServeCommand } from '../lib/agent-serve.js';
+import type { CliConfig } from '../lib/config.js';
+
+export function createAgentCommand(config: CliConfig): Command {
+  const agent = new Command('agent').description('AI agent service with L402 payment');
+
+  agent
+    .command('serve')
+    .description('Start an L402-gated AI agent HTTP service')
+    .requiredOption('--agent <name>', 'Agent to use (codex|claude|opencode|gemini|pi|...)')
+    .option('--port <port>', 'Listen port', '8402')
+    .option('--host <host>', 'Listen host', '127.0.0.1')
+    .option('--price <ckb>', 'Price per request in CKB', '0.1')
+    .option('--root-key <hex>', 'Macaroon root key (32-byte hex, or set L402_ROOT_KEY env)')
+    .option('--expiry <seconds>', 'Token expiry in seconds', '3600')
+    .option('--cwd <path>', 'Working directory for agent execution')
+    .option('--approve-all', 'Auto-approve all agent tool calls')
+    .option('--timeout <seconds>', 'Max agent execution time per request', '300')
+    .option('--json')
+    .action(async (options) => {
+      await runAgentServeCommand(config, options);
+    });
+
+  agent
+    .command('call')
+    .description('Call a remote L402-gated agent service (auto-pay via Fiber)')
+    .argument('<url>', 'Agent service URL (e.g. http://host:8402)')
+    .option('--prompt <text>', 'Prompt text to send')
+    .option('--file <path>', 'Read prompt from file')
+    .option('--timeout <seconds>', 'Request timeout in seconds', '300')
+    .option('--json')
+    .action(async (url, options) => {
+      await runAgentCallCommand(config, url, options);
+    });
+
+  return agent;
+}

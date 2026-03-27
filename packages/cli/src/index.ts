@@ -1,11 +1,13 @@
 import { join } from 'node:path';
 import { Command } from 'commander';
+import { createAgentCommand } from './commands/agent.js';
 import { createBinaryCommand } from './commands/binary.js';
 import { createChannelCommand } from './commands/channel.js';
 import { createConfigCommand } from './commands/config.js';
 import { createGraphCommand } from './commands/graph.js';
 import { createInvoiceCommand } from './commands/invoice.js';
 import { createJobCommand } from './commands/job.js';
+import { createL402Command } from './commands/l402.js';
 import { createLogsCommand } from './commands/logs.js';
 import { createNodeCommand } from './commands/node.js';
 import { createPaymentCommand } from './commands/payment.js';
@@ -175,6 +177,7 @@ async function main(): Promise<void> {
   });
 
   program.addCommand(createNodeCommand(config));
+  program.addCommand(createAgentCommand(config));
   program.addCommand(createChannelCommand(config));
   program.addCommand(createInvoiceCommand(config));
   program.addCommand(createPaymentCommand(config));
@@ -184,6 +187,7 @@ async function main(): Promise<void> {
   program.addCommand(createGraphCommand(config));
   program.addCommand(createBinaryCommand(config));
   program.addCommand(createConfigCommand(config));
+  program.addCommand(createL402Command(config));
   program.addCommand(createRuntimeCommand(config));
   program.addCommand(createVersionCommand());
   program.addCommand(createWalletCommand(config));
