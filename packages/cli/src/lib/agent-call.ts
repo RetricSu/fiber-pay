@@ -19,6 +19,36 @@ export interface AgentCallOptions {
   json?: boolean;
 }
 
+function formatDuration(durationMs: unknown): string {
+  if (typeof durationMs !== 'number' || Number.isNaN(durationMs)) {
+    return 'unknown';
+  }
+  return `${durationMs}ms`;
+}
+
+function printFriendlySuccess(
+  result: Record<string, unknown>,
+  options: { paymentRequired: boolean; paymentHash?: string },
+): void {
+  const agent = typeof result.agent === 'string' ? result.agent : 'unknown';
+  const duration = formatDuration(result.durationMs);
+  const response =
+    typeof result.response === 'string'
+      ? result.response
+      : JSON.stringify(result.response, null, 2);
+
+  console.log('Agent call succeeded');
+  console.log(`  Agent:         ${agent}`);
+  console.log(`  Duration:      ${duration}`);
+  console.log(`  Payment:       ${options.paymentRequired ? 'required' : 'not required'}`);
+  if (options.paymentHash) {
+    console.log(`  Payment hash:  ${options.paymentHash}`);
+  }
+  console.log('');
+  console.log('Agent response:');
+  console.log(response ?? '');
+}
+
 export async function runAgentCallCommand(
   config: CliConfig,
   url: string,
@@ -100,7 +130,7 @@ export async function runAgentCallCommand(
       if (asJson) {
         printJsonSuccess(body);
       } else {
-        console.log(body.response ?? JSON.stringify(body, null, 2));
+        printFriendlySuccess(body, { paymentRequired: false });
       }
       return;
     }
@@ -226,8 +256,10 @@ export async function runAgentCallCommand(
         paymentHash: paymentResult.payment_hash,
       });
     } else {
-      console.log('');
-      console.log(result.response ?? JSON.stringify(result, null, 2));
+      printFriendlySuccess(result, {
+        paymentRequired: true,
+        paymentHash: paymentResult.payment_hash,
+      });
     }
   } catch (error) {
     clearTimeout(timer);

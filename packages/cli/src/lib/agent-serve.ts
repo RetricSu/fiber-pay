@@ -28,6 +28,39 @@ export interface AgentServeOptions {
   json?: boolean;
 }
 
+interface AgentServeRequest extends express.Request {
+  l402?: { valid?: boolean; paymentHash?: string; preimage?: string };
+  _fiberPayRequestId?: number;
+}
+
+function getClientIp(req: AgentServeRequest): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  const forwardedValue = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  if (typeof forwardedValue === 'string' && forwardedValue.trim().length > 0) {
+    return forwardedValue.split(',')[0]?.trim() || 'unknown';
+  }
+
+  return req.ip || req.socket.remoteAddress || 'unknown';
+}
+
+function summarizeL402Status(req: AgentServeRequest): string {
+  if (req.l402?.valid) {
+    if (req.l402.paymentHash) {
+      return `payment-verified:${req.l402.paymentHash.slice(0, 14)}...`;
+    }
+    if (req.l402.preimage) {
+      return 'payment-verified:preimage';
+    }
+    return 'payment-verified';
+  }
+
+  return 'no-l402-token';
+}
+
+function getRequestId(req: AgentServeRequest): number {
+  return req._fiberPayRequestId ?? 0;
+}
+
 function runAcpx(
   agent: string,
   prompt: string,
@@ -173,6 +206,44 @@ export async function runAgentServeCommand(
   const app = express();
   app.use(express.json());
 
+  let requestCounter = 0;
+
+  // Request visibility middleware (works for both challenge and paid flows).
+  app.use((req: AgentServeRequest, res, next) => {
+    const requestId = ++requestCounter;
+    req._fiberPayRequestId = requestId;
+    const startTime = Date.now();
+    const clientIp = getClientIp(req);
+
+    if (!asJson) {
+      console.log(
+        `[REQ ${requestId}] ${req.method} ${req.path} from ${clientIp} (auth=${req.headers.authorization ? 'present' : 'none'})`,
+      );
+    }
+
+    res.on('finish', () => {
+      if (asJson) {
+        return;
+      }
+
+      const durationMs = Date.now() - startTime;
+      const l402State = summarizeL402Status(req);
+
+      if (res.statusCode === 402 || res.statusCode === 401) {
+        console.log(
+          `[REQ ${requestId}] challenge-issued status=${res.statusCode} duration=${durationMs}ms`,
+        );
+        return;
+      }
+
+      console.log(
+        `[REQ ${requestId}] completed status=${res.statusCode} duration=${durationMs}ms l402=${l402State}`,
+      );
+    });
+
+    next();
+  });
+
   // L402 payment gate on all routes
   app.use(
     createL402Middleware({
@@ -185,9 +256,13 @@ export async function runAgentServeCommand(
   );
 
   // Agent endpoint
-  app.post('/', async (req, res) => {
+  app.post('/', async (req: AgentServeRequest, res) => {
+    const requestId = getRequestId(req);
     const prompt = req.body?.prompt;
     if (!prompt || typeof prompt !== 'string') {
+      if (!asJson) {
+        console.log(`[REQ ${requestId}] invalid request body: missing string prompt`);
+      }
       res.status(400).json({
         error: 'Missing or invalid "prompt" field in request body.',
       });
@@ -197,6 +272,12 @@ export async function runAgentServeCommand(
     const startTime = Date.now();
 
     try {
+      if (!asJson) {
+        console.log(
+          `[REQ ${requestId}] payment accepted, invoking agent=${options.agent} promptChars=${prompt.length}`,
+        );
+      }
+
       const result = await runAcpx(options.agent, prompt, {
         cwd: options.cwd,
         approveAll: options.approveAll,
@@ -206,6 +287,12 @@ export async function runAgentServeCommand(
       const durationMs = Date.now() - startTime;
 
       if (result.exitCode !== 0) {
+        if (!asJson) {
+          console.log(
+            `[REQ ${requestId}] agent failed exit=${result.exitCode} duration=${durationMs}ms`,
+          );
+        }
+
         res.status(502).json({
           error: 'Agent execution failed.',
           agent: options.agent,
@@ -215,12 +302,21 @@ export async function runAgentServeCommand(
         return;
       }
 
+      if (!asJson) {
+        console.log(`[REQ ${requestId}] agent completed duration=${durationMs}ms`);
+      }
+
       res.json({
         response: result.stdout.trim(),
         agent: options.agent,
         durationMs,
       });
     } catch (error) {
+      if (!asJson) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(`[REQ ${requestId}] agent execution error: ${message}`);
+      }
+
       res.status(500).json({
         error: 'Internal server error.',
         message: error instanceof Error ? error.message : String(error),
