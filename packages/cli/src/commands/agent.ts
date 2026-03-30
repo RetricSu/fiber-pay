@@ -9,7 +9,10 @@ export function createAgentCommand(config: CliConfig): Command {
   agent
     .command('serve')
     .description('Start an L402-gated AI agent HTTP service')
-    .requiredOption('--agent <name>', 'Agent to use (see acpx documentation for supported agents)')
+    .requiredOption(
+      '--agent <name>',
+      'Agent to use (common values: codex, claude, opencode, gemini, pi; see acpx docs for full list)',
+    )
     .option('--port <port>', 'Listen port', '8402')
     .option('--host <host>', 'Listen host', '127.0.0.1')
     .option('--price <ckb>', 'Price per request in CKB', '0.1')
@@ -19,6 +22,15 @@ export function createAgentCommand(config: CliConfig): Command {
     .option('--approve-all', 'Auto-approve all agent tool calls')
     .option('--timeout <seconds>', 'Max agent execution time per request', '300')
     .option('--json')
+    .addHelpText(
+      'after',
+      [
+        '',
+        'Examples:',
+        '  fiber-pay agent serve --agent codex --price 0.1 --root-key <hex>',
+        '  fiber-pay agent serve --agent claude --price 0.2 --port 8402',
+      ].join('\n'),
+    )
     .action(async (options) => {
       await runAgentServeCommand(config, options);
     });
