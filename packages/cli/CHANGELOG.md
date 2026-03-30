@@ -1,5 +1,26 @@
 # @fiber-pay/cli
 
+## 0.1.1
+
+### Patch Changes
+
+- a6e0236: Improve agent command UX and observability
+
+  - **CLI**: Add request lifecycle logs to `fiber-pay agent serve` to show incoming requests, L402 challenge/payment status, and agent execution state
+  - **CLI**: Improve `fiber-pay agent call` success output with clearer agent metadata, duration, payment details, and response section
+  - **CLI**: Show common `--agent` values and usage examples in `fiber-pay agent serve -h`
+
+- d9bd02b: Add L402 protocol support
+
+  - **SDK**: New `L402Middleware`, `MacaroonService`, and `createL402Middleware` for building payment-gated APIs using the L402 protocol with Fiber Lightning Network
+  - **CLI**: New `l402 proxy` command for reverse-proxying any HTTP service behind L402 payment
+  - **CLI**: New `agent serve` and `agent call` commands for paid AI agent services via acpx
+
+- Updated dependencies [d9bd02b]
+  - @fiber-pay/sdk@0.1.1
+  - @fiber-pay/node@0.1.1
+  - @fiber-pay/runtime@0.1.1
+
 ## 0.1.0
 
 ### Patch Changes
