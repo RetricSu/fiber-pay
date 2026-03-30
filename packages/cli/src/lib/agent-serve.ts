@@ -28,7 +28,12 @@ export interface AgentServeOptions {
   json?: boolean;
 }
 
-function getClientIp(req: express.Request): string {
+interface AgentServeRequest extends express.Request {
+  l402?: { valid?: boolean; paymentHash?: string; preimage?: string };
+  _fiberPayRequestId?: number;
+}
+
+function getClientIp(req: AgentServeRequest): string {
   const forwarded = req.headers['x-forwarded-for'];
   const forwardedValue = Array.isArray(forwarded) ? forwarded[0] : forwarded;
   if (typeof forwardedValue === 'string' && forwardedValue.trim().length > 0) {
@@ -38,16 +43,12 @@ function getClientIp(req: express.Request): string {
   return req.ip || req.socket.remoteAddress || 'unknown';
 }
 
-function summarizeL402Status(req: express.Request): string {
-  const l402 = req as express.Request & {
-    l402?: { valid?: boolean; paymentHash?: string; preimage?: string };
-  };
-
-  if (l402.l402?.valid) {
-    if (l402.l402.paymentHash) {
-      return `payment-verified:${l402.l402.paymentHash.slice(0, 14)}...`;
+function summarizeL402Status(req: AgentServeRequest): string {
+  if (req.l402?.valid) {
+    if (req.l402.paymentHash) {
+      return `payment-verified:${req.l402.paymentHash.slice(0, 14)}...`;
     }
-    if (l402.l402.preimage) {
+    if (req.l402.preimage) {
       return 'payment-verified:preimage';
     }
     return 'payment-verified';
@@ -56,9 +57,8 @@ function summarizeL402Status(req: express.Request): string {
   return 'no-l402-token';
 }
 
-function getRequestId(req: express.Request): number {
-  const withMeta = req as express.Request & { _fiberPayRequestId?: number };
-  return withMeta._fiberPayRequestId ?? 0;
+function getRequestId(req: AgentServeRequest): number {
+  return req._fiberPayRequestId ?? 0;
 }
 
 function runAcpx(
@@ -209,9 +209,9 @@ export async function runAgentServeCommand(
   let requestCounter = 0;
 
   // Request visibility middleware (works for both challenge and paid flows).
-  app.use((req, res, next) => {
+  app.use((req: AgentServeRequest, res, next) => {
     const requestId = ++requestCounter;
-    (req as express.Request & { _fiberPayRequestId?: number })._fiberPayRequestId = requestId;
+    req._fiberPayRequestId = requestId;
     const startTime = Date.now();
     const clientIp = getClientIp(req);
 
@@ -256,7 +256,7 @@ export async function runAgentServeCommand(
   );
 
   // Agent endpoint
-  app.post('/', async (req, res) => {
+  app.post('/', async (req: AgentServeRequest, res) => {
     const requestId = getRequestId(req);
     const prompt = req.body?.prompt;
     if (!prompt || typeof prompt !== 'string') {
