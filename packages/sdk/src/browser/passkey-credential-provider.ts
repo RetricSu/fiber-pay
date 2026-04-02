@@ -49,9 +49,14 @@ export class PasskeyCredentialProvider implements CredentialProvider {
       typeof PublicKeyCredential.getClientCapabilities === 'function'
     ) {
       try {
-        const capabilities = (
-          PublicKeyCredential.getClientCapabilities as unknown as () => Record<string, boolean>
+        const capabilitiesResult = (
+          PublicKeyCredential.getClientCapabilities as unknown as () => unknown
         )();
+
+        const capabilities = (
+          capabilitiesResult instanceof Promise ? await capabilitiesResult : capabilitiesResult
+        ) as Record<string, boolean> | undefined;
+
         if (capabilities && capabilities.prf === false) {
           return false;
         }
@@ -287,10 +292,13 @@ export class PasskeyCredentialProvider implements CredentialProvider {
 
     const derivedBytes = new Uint8Array(derivedBits);
 
-    this.fiberKey = new Uint8Array(derivedBytes.buffer, derivedBytes.byteOffset, 32);
+    this.fiberKey = new Uint8Array(derivedBytes.slice(0, 32));
 
     if (!this.skipCkbKey) {
-      this.ckbKey = new Uint8Array(derivedBytes.buffer, derivedBytes.byteOffset + 32, 32);
+      this.ckbKey = new Uint8Array(derivedBytes.slice(32, 64));
     }
+
+    // Wipe the original derived payload from memory immediately
+    derivedBytes.fill(0);
   }
 }

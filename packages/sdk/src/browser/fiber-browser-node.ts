@@ -208,6 +208,13 @@ export class FiberBrowserNode {
       return await this.adapter.nodeInfo();
     } catch (error) {
       this.setState('error');
+      // Ensure keys are wiped if start fails
+      await this.config.credential.lock();
+      if (this.adapter) {
+        await this.adapter.stop().catch(() => {});
+        this.adapter = null;
+      }
+
       if (error instanceof FiberRpcError) {
         throw error;
       }
@@ -234,8 +241,8 @@ export class FiberBrowserNode {
         await this.adapter.stop();
         this.adapter = null;
       }
-      await this.config.credential.lock();
     } finally {
+      await this.config.credential.lock();
       this.setState('stopped');
     }
   }

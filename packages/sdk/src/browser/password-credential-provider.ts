@@ -129,11 +129,14 @@ export class PasswordCredentialProvider implements CredentialProvider {
       dkLen: DERIVED_KEY_LENGTH,
     });
 
-    this.fiberKey = new Uint8Array(derived.buffer, derived.byteOffset, 32);
+    this.fiberKey = new Uint8Array(derived.slice(0, 32));
 
     if (!this.skipCkbKey) {
-      this.ckbKey = new Uint8Array(derived.buffer, derived.byteOffset + 32, 32);
+      this.ckbKey = new Uint8Array(derived.slice(32, 64));
     }
+
+    // Wipe the original derived payload from memory immediately
+    derived.fill(0);
   }
 
   async lock(): Promise<void> {
