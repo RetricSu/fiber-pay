@@ -21,9 +21,13 @@ function App() {
   const [password, setPassword] = useState('demo-secret');
   const [invoiceStr, setInvoiceStr] = useState('');
 
-  const handleCopyNodeId = () => {
+  const handleCopyNodeId = async () => {
     if (nodeInfo?.node_id) {
-      navigator.clipboard.writeText(nodeInfo.node_id);
+      try {
+        await navigator.clipboard.writeText(nodeInfo.node_id);
+      } catch (err) {
+        console.error('Failed to copy node ID to clipboard: ', err);
+      }
     }
   };
 

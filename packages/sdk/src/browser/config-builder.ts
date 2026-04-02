@@ -221,7 +221,7 @@ export class ConfigBuilder {
     };
 
     if (entry.autoAcceptAmount) {
-      result.auto_accept_amount = Number(entry.autoAcceptAmount);
+      result.auto_accept_amount = BigInt(entry.autoAcceptAmount);
     }
 
     return result;

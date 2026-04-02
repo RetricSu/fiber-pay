@@ -29,7 +29,7 @@ export function stringify(obj: unknown, indent = 0): string {
     return obj;
   }
 
-  if (typeof obj === 'number' || typeof obj === 'boolean') {
+  if (typeof obj === 'number' || typeof obj === 'boolean' || typeof obj === 'bigint') {
     return String(obj);
   }
 
@@ -61,15 +61,16 @@ export function stringify(obj: unknown, indent = 0): string {
     return entries
       .map(([key, value]) => {
         const valueStr = stringify(value, indent + 1);
+        const safeKey = stringify(key);
         if (
           typeof value === 'object' &&
           value !== null &&
           !(Array.isArray(value) && value.length === 0) &&
           !(typeof value === 'object' && Object.keys(value).length === 0)
         ) {
-          return `${spaces}${key}:\n${valueStr}`;
+          return `${spaces}${safeKey}:\n${valueStr}`;
         }
-        return `${spaces}${key}: ${valueStr}`;
+        return `${spaces}${safeKey}: ${valueStr}`;
       })
       .join('\n');
   }
