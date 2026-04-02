@@ -175,9 +175,20 @@ Use smoke checks for startup/readiness/log health only (no channel open/payment)
 pnpm smoke
 ```
 
+**For WASM integration:**
+
+```bash
+pnpm test:wasm
+```
+
+Starts a Vite server to validate the WebAssembly-based Fiber node lifecycle directly within the browser without spinning up local `fnn` binaries. 
+
+*(Note: Both WASM smoke tests and frontend applications require specific Vite plugins like `crossOriginIsolation` to safely enable multithreading `SharedArrayBuffer` features for Tokio runtime execution.)*
+
+
 Smoke validates:
 
-- node start/stop path
+- node start/stop path (native and wasm)
 - runtime start/stop path
 - persisted fnn/runtime logs availability
 - key/bootstrap integrity in temporary data dir

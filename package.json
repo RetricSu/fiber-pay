@@ -20,6 +20,7 @@
     "changeset:version": "changeset version",
     "release": "pnpm build && changeset publish",
     "smoke": "node scripts/ci-smoke-node-runtime.mjs",
+    "test:wasm": "pnpm -F fiber-wasm-smoke-test dev",
     "e2e": "node scripts/e2e-testnet-dual-node.mjs",
     "prepare": "husky"
   },

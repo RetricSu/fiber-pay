@@ -13,7 +13,9 @@ fiber-pay is an AI payment layer over Fiber Network for CKB Lightning. It provid
 
 ## Architecture
 
-fiber-pay primarily controls the local `fnn` binary and interacts through RPC; most CLI atomic commands are direct mappings or thin orchestration wrappers over RPC methods. On top of atomic commands, fiber-pay introduces a runtime for complex operations.
+`fiber-pay` primarily operates via the local `fnn` binary and interacts through RPC. However, via `@fiber-pay/sdk/browser`, it also provides a native WebAssembly architecture allowing nodes to run fully in the browser (eliminating local daemon dependency). 
+
+Most CLI atomic commands are direct mappings or thin orchestration wrappers over RPC methods. On top of atomic commands, fiber-pay introduces a runtime for complex operations. 
 
 Think in layers:
 
@@ -72,5 +74,6 @@ Read [references/rebalance.md](references/rebalance.md) for channel liquidity re
 - **Upgrade & migration**: Read [references/upgrade.md](references/upgrade.md) for upgrading the Fiber node binary and migrating the database between versions (`node upgrade`, migration check, backup/rollback, breaking change handling).
 - **Output contracts**: Read [references/contracts.md](references/contracts.md) for JSON envelope, NDJSON stream events, and timeout semantics.
 - **Runtime API**: Read [references/runtime-api.md](references/runtime-api.md) for `/jobs/*` and `/monitor/*` endpoints and state model.
-- **Password Management**: Read [references/password-management.md](references/password-management.md) for keystore encryption, password configuration, and security best practices.
+- **Password Management**: Read [references/password-management.md](references/password-management.md) for CLI keystore encryption, security best practices, and the novel WebAuthn Passkey integration for browser environments.
+- **Browser WASM Integration**: Read [references/wasm-browser.md](references/wasm-browser.md) for building browser-based native Fiber nodes using SDK, Vite COOP/COEP isolation, and WebAuthn credential pipelines.
 - **L402 & Agent Service**: Read [references/l402-agent.md](references/l402-agent.md) for L402 payment-gated APIs, `l402 proxy`, `agent serve`, and `agent call` commands.
