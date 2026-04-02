@@ -29,9 +29,9 @@ export type {
   PasswordUnlockParams,
   RawKeyUnlockParams,
 } from './credential-provider.js';
-
-export { PasswordCredentialProvider } from './password-credential-provider.js';
-export { RawKeyCredentialProvider } from './raw-key-credential-provider.js';
+export * from './passkey-credential-provider.js';
+export * from './password-credential-provider.js';
+export * from './raw-key-credential-provider.js';
 
 // =============================================================================
 // Config Builder (for advanced users who need custom configs)

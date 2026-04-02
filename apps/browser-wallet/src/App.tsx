@@ -4,7 +4,18 @@ import { useFiberPayment } from './hooks/useFiberPayment';
 import { Play, Square, Wallet, Zap, Copy, LoaderCircle, CheckCircle2, XCircle } from 'lucide-react';
 
 function App() {
-  const { start, stop, state, nodeInfo, error: nodeError, node } = useFiberNode('testnet');
+  const { 
+    startWithPassword, 
+    startWithPasskey, 
+    createPasskey, 
+    stop, 
+    state, 
+    nodeInfo, 
+    error: nodeError, 
+    node,
+    isPasskeySupported,
+    hasPasskeyConfigured
+  } = useFiberNode('testnet');
   const { payInvoice, isPaying, paymentResult, error: payError } = useFiberPayment(node);
 
   const [password, setPassword] = useState('demo-secret');
@@ -13,7 +24,6 @@ function App() {
   const handleCopyNodeId = () => {
     if (nodeInfo?.node_id) {
       navigator.clipboard.writeText(nodeInfo.node_id);
-      // normally show a toast here
     }
   };
 
@@ -49,6 +59,24 @@ function App() {
 
         {state === 'idle' || state === 'stopped' || state === 'error' ? (
           <div className="flex flex-col gap-4">
+            {isPasskeySupported && (
+              <div className="flex flex-col gap-2" style={{ borderBottom: '1px solid var(--panel-border)', paddingBottom: '16px', marginBottom: '8px' }}>
+                <div className="text-secondary mb-2">Passwordless Authentication</div>
+                {hasPasskeyConfigured ? (
+                  <button className="btn btn-primary" onClick={startWithPasskey}>
+                    <Play size={18} />
+                    Login with Passkey
+                  </button>
+                ) : (
+                  <button className="btn btn-primary" onClick={() => createPasskey('DemoUser')}>
+                    <Play size={18} />
+                    Register new Passkey
+                  </button>
+                )}
+              </div>
+            )}
+            
+            <div className="text-secondary mb-2">Fallback Authentication</div>
             <input
               type="password"
               className="input"
@@ -56,9 +84,9 @@ function App() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            <button className="btn btn-primary" onClick={() => start(password)}>
+            <button className="btn" onClick={() => startWithPassword(password)}>
               <Play size={18} />
-              Start WASM Node
+              Start with Password
             </button>
           </div>
         ) : (

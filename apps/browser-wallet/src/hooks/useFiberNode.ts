@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   FiberBrowserNode,
   PasswordCredentialProvider,
+  PasskeyCredentialProvider,
   type BrowserNodeState,
   type NodeInfoResult,
 } from '@fiber-pay/sdk/browser';
@@ -10,24 +11,43 @@ export interface UseFiberNodeResult {
   state: BrowserNodeState;
   nodeInfo: NodeInfoResult | null;
   error: string | null;
-  start: (password: string) => Promise<void>;
+  startWithPassword: (password: string) => Promise<void>;
+  startWithPasskey: () => Promise<void>;
+  createPasskey: (username: string) => Promise<void>;
   stop: () => Promise<void>;
   node: FiberBrowserNode | null;
+  isPasskeySupported: boolean;
+  hasPasskeyConfigured: boolean;
 }
 
 export function useFiberNode(network: 'testnet' | 'mainnet'): UseFiberNodeResult {
   const [state, setState] = useState<BrowserNodeState>('idle');
   const [nodeInfo, setNodeInfo] = useState<NodeInfoResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isPasskeySupported, setIsPasskeySupported] = useState(false);
+  const [hasPasskeyConfigured, setHasPasskeyConfigured] = useState(false);
 
   const nodeRef = useRef<FiberBrowserNode | null>(null);
 
   useEffect(() => {
-    // Create node instance on init
-    const credential = new PasswordCredentialProvider('browser-wallet-demo');
+    // Check support
+    PasskeyCredentialProvider.isSupported().then(setIsPasskeySupported).catch(() => {});
+    
+    // Check if configured
+    const pkProvider = new PasskeyCredentialProvider(`wallet-demo-${network}`);
+    setHasPasskeyConfigured(pkProvider.isConfigured());
+  }, [network]);
+
+  const initNode = useCallback((provider: PasswordCredentialProvider | PasskeyCredentialProvider) => {
+    if (nodeRef.current) {
+      if (nodeRef.current.state !== 'stopped' && nodeRef.current.state !== 'idle') {
+         throw new Error('Node already running');
+      }
+    }
+
     const node = new FiberBrowserNode({
       network,
-      credential,
+      credential: provider,
       nodeConfig: {
         databasePrefix: `/wallet-demo-${network}`,
       },
@@ -35,40 +55,61 @@ export function useFiberNode(network: 'testnet' | 'mainnet'): UseFiberNodeResult
 
     nodeRef.current = node;
 
-    const handleStateChange = (newState: BrowserNodeState) => {
+    node.on('stateChange', (newState) => {
       setState(newState);
       if (newState === 'stopped') {
         setNodeInfo(null);
       }
-    };
+    });
 
-    const handleError = (err: Error) => {
+    node.on('error', (err: Error) => {
       setError(err.message);
-    };
+    });
 
-    node.on('stateChange', handleStateChange);
-    node.on('error', handleError);
-
-    return () => {
-      node.off('stateChange', handleStateChange);
-      node.off('error', handleError);
-      // We don't automatically stop on unmount to allow background running,
-      // but in a real app you might want to manage this via a Context Provider.
-    };
+    return node;
   }, [network]);
 
-  const start = useCallback(async (password: string) => {
-    if (!nodeRef.current) return;
+  const startWithPassword = useCallback(async (password: string) => {
     setError(null);
     try {
-      const info = await nodeRef.current.start({ password });
+      const provider = new PasswordCredentialProvider(`wallet-demo-${network}`);
+      const node = initNode(provider);
+      const info = await node.start({ unlockParams: { password } });
       setNodeInfo(info);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-      // Reset state if it failed to start
       setState('error');
     }
-  }, []);
+  }, [initNode, network]);
+
+  const startWithPasskey = useCallback(async () => {
+    setError(null);
+    try {
+      const provider = new PasskeyCredentialProvider(`wallet-demo-${network}`);
+      const node = initNode(provider);
+      const info = await node.start(); // Unlock params not needed for existing passkey
+      setNodeInfo(info);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setState('error');
+    }
+  }, [initNode, network]);
+
+  const createPasskey = useCallback(async (username: string) => {
+    setError(null);
+    try {
+      const provider = new PasskeyCredentialProvider(`wallet-demo-${network}`);
+      await provider.register(username);
+      setHasPasskeyConfigured(true);
+      
+      const node = initNode(provider);
+      const info = await node.start();
+      setNodeInfo(info);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setState('error');
+    }
+  }, [initNode, network]);
 
   const stop = useCallback(async () => {
     if (!nodeRef.current) return;
@@ -83,8 +124,12 @@ export function useFiberNode(network: 'testnet' | 'mainnet'): UseFiberNodeResult
     state,
     nodeInfo,
     error,
-    start,
+    startWithPassword,
+    startWithPasskey,
+    createPasskey,
     stop,
     node: nodeRef.current,
+    isPasskeySupported,
+    hasPasskeyConfigured,
   };
 }
