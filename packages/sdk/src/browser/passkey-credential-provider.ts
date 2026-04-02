@@ -35,7 +35,7 @@ export class PasskeyCredentialProvider implements CredentialProvider {
    * Check if the current browser environment supports Passkeys with the PRF extension.
    */
   static async isSupported(): Promise<boolean> {
-    if (!window.PublicKeyCredential) return false;
+    if (typeof window === 'undefined' || typeof PublicKeyCredential === 'undefined') return false;
 
     // Check for platform authenticator (e.g., Face ID / Touch ID)
     if (PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
@@ -268,7 +268,7 @@ export class PasskeyCredentialProvider implements CredentialProvider {
   }
 
   /**
-   * Use HKDF to expand the 32-byte PRF secret into 64 bytes (32 for CKB, 32 for Fiber).
+   * Use HKDF to expand the 32-byte PRF secret into 64 bytes (32 for Fiber, 32 for CKB).
    */
   private async deriveKeysFromPrf(prfSecret: ArrayBuffer) {
     const encoder = new TextEncoder();

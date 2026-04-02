@@ -1,5 +1,9 @@
 import { defineConfig, type Plugin } from 'vite';
-import { resolve } from 'path';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * Vite plugin to set Cross-Origin Isolation headers on all responses.

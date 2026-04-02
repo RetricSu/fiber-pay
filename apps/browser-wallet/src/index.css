@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+/* External Google Fonts import removed due to COEP/COOP (require-corp) blocking cross-origin font loads. */
 
 :root {
   --bg-gradient: radial-gradient(circle at top right, #111a2f 0%, #0d1117 50%, #05070a 100%);
@@ -68,6 +68,7 @@ h1 {
   font-size: 2rem;
   margin-bottom: 2rem;
   background: linear-gradient(to right, #f0f6fc, #58a6ff);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
