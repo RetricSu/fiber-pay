@@ -8,7 +8,7 @@ Fiber target: `v0.7.1`
 
 `fiber-pay` is built to make Fiber programmable for both humans and AI agents:
 
-- `@fiber-pay/sdk`: typed building blocks for Fiber RPC, verification, policy logic, and L402 protocol
+- `@fiber-pay/sdk`: typed building blocks for Fiber RPC, verification, policy logic, and L402 protocol (now supports native WebAssembly execution in the Browser!)
 - `@fiber-pay/cli`: stable operator + automation interface with machine-readable output
 - `@fiber-pay/runtime`: orchestration runtime for jobs, monitoring, retries, and proxy-facing automation loops
 - `@fiber-pay/node`: easy handling for the local `fnn` binary lifecycle
@@ -20,6 +20,7 @@ Fiber target: `v0.7.1`
 - Uniform `--json` envelopes for reliable parsing and tool chaining
 - NDJSON stream events for `watch --json` commands
 - Explicit defaults for startup, ports, binary path, and key password behavior
+- Dynamic `ConfigBuilder` enabling browser environment node orchestration
 
 ## Copy-paste prompt for your coding agent
 

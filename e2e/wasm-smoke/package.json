@@ -1,0 +1,15 @@
+{
+  "name": "fiber-wasm-smoke-test",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@nervosnetwork/fiber-js": "0.7.1"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5"
+  }
+}

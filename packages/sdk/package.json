@@ -9,6 +9,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./browser": {
+      "import": "./dist/browser/index.js",
+      "types": "./dist/browser/index.d.ts"
     }
   },
   "files": [
@@ -42,9 +46,13 @@
     "zod": "^4.3.6"
   },
   "peerDependencies": {
+    "@nervosnetwork/fiber-js": "~0.7.1",
     "express": "^4.0.0 || ^5.0.0"
   },
   "peerDependenciesMeta": {
+    "@nervosnetwork/fiber-js": {
+      "optional": true
+    },
     "express": {
       "optional": true
     }

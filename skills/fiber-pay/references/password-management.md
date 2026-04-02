@@ -121,6 +121,22 @@ Consider setting a custom password when:
 - Sharing a machine with other users
 - Requiring compliance with security policies
 
+## Browser WASM Password Management
+
+When running the node directly in the browser via `@fiber-pay/sdk/browser`, key security logic adapts to web platform constraints and capabilities:
+
+### PasskeyCredentialProvider (Recommended)
+This provider uses the **WebAuthn PRF (Pseudo-Random Function) Extension** to implement true passwordless authentication. 
+- During `register()`, a WebAuthn ceremony captures a platform authenticator (e.g., FaceID/TouchID) profile. 
+- On `unlock()`, the authenticator computes a secure 32-byte ArrayBuffer based on an internal secret.
+- **Key Derivation**: The PRF secret is fully expanded to 64 bytes via `HKDF-SHA256`, securely restoring both the 32-byte Fiber P2P Key and 32-byte CKB Private Key (if not using external funding).
+
+### PasswordCredentialProvider
+A traditional fallback mechanism utilizing standard password derivation.
+- Derives keys using `scrypt` (N=2^14, r=8, p=1).
+- Generates a unique Salt per identifier, securely persisting it purely in browser `IndexedDB`.
+- As a result, users receive the exact same Fiber/CKB keypair across browser sessions on a device as long as they input the same password.
+
 ## Production Best Practices
 
 For production deployments, follow these recommendations:
