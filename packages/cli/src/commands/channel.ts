@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { type ChannelState, ckbToShannons, type HexString } from '@fiber-pay/sdk';
+import { type ChannelState, ckbToShannons, type HexString, nodeIdToPeerId } from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import { sleep } from '../lib/async.js';
 import type { CliConfig } from '../lib/config.js';
@@ -17,6 +17,44 @@ import {
 import { createReadyRpcClient, resolveRpcEndpoint } from '../lib/rpc.js';
 import { tryCreateRuntimeChannelJob } from '../lib/runtime-jobs.js';
 import { registerChannelRebalanceCommand } from './rebalance.js';
+
+function extractPeerIdFromMultiaddr(address: string): string | undefined {
+  const match = address.match(/\/p2p\/([^/]+)$/);
+  return match?.[1];
+}
+
+async function resolvePeerPubkeyFromMultiaddr(
+  rpc: Awaited<ReturnType<typeof createReadyRpcClient>>,
+  address: string,
+  timeoutMs: number,
+): Promise<`0x${string}`> {
+  const expectedPeerId = extractPeerIdFromMultiaddr(address);
+  if (!expectedPeerId) {
+    throw new Error('Invalid peer multiaddr: missing /p2p/<peerId> suffix');
+  }
+
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const peers = await rpc.listPeers();
+    for (const peer of peers.peers) {
+      if (extractPeerIdFromMultiaddr(peer.address) === expectedPeerId) {
+        return peer.pubkey;
+      }
+      try {
+        if ((await nodeIdToPeerId(peer.pubkey)) === expectedPeerId) {
+          return peer.pubkey;
+        }
+      } catch {
+        // Ignore malformed pubkeys and continue scanning peer list.
+      }
+    }
+    await sleep(500);
+  }
+
+  throw new Error(
+    `connect_peer accepted but peer pubkey not resolved within ${Math.floor(timeoutMs / 1000)}s (${expectedPeerId})`,
+  );
+}
 
 export function createChannelCommand(config: CliConfig): Command {
   const channel = new Command('channel').description('Channel lifecycle and status commands');
@@ -234,14 +272,7 @@ export function createChannelCommand(config: CliConfig): Command {
       let peerPubkey = peerInput;
       if (peerInput.includes('/')) {
         await rpc.connectPeer({ address: peerInput });
-        const peers = await rpc.listPeers();
-        const matched = peers.peers.find((item) => item.address === peerInput);
-        if (!matched) {
-          throw new Error(
-            'Connected to peer address but failed to resolve peer pubkey from list_peers response',
-          );
-        }
-        peerPubkey = matched.pubkey;
+        peerPubkey = await resolvePeerPubkeyFromMultiaddr(rpc, peerInput, 8_000);
       }
 
       if (!peerPubkey.startsWith('0x')) {

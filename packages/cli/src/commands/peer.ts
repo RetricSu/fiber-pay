@@ -1,27 +1,48 @@
+import { nodeIdToPeerId } from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import type { CliConfig } from '../lib/config.js';
 import { printJsonSuccess, printPeerListHuman } from '../lib/format.js';
 import { createReadyRpcClient } from '../lib/rpc.js';
 
-function extractPubkeyFromMultiaddr(address: string): string | undefined {
+function extractPeerIdFromMultiaddr(address: string): string | undefined {
   const match = address.match(/\/p2p\/([^/]+)$/);
   return match?.[1];
 }
 
+async function findPeerByPeerId(
+  rpc: Awaited<ReturnType<typeof createReadyRpcClient>>,
+  expectedPeerId: string,
+) {
+  const peers = await rpc.listPeers();
+  for (const peer of peers.peers) {
+    if (extractPeerIdFromMultiaddr(peer.address) === expectedPeerId) {
+      return peer;
+    }
+    try {
+      if ((await nodeIdToPeerId(peer.pubkey)) === expectedPeerId) {
+        return peer;
+      }
+    } catch {
+      // Ignore malformed pubkeys and continue scanning peer list.
+    }
+  }
+  return undefined;
+}
+
 async function waitForPeerConnected(
   rpc: Awaited<ReturnType<typeof createReadyRpcClient>>,
-  expectedPubkey: string,
+  expectedPeerId: string,
   timeoutMs: number,
-): Promise<boolean> {
+): Promise<{ pubkey: string; address: string } | undefined> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const peers = await rpc.listPeers();
-    if (peers.peers.some((peer) => peer.pubkey === expectedPubkey)) {
-      return true;
+    const match = await findPeerByPeerId(rpc, expectedPeerId);
+    if (match) {
+      return { pubkey: match.pubkey, address: match.address };
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  return false;
+  return undefined;
 }
 
 export function createPeerCommand(config: CliConfig): Command {
@@ -47,27 +68,33 @@ export function createPeerCommand(config: CliConfig): Command {
     .option('--json')
     .action(async (address, options) => {
       const rpc = await createReadyRpcClient(config);
-      const hintedPubkey = extractPubkeyFromMultiaddr(address);
-      if (!hintedPubkey) {
-        throw new Error('Invalid multiaddr: missing /p2p/<pubkey> suffix');
+      const expectedPeerId = extractPeerIdFromMultiaddr(address);
+      if (!expectedPeerId) {
+        throw new Error('Invalid multiaddr: missing /p2p/<peerId> suffix');
       }
 
       await rpc.connectPeer({ address });
       const timeoutMs = Math.max(1, Number.parseInt(String(options.timeout), 10) || 8) * 1000;
-      const connected = await waitForPeerConnected(rpc, hintedPubkey, timeoutMs);
+      const connected = await waitForPeerConnected(rpc, expectedPeerId, timeoutMs);
 
       if (!connected) {
         throw new Error(
-          `connect_peer accepted but peer not found in list within ${Math.floor(timeoutMs / 1000)}s (${hintedPubkey})`,
+          `connect_peer accepted but peer not found in list within ${Math.floor(timeoutMs / 1000)}s (${expectedPeerId})`,
         );
       }
 
       if (options.json) {
-        printJsonSuccess({ address, pubkey: hintedPubkey, message: 'Connected' });
+        printJsonSuccess({
+          address,
+          peerId: expectedPeerId,
+          pubkey: connected.pubkey,
+          message: 'Connected',
+        });
       } else {
         console.log('✅ Connected to peer');
         console.log(`  Address: ${address}`);
-        console.log(`  Peer Pubkey: ${hintedPubkey}`);
+        console.log(`  Peer ID: ${expectedPeerId}`);
+        console.log(`  Peer Pubkey: ${connected.pubkey}`);
       }
     });
 
