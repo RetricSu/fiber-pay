@@ -8,6 +8,7 @@ import {
 } from '@fiber-pay/sdk/browser';
 
 export interface UseFiberNodeResult {
+  network: 'testnet' | 'mainnet';
   state: BrowserNodeState;
   nodeInfo: NodeInfoResult | null;
   error: string | null;
@@ -121,6 +122,7 @@ export function useFiberNode(network: 'testnet' | 'mainnet'): UseFiberNodeResult
   }, []);
 
   return {
+    network,
     state,
     nodeInfo,
     error,
