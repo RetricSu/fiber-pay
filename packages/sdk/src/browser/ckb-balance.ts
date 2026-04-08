@@ -73,6 +73,11 @@ export async function getLockBalanceShannons(
     if (!nextCursor || nextCursor === cursor || cells.length < pageSize) {
       break;
     }
+
+    if (i === maxPages - 1) {
+      throw new Error('Maximum pages reached while fetching balance. Result is incomplete.');
+    }
+
     cursor = nextCursor;
   }
 

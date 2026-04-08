@@ -54,8 +54,7 @@ function asCkb(hex: string | undefined): string {
   }
 
   try {
-    const value = Number(BigInt(hex)) / 1e8;
-    return value.toFixed(8);
+    return formatShannonsAsCkb(hex, 8);
   } catch {
     return hex;
   }

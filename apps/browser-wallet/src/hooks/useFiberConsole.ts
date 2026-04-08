@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import type {
-  Channel,
-  FiberBrowserNode,
-  GetInvoiceResult,
-  GetPaymentResult,
-  ListPeersResult,
-  NodeInfoResult,
+import {
+  ChannelState,
+  type Channel,
+  type FiberBrowserNode,
+  type GetInvoiceResult,
+  type GetPaymentResult,
+  type ListPeersResult,
+  type NodeInfoResult,
 } from '@fiber-pay/sdk/browser';
 
 type ActivityLevel = 'info' | 'success' | 'error';
@@ -41,9 +42,20 @@ function toHex(value: number | bigint): `0x${string}` {
   return `0x${value.toString(16)}`;
 }
 
-function ckbToShannons(ckb: number | string): `0x${string}` {
-  const amount = typeof ckb === 'string' ? Number.parseFloat(ckb) : ckb;
-  const shannons = BigInt(Math.floor(amount * 1e8));
+function ckbToShannons(ckb: string): `0x${string}` {
+  const normalized = ckb.trim();
+  if (!/^\d+(?:\.\d{1,8})?$/.test(normalized)) {
+    throw new Error('Amount must be a positive decimal number with up to 8 fraction digits.');
+  }
+
+  const [whole, fraction = ''] = normalized.split('.');
+  const shannons =
+    BigInt(whole || '0') * 100_000_000n + BigInt(fraction.padEnd(8, '0').slice(0, 8));
+
+  if (shannons <= 0n) {
+    throw new Error('Amount must be greater than 0.');
+  }
+
   return toHex(shannons);
 }
 
@@ -90,7 +102,6 @@ export function useFiberConsole(
   const [paymentLookup, setPaymentLookup] = useState<GetPaymentResult | null>(null);
 
   const [loading, setLoading] = useState<LoadingMap>({});
-  const [error, setError] = useState<string | null>(null);
   const [activity, setActivity] = useState<ActivityLogItem[]>([]);
 
   const pushActivity = useCallback((level: ActivityLevel, message: string, detail?: string) => {
@@ -111,6 +122,14 @@ export function useFiberConsole(
     });
   }, []);
 
+  const reportValidationError = useCallback(
+    (message: string): false => {
+      pushActivity('error', 'Validation failed', message);
+      return false;
+    },
+    [pushActivity],
+  );
+
   const ensureNode = useCallback(() => {
     if (!node || !isRunning || !node.isRunning) {
       throw new Error('Node is not running. Start node first.');
@@ -121,13 +140,11 @@ export function useFiberConsole(
   const runAction = useCallback(
     async <T,>(name: string, action: () => Promise<T>): Promise<T | null> => {
       setLoading((prev) => ({ ...prev, [name]: true }));
-      setError(null);
 
       try {
         return await action();
       } catch (actionError) {
         const message = operationErrorMessage(actionError);
-        setError(message);
         pushActivity('error', `${name} failed`, message);
         return null;
       } finally {
@@ -183,15 +200,12 @@ export function useFiberConsole(
     async (address: string): Promise<boolean> => {
       const normalizedAddress = address.trim();
       if (!normalizedAddress) {
-        setError('Peer address is required.');
-        return false;
+        return reportValidationError('Peer address is required.');
       }
 
       const invalidReason = validateBrowserPeerAddress(normalizedAddress);
       if (invalidReason) {
-        setError(invalidReason);
-        pushActivity('error', 'connectPeer blocked', invalidReason);
-        return false;
+        return reportValidationError(invalidReason);
       }
 
       if (/\/ip4\//.test(normalizedAddress) && /\/wss(?:\/|$)/.test(normalizedAddress)) {
@@ -212,15 +226,14 @@ export function useFiberConsole(
 
       return result !== null;
     },
-    [ensureNode, pushActivity, runAction],
+    [ensureNode, pushActivity, reportValidationError, runAction],
   );
 
   const disconnectPeer = useCallback(
     async (peerId: string): Promise<boolean> => {
       const normalizedPeerId = peerId.trim();
       if (!normalizedPeerId) {
-        setError('Peer ID is required.');
-        return false;
+        return reportValidationError('Peer ID is required.');
       }
 
       const result = await runAction('disconnectPeer', async () => {
@@ -233,28 +246,29 @@ export function useFiberConsole(
 
       return result !== null;
     },
-    [ensureNode, pushActivity, runAction],
+    [ensureNode, pushActivity, reportValidationError, runAction],
   );
 
   const openChannel = useCallback(
     async (peerId: string, fundingCkb: string): Promise<boolean> => {
       const normalizedPeerId = peerId.trim();
-      const amount = Number.parseFloat(fundingCkb);
+      let fundingAmountHex: `0x${string}`;
 
       if (!normalizedPeerId) {
-        setError('Peer ID is required for opening a channel.');
-        return false;
+        return reportValidationError('Peer ID is required for opening a channel.');
       }
-      if (!Number.isFinite(amount) || amount <= 0) {
-        setError('Funding amount must be a positive number.');
-        return false;
+
+      try {
+        fundingAmountHex = ckbToShannons(fundingCkb);
+      } catch (parseError) {
+        return reportValidationError(operationErrorMessage(parseError));
       }
 
       const result = await runAction('openChannel', async () => {
         const currentNode = ensureNode();
         const openResult = await currentNode.openChannel({
           peer_id: normalizedPeerId,
-          funding_amount: ckbToShannons(amount),
+          funding_amount: fundingAmountHex,
         });
 
         const channelsResult = await currentNode.listChannels({ include_closed: true });
@@ -269,15 +283,14 @@ export function useFiberConsole(
 
       return result !== null;
     },
-    [ensureNode, pushActivity, runAction],
+    [ensureNode, pushActivity, reportValidationError, runAction],
   );
 
   const closeChannel = useCallback(
     async (channelId: string, force = false): Promise<boolean> => {
       const normalizedChannelId = channelId.trim();
       if (!normalizedChannelId) {
-        setError('Channel ID is required for closing channel.');
-        return false;
+        return reportValidationError('Channel ID is required for closing channel.');
       }
 
       const result = await runAction('closeChannel', async () => {
@@ -294,18 +307,18 @@ export function useFiberConsole(
         const stateName = target.state.state_name;
 
         // Pending channels are usually removed via abandon_channel, while ready channels should use shutdown_channel.
-        if (stateName === 'CLOSED') {
+        if (stateName === ChannelState.Closed) {
           pushActivity('info', 'Channel is already closed', `Channel ID: ${normalizedChannelId}`);
           setChannels(channelsResult.channels);
           return;
         }
 
         if (
-          stateName === 'NEGOTIATING_FUNDING' ||
-          stateName === 'COLLABORATING_FUNDING_TX' ||
-          stateName === 'SIGNING_COMMITMENT' ||
-          stateName === 'AWAITING_TX_SIGNATURES' ||
-          stateName === 'AWAITING_CHANNEL_READY'
+          stateName === ChannelState.NegotiatingFunding ||
+          stateName === ChannelState.CollaboratingFundingTx ||
+          stateName === ChannelState.SigningCommitment ||
+          stateName === ChannelState.AwaitingTxSignatures ||
+          stateName === ChannelState.AwaitingChannelReady
         ) {
           await currentNode.abandonChannel({ channel_id: normalizedChannelId as `0x${string}` });
           pushActivity(
@@ -331,27 +344,28 @@ export function useFiberConsole(
 
       return result !== null;
     },
-    [ensureNode, pushActivity, runAction],
+    [ensureNode, pushActivity, reportValidationError, runAction],
   );
 
   const createInvoice = useCallback(
     async (amountCkb: string, description: string, expirySeconds: string): Promise<boolean> => {
-      const amount = Number.parseFloat(amountCkb);
       const expiry = Number.parseInt(expirySeconds, 10);
+      let amountHex: `0x${string}`;
 
-      if (!Number.isFinite(amount) || amount <= 0) {
-        setError('Invoice amount must be a positive number.');
-        return false;
+      try {
+        amountHex = ckbToShannons(amountCkb);
+      } catch (parseError) {
+        return reportValidationError(operationErrorMessage(parseError));
       }
+
       if (!Number.isInteger(expiry) || expiry <= 0) {
-        setError('Invoice expiry must be a positive integer (seconds).');
-        return false;
+        return reportValidationError('Invoice expiry must be a positive integer (seconds).');
       }
 
       const result = await runAction('createInvoice', async () => {
         const currentNode = ensureNode();
         const invoiceResult = await currentNode.newInvoice({
-          amount: ckbToShannons(amount),
+          amount: amountHex,
           currency: network === 'mainnet' ? 'Fibb' : 'Fibt',
           description: description.trim() || undefined,
           expiry: toHex(expiry),
@@ -373,7 +387,7 @@ export function useFiberConsole(
 
       return result !== null;
     },
-    [ensureNode, network, pushActivity, runAction],
+    [ensureNode, network, pushActivity, reportValidationError, runAction],
   );
 
   const queryInvoice = useCallback(
@@ -382,13 +396,11 @@ export function useFiberConsole(
       try {
         normalizedHash = normalizePaymentHash(paymentHash);
       } catch (parseError) {
-        setError(operationErrorMessage(parseError));
-        return false;
+        return reportValidationError(operationErrorMessage(parseError));
       }
 
       if (!normalizedHash) {
-        setError('Payment hash is required for invoice query.');
-        return false;
+        return reportValidationError('Payment hash is required for invoice query.');
       }
 
       const result = await runAction('queryInvoice', async () => {
@@ -405,7 +417,7 @@ export function useFiberConsole(
 
       return result !== null;
     },
-    [ensureNode, pushActivity, runAction],
+    [ensureNode, pushActivity, reportValidationError, runAction],
   );
 
   const cancelInvoice = useCallback(
@@ -414,13 +426,11 @@ export function useFiberConsole(
       try {
         normalizedHash = normalizePaymentHash(paymentHash);
       } catch (parseError) {
-        setError(operationErrorMessage(parseError));
-        return false;
+        return reportValidationError(operationErrorMessage(parseError));
       }
 
       if (!normalizedHash) {
-        setError('Payment hash is required for cancelling invoice.');
-        return false;
+        return reportValidationError('Payment hash is required for cancelling invoice.');
       }
 
       const result = await runAction('cancelInvoice', async () => {
@@ -443,15 +453,14 @@ export function useFiberConsole(
 
       return result !== null;
     },
-    [ensureNode, pushActivity, runAction],
+    [ensureNode, pushActivity, reportValidationError, runAction],
   );
 
   const payInvoice = useCallback(
     async (invoiceAddress: string): Promise<boolean> => {
       const normalizedInvoice = invoiceAddress.trim();
       if (!normalizedInvoice) {
-        setError('Invoice string is required.');
-        return false;
+        return reportValidationError('Invoice string is required.');
       }
 
       const result = await runAction('payInvoice', async () => {
@@ -480,7 +489,7 @@ export function useFiberConsole(
 
       return result !== null;
     },
-    [ensureNode, pushActivity, runAction],
+    [ensureNode, pushActivity, reportValidationError, runAction],
   );
 
   const queryPayment = useCallback(
@@ -489,13 +498,11 @@ export function useFiberConsole(
       try {
         normalizedHash = normalizePaymentHash(paymentHash);
       } catch (parseError) {
-        setError(operationErrorMessage(parseError));
-        return false;
+        return reportValidationError(operationErrorMessage(parseError));
       }
 
       if (!normalizedHash) {
-        setError('Payment hash is required for payment query.');
-        return false;
+        return reportValidationError('Payment hash is required for payment query.');
       }
 
       const result = await runAction('queryPayment', async () => {
@@ -508,12 +515,8 @@ export function useFiberConsole(
 
       return result !== null;
     },
-    [ensureNode, pushActivity, runAction],
+    [ensureNode, pushActivity, reportValidationError, runAction],
   );
-
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
 
   useEffect(() => {
     if (!isRunning) {
@@ -544,9 +547,7 @@ export function useFiberConsole(
     latestPayment,
     paymentLookup,
     loading,
-    error,
     activity,
-    clearError,
     refreshSnapshot,
     refreshGraph,
     connectPeer,
