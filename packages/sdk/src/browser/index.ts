@@ -57,6 +57,7 @@ export { FiberWasmAdapter } from './wasm-adapter.js';
 // Re-export core SDK types (convenience — no need to import from two paths)
 // =============================================================================
 
+export { scriptToAddress } from '../address.js';
 export { FiberRpcError } from '../rpc/client.js';
 export type {
   AbandonChannelParams,
@@ -102,3 +103,4 @@ export type {
   UpdateChannelParams,
 } from '../types/rpc.js';
 export { ChannelState } from '../types/rpc.js';
+export { callJsonRpc, formatShannonsAsCkb, getLockBalanceShannons } from './ckb-balance.js';

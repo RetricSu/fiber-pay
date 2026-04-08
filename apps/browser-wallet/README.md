@@ -1,73 +1,34 @@
-# React + TypeScript + Vite
+# Browser Wallet Demo Console
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This app demonstrates a Fiber WASM node running fully in browser with a developer-friendly control console.
 
-Currently, two official plugins are available:
+## Run
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+pnpm -C apps/browser-wallet dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Build:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+pnpm -C apps/browser-wallet build
 ```
+
+## What You Can Do
+
+After node startup, the app exposes common operational flows (similar to CLI workflows):
+
+- Node lifecycle: start/stop with password or passkey
+- Runtime snapshot: `node_info`, `list_peers`, `list_channels`
+- Peer operations: `connect_peer`, `disconnect_peer`
+- Channel operations: `open_channel` + live channel list
+- Invoice operations: `new_invoice`, `get_invoice`, `cancel_invoice`
+- Payment operations: `send_payment`, `waitForPayment`, `get_payment`
+- Network graph overview: `graph_nodes`, `graph_channels`
+- Activity log: operation history with success/error detail
+
+## Notes
+
+- The demo targets `testnet` by default.
+- Channel/invoice/payment amounts are entered in CKB in UI, and converted to shannons for RPC.
+- Sensitive operations remain local to browser runtime (WASM + local credential provider).
