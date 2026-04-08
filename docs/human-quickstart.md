@@ -39,7 +39,7 @@ This initializes binary/config/key/runtime automatically for first-time local bo
 fiber-pay peer connect <peer-multiaddr> --json
 fiber-pay channel open --peer <peer-address> --funding <CKB> --json
 fiber-pay channel watch --until CHANNEL_READY --json
-fiber-pay channel list --state ChannelReady --json
+fiber-pay channel list --state CHANNEL_READY --json
 ```
 
 ## 4) Receive then send payment

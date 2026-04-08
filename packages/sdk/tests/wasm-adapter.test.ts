@@ -15,7 +15,7 @@ function createMockInstance(): FiberWasmInstance {
 				case 'node_info':
 					return Promise.resolve({
 						version: '0.7.1',
-						node_id: '0xabc',
+						pubkey: '0xabc',
 						node_name: 'test-wasm-node',
 						addresses: [],
 						chain_hash: '0x000',
@@ -190,7 +190,7 @@ describe('FiberWasmAdapter', () => {
 		it('should call nodeInfo', async () => {
 			const info = await adapter.nodeInfo();
 			expect(info.version).toBe('0.7.1');
-			expect(info.node_id).toBe('0xabc');
+			expect(info.pubkey).toBe('0xabc');
 		});
 
 		it('should call listPeers', async () => {

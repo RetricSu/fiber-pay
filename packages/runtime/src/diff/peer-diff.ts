@@ -6,17 +6,17 @@ export type PeerDiffEvent =
 
 export function diffPeers(previous: PeerInfo[], current: PeerInfo[]): PeerDiffEvent[] {
   const events: PeerDiffEvent[] = [];
-  const prevById = new Map(previous.map((peer) => [peer.peer_id, peer]));
-  const currById = new Map(current.map((peer) => [peer.peer_id, peer]));
+  const prevByPubkey = new Map(previous.map((peer) => [peer.pubkey, peer]));
+  const currByPubkey = new Map(current.map((peer) => [peer.pubkey, peer]));
 
-  for (const [peerId, peer] of currById.entries()) {
-    if (!prevById.has(peerId)) {
+  for (const [pubkey, peer] of currByPubkey.entries()) {
+    if (!prevByPubkey.has(pubkey)) {
       events.push({ type: 'peer_connected', peer });
     }
   }
 
-  for (const [peerId, peer] of prevById.entries()) {
-    if (!currById.has(peerId)) {
+  for (const [pubkey, peer] of prevByPubkey.entries()) {
+    if (!currByPubkey.has(pubkey)) {
       events.push({ type: 'peer_disconnected', peer });
     }
   }

@@ -1,8 +1,8 @@
 /**
- * Fiber Network Node RPC Types (Fiber v0.7.1)
+ * Fiber Network Node RPC Types (Fiber v0.8.0)
  *
  * The types in this file are intended to align with the upstream RPC spec:
- * https://github.com/nervosnetwork/fiber/blob/v0.7.1/crates/fiber-lib/src/rpc/README.md
+ * https://github.com/nervosnetwork/fiber/blob/v0.8.0/crates/fiber-lib/src/rpc/README.md
  */
 
 // =============================================================================
@@ -55,7 +55,7 @@ export type UdtScript = Script;
 
 export type Currency = 'Fibb' | 'Fibt' | 'Fibd';
 
-export type HashAlgorithm = 'CkbHash' | 'Sha256';
+export type HashAlgorithm = 'ckb_hash' | 'sha256';
 
 /** Recoverable signature (InvoiceSignature in the RPC spec). */
 export type InvoiceSignature = HexString;
@@ -66,25 +66,25 @@ export type InvoiceSignature = HexString;
  */
 export type Attribute =
   /** Deprecated since v0.6.0, preserved for compatibility. */
-  | { FinalHtlcTimeout: HexString }
+  | { final_htlc_timeout: HexString }
   /** Final TLC minimum expiry delta in milliseconds. */
-  | { FinalHtlcMinimumExpiryDelta: HexString }
+  | { final_htlc_minimum_expiry_delta: HexString }
   /** Invoice expiry time in seconds. */
-  | { ExpiryTime: HexString }
+  | { expiry_time: HexString }
   /** Human-readable invoice description. */
-  | { Description: string }
+  | { description: string }
   /** Fallback address for on-chain settlement. */
-  | { FallbackAddr: string }
+  | { fallback_addr: string }
   /** UDT script for token invoices. */
-  | { UdtScript: UdtScript }
+  | { udt_script: HexString }
   /** Payee public key. */
-  | { PayeePublicKey: Pubkey }
+  | { payee_public_key: Pubkey }
   /** Hash algorithm used in the payment hash lock. */
-  | { HashAlgorithm: HashAlgorithm }
+  | { hash_algorithm: HashAlgorithm }
   /** Feature flags list. */
-  | { Feature: string[] }
+  | { feature: string[] }
   /** Payment secret. */
-  | { PaymentSecret: Hash256 };
+  | { payment_secret: Hash256 };
 
 export interface InvoiceData {
   timestamp: HexString;
@@ -116,8 +116,8 @@ export enum ChannelState {
   Closed = 'CLOSED',
 }
 
-/** Channel state flags are serialized as flag names by upstream RPC and may evolve. */
-export type ChannelStateFlags = string[];
+/** Channel state flags are serialized as a pipe-delimited SCREAMING_SNAKE_CASE string. */
+export type ChannelStateFlags = string;
 
 /** TLC status. The upstream spec defines OutboundTlcStatus / InboundTlcStatus, which may evolve. */
 export type TlcStatus = { Outbound: unknown } | { Inbound: unknown };
@@ -138,7 +138,7 @@ export interface Channel {
   is_acceptor: boolean;
   is_one_way: boolean;
   channel_outpoint: OutPoint | null;
-  peer_id: PeerId;
+  pubkey: Pubkey;
   funding_udt_type_script: Script | null;
   state: {
     state_name: ChannelState;
@@ -164,7 +164,6 @@ export interface Channel {
 
 export interface PeerInfo {
   pubkey: Pubkey;
-  peer_id: PeerId;
   address: Multiaddr;
 }
 
@@ -236,7 +235,7 @@ export type UdtCfgInfos = UdtArgInfo[];
 export interface NodeInfo {
   version: string;
   commit_hash: string;
-  node_id: Pubkey;
+  pubkey: Pubkey;
   features: string[];
   node_name: string | null;
   addresses: Multiaddr[];
@@ -271,7 +270,7 @@ export interface GraphNodeInfo {
   version: string;
   addresses: Multiaddr[];
   features: string[];
-  node_id: Pubkey;
+  pubkey: Pubkey;
   timestamp: HexString;
   chain_hash: Hash256;
   auto_accept_min_ckb_funding_amount: HexString;
@@ -297,7 +296,8 @@ export interface GraphChannelInfo {
 // --- Peer Module ---
 
 export interface ConnectPeerParams {
-  address: Multiaddr;
+  address?: string;
+  pubkey?: Pubkey;
   save?: boolean;
 }
 
@@ -305,7 +305,7 @@ export interface ConnectPeerParams {
 export type ConnectPeerResult = null;
 
 export interface DisconnectPeerParams {
-  peer_id: PeerId;
+  pubkey: Pubkey;
 }
 
 export interface ListPeersResult {
@@ -315,7 +315,7 @@ export interface ListPeersResult {
 // --- Channel Module ---
 
 export interface OpenChannelParams {
-  peer_id: PeerId;
+  pubkey: Pubkey;
   funding_amount: HexString;
   public?: boolean;
   one_way?: boolean;
@@ -351,7 +351,7 @@ export interface AcceptChannelResult {
 }
 
 export interface ListChannelsParams {
-  peer_id?: PeerId;
+  pubkey?: Pubkey;
   include_closed?: boolean;
   only_pending?: boolean;
 }
@@ -534,8 +534,8 @@ export type CchOrderStatus =
   | 'Pending'
   | 'IncomingAccepted'
   | 'OutgoingInFlight'
-  | 'OutgoingSucceeded'
-  | 'Succeeded'
+  | 'OutgoingSuccess'
+  | 'Success'
   | 'Failed';
 
 /** Reason for removing a TLC in Dev module APIs. */

@@ -62,7 +62,7 @@ const MAINNET_CKB_RPC = 'https://mainnet.ckbapp.dev/';
 
 /**
  * Fiber on-chain scripts — these are the same for both testnet and mainnet
- * as of v0.7.1. They define FundingLock and CommitmentLock contracts.
+ * as of v0.8.0. They define FundingLock and CommitmentLock contracts.
  */
 const FIBER_SCRIPTS = [
   {

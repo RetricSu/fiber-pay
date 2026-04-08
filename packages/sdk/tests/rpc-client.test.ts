@@ -296,10 +296,9 @@ describe('FiberRpcClient - New Methods', () => {
       expect(body.params[0].payment_preimage).toBeUndefined();
     });
 
-    it.each([
-      { sdkValue: 'Sha256', rpcValue: 'sha256' },
-      { sdkValue: 'CkbHash', rpcValue: 'ckb_hash' },
-    ] as const)('should map $sdkValue to $rpcValue for RPC', async ({ sdkValue, rpcValue }) => {
+    it.each(['sha256', 'ckb_hash'] as const)(
+      'should pass through %s hash_algorithm for RPC',
+      async (algorithm) => {
       const fetchMock = mockFetch({
         invoice_address: 'fibt1testinvoice',
         invoice: {
@@ -318,14 +317,15 @@ describe('FiberRpcClient - New Methods', () => {
         amount: '0x5f5e100' as HexString,
         currency: 'Fibt',
         payment_hash: '0xdeadbeef' as HexString,
-        hash_algorithm: sdkValue,
+        hash_algorithm: algorithm,
       };
 
       await client.newInvoice(params);
 
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-      expect(body.params[0].hash_algorithm).toBe(rpcValue);
-    });
+      expect(body.params[0].hash_algorithm).toBe(algorithm);
+      },
+    );
 
     it('should work without hash_algorithm', async () => {
       const fetchMock = mockFetch({
@@ -458,13 +458,13 @@ describe('FiberRpcClient - Polling Helpers', () => {
         channels: [
           {
             channel_id: '0xch-upper',
-            peer_id: 'QmTest',
+            pubkey: 'QmTest',
             is_public: true,
             is_acceptor: false,
             is_one_way: false,
             channel_outpoint: null,
             funding_udt_type_script: null,
-            state: { state_name: 'CHANNEL_READY', state_flags: [] },
+            state: { state_name: 'CHANNEL_READY', state_flags: 'OUR_INIT_SENT | THEIR_INIT_SENT' },
             local_balance: '0x0',
             remote_balance: '0x0',
             offered_tlc_balance: '0x0',
@@ -492,13 +492,13 @@ describe('FiberRpcClient - Polling Helpers', () => {
           channels: [
             {
               channel_id: '0xch1',
-              peer_id: 'QmTest',
+              pubkey: 'QmTest',
               is_public: true,
               is_acceptor: false,
               is_one_way: false,
               channel_outpoint: null,
               funding_udt_type_script: null,
-              state: { state_name: 'AWAITING_CHANNEL_READY', state_flags: [] },
+              state: { state_name: 'AWAITING_CHANNEL_READY', state_flags: 'OUR_INIT_SENT' },
               local_balance: '0x0',
               remote_balance: '0x0',
               offered_tlc_balance: '0x0',
@@ -518,13 +518,13 @@ describe('FiberRpcClient - Polling Helpers', () => {
           channels: [
             {
               channel_id: '0xch1',
-              peer_id: 'QmTest',
+              pubkey: 'QmTest',
               is_public: true,
               is_acceptor: false,
               is_one_way: false,
               channel_outpoint: null,
               funding_udt_type_script: null,
-              state: { state_name: 'CHANNEL_READY', state_flags: [] },
+              state: { state_name: 'CHANNEL_READY', state_flags: 'OUR_INIT_SENT | THEIR_INIT_SENT' },
               local_balance: '0x5f5e100',
               remote_balance: '0x0',
               offered_tlc_balance: '0x0',
@@ -556,13 +556,13 @@ describe('FiberRpcClient - Polling Helpers', () => {
         channels: [
           {
             channel_id: '0xch1',
-            peer_id: 'QmTest',
+            pubkey: 'QmTest',
             is_public: true,
             is_acceptor: false,
             is_one_way: false,
             channel_outpoint: null,
             funding_udt_type_script: null,
-            state: { state_name: 'Closed', state_flags: [] },
+            state: { state_name: 'Closed', state_flags: 'CHANNEL_CLOSED' },
             local_balance: '0x0',
             remote_balance: '0x0',
             offered_tlc_balance: '0x0',
@@ -656,7 +656,7 @@ describe('FiberRpcClient - Polling Helpers', () => {
 // =============================================================================
 
 describe('Type Correctness', () => {
-  it('CkbInvoiceStatus should include v0.7.1 variants', () => {
+  it('CkbInvoiceStatus should include v0.8.0 variants', () => {
     const statuses: CkbInvoiceStatus[] = ['Open', 'Cancelled', 'Expired', 'Received', 'Paid'];
     expect(statuses).toHaveLength(5);
   });

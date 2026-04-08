@@ -415,7 +415,7 @@ export class JobManager extends EventEmitter<JobManagerEvents> {
         channelJob.params.channelId ??
         channelJob.params.shutdownChannelParams?.channel_id ??
         channelJob.result?.channelId,
-      peerId: channelJob.params.peerId ?? channelJob.params.openChannelParams?.peer_id,
+      peerId: channelJob.params.peerId ?? channelJob.params.openChannelParams?.pubkey,
       channelState: channelJob.result?.state,
     };
   }

@@ -52,12 +52,21 @@ async function main() {
     console.log('✓ Already connected to peer\n');
   }
 
+  const discovered = await client.listPeers({});
+  const connectedPeer = discovered.peers.find((peer) => peer.address === PEER_ADDR);
+  const targetPubkey = process.env.PEER_PUBKEY ?? connectedPeer?.pubkey;
+
+  if (!targetPubkey || !targetPubkey.startsWith('0x')) {
+    console.error('Could not resolve peer pubkey. Set PEER_PUBKEY=0x... and retry.');
+    process.exit(1);
+  }
+
   // 2. Open a channel
   const fundingCkb = 200; // 200 CKB minimum recommended
   console.log(`Opening channel with ${fundingCkb} CKB funding...`);
 
   const channel = await client.openChannel({
-    peer_id: peerId,
+    pubkey: targetPubkey as `0x${string}`,
     funding_amount: ckbToShannons(fundingCkb),
     public: true,
   });

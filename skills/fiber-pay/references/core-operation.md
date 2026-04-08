@@ -9,12 +9,12 @@ Before `payment send`, verify all of the following:
 - node process is running
 - RPC is reachable
 - runtime proxy is available
-- at least one usable `ChannelReady` path exists
+- at least one usable `CHANNEL_READY` path exists
 
 ```bash
 fiber-pay node ready --json
 fiber-pay runtime status --json
-fiber-pay channel list --state ChannelReady --json
+fiber-pay channel list --state CHANNEL_READY --json
 ```
 
 If any check fails, do **not** send payment yet; fix readiness first.

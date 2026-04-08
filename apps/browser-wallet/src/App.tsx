@@ -364,8 +364,8 @@ function App() {
             <>
               <div className="runtime-grid">
                 <div className="metric-tile">
-                  <p className="metric-label">Node ID</p>
-                  <p className="metric-value mono">{shorten(runtimeInfo?.node_id ?? '-', 16, 10)}</p>
+                  <p className="metric-label">Node Pubkey</p>
+                  <p className="metric-value mono">{shorten(runtimeInfo?.pubkey ?? '-', 16, 10)}</p>
                 </div>
                 <div className="metric-tile">
                   <p className="metric-label">Version</p>
@@ -504,16 +504,16 @@ function App() {
             ) : (
               <div className="list-grid">
                 {peers.map((peer) => (
-                  <article key={peer.peer_id} className="list-item">
+                  <article key={peer.pubkey} className="list-item">
                     <div>
-                      <p className="field-label">Peer ID</p>
-                      <p className="mono" title={peer.peer_id}>{shorten(peer.peer_id, 20, 12)}</p>
+                      <p className="field-label">Peer Pubkey</p>
+                      <p className="mono" title={peer.pubkey}>{shorten(peer.pubkey, 20, 12)}</p>
                     </div>
                     <div>
                       <p className="field-label">Address</p>
                       <p className="mono" title={peer.address}>{shorten(peer.address, 26, 12)}</p>
                     </div>
-                    <button className="btn btn-ghost" onClick={() => void disconnectPeer(peer.peer_id)} disabled={loading.disconnectPeer}>
+                    <button className="btn btn-ghost" onClick={() => void disconnectPeer(peer.pubkey)} disabled={loading.disconnectPeer}>
                       Disconnect
                     </button>
                   </article>
@@ -575,7 +575,7 @@ function App() {
                       </div>
                       <div>
                         <p className="field-label">Peer</p>
-                        <p className="mono" title={channel.peer_id}>{shorten(channel.peer_id, 20, 12)}</p>
+                        <p className="mono" title={channel.pubkey}>{shorten(channel.pubkey, 20, 12)}</p>
                       </div>
                       <div>
                         <p className="field-label">State</p>

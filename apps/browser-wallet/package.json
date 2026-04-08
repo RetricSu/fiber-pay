@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@fiber-pay/sdk": "workspace:*",
-    "@nervosnetwork/fiber-js": "~0.7.1",
+    "@nervosnetwork/fiber-js": "~0.8.0",
     "lucide-react": "^0.364.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.4",

@@ -25,14 +25,14 @@ async function main() {
   // 2. Get node info
   const info = await client.nodeInfo();
   console.log('Node Info:');
-  console.log(`  Node ID:  ${info.node_id}`);
+  console.log(`  Node ID:  ${info.pubkey}`);
   console.log(`  Version:  ${info.version}`);
   console.log(`  Channels: ${info.channel_count}`);
   console.log(`  Peers:    ${info.peers_count}\n`);
 
   // 3. Check channel balances
   const channels = await client.listChannels({});
-  const readyChannels = channels.channels.filter((ch) => ch.state.state_name === 'ChannelReady');
+  const readyChannels = channels.channels.filter((ch) => ch.state.state_name === 'CHANNEL_READY');
 
   if (readyChannels.length === 0) {
     console.error('No ready channels. Open a channel first.');
@@ -62,7 +62,7 @@ async function main() {
     description: 'Example payment',
     expiry: toHex(3600), // 1 hour
     payment_preimage: preimage,
-    hash_algorithm: 'Sha256',
+    hash_algorithm: 'sha256',
   });
 
   console.log(`✓ Invoice created`);

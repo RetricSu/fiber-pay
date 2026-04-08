@@ -14,7 +14,7 @@ fiber-pay node stop
 
 # 2. Upgrade binary + migrate store
 fiber-pay node upgrade                    # latest version
-fiber-pay node upgrade --version v0.7.1   # specific version
+fiber-pay node upgrade --version v0.8.0   # specific version
 fiber-pay node upgrade --force-migrate    # force migration check/attempt
 
 # 3. Restart

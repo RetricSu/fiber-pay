@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { type ChannelState, ckbToShannons, type HexString } from '@fiber-pay/sdk';
+import { type ChannelState, ckbToShannons, type HexString, nodeIdToPeerId } from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import { sleep } from '../lib/async.js';
 import type { CliConfig } from '../lib/config.js';
@@ -18,13 +18,51 @@ import { createReadyRpcClient, resolveRpcEndpoint } from '../lib/rpc.js';
 import { tryCreateRuntimeChannelJob } from '../lib/runtime-jobs.js';
 import { registerChannelRebalanceCommand } from './rebalance.js';
 
+function extractPeerIdFromMultiaddr(address: string): string | undefined {
+  const match = address.match(/\/p2p\/([^/]+)$/);
+  return match?.[1];
+}
+
+async function resolvePeerPubkeyFromMultiaddr(
+  rpc: Awaited<ReturnType<typeof createReadyRpcClient>>,
+  address: string,
+  timeoutMs: number,
+): Promise<`0x${string}`> {
+  const expectedPeerId = extractPeerIdFromMultiaddr(address);
+  if (!expectedPeerId) {
+    throw new Error('Invalid peer multiaddr: missing /p2p/<peerId> suffix');
+  }
+
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const peers = await rpc.listPeers();
+    for (const peer of peers.peers) {
+      if (extractPeerIdFromMultiaddr(peer.address) === expectedPeerId) {
+        return peer.pubkey;
+      }
+      try {
+        if ((await nodeIdToPeerId(peer.pubkey)) === expectedPeerId) {
+          return peer.pubkey;
+        }
+      } catch {
+        // Ignore malformed pubkeys and continue scanning peer list.
+      }
+    }
+    await sleep(500);
+  }
+
+  throw new Error(
+    `connect_peer accepted but peer pubkey not resolved within ${Math.floor(timeoutMs / 1000)}s (${expectedPeerId})`,
+  );
+}
+
 export function createChannelCommand(config: CliConfig): Command {
   const channel = new Command('channel').description('Channel lifecycle and status commands');
 
   channel
     .command('list')
     .option('--state <state>')
-    .option('--peer <peerId>')
+    .option('--peer <pubkey>')
     .option('--include-closed')
     .option('--json')
     .action(async (options) => {
@@ -32,7 +70,7 @@ export function createChannelCommand(config: CliConfig): Command {
       const stateFilter = parseChannelState(options.state);
       const response = await rpc.listChannels(
         options.peer
-          ? { peer_id: options.peer, include_closed: Boolean(options.includeClosed) }
+          ? { pubkey: options.peer, include_closed: Boolean(options.includeClosed) }
           : { include_closed: Boolean(options.includeClosed) },
       );
       const channels = stateFilter
@@ -82,7 +120,7 @@ export function createChannelCommand(config: CliConfig): Command {
     .option('--timeout <seconds>')
     .option('--on-timeout <behavior>', 'fail | success', 'fail')
     .option('--channel <channelId>')
-    .option('--peer <peerId>')
+    .option('--peer <pubkey>')
     .option('--state <state>')
     .option('--until <state>')
     .option('--include-closed')
@@ -121,7 +159,7 @@ export function createChannelCommand(config: CliConfig): Command {
       while (true) {
         const response = await rpc.listChannels(
           options.peer
-            ? { peer_id: options.peer, include_closed: Boolean(options.includeClosed) }
+            ? { pubkey: options.peer, include_closed: Boolean(options.includeClosed) }
             : { include_closed: Boolean(options.includeClosed) },
         );
         let channels = response.channels;
@@ -217,7 +255,7 @@ export function createChannelCommand(config: CliConfig): Command {
 
   channel
     .command('open')
-    .requiredOption('--peer <peerIdOrMultiaddr>')
+    .requiredOption('--peer <pubkeyOrMultiaddr>')
     .requiredOption('--funding <ckb>')
     .option('--private')
     .option(
@@ -231,26 +269,29 @@ export function createChannelCommand(config: CliConfig): Command {
       const peerInput = options.peer as string;
       const fundingCkb = parseFloat(options.funding);
 
-      let peerId = peerInput;
+      let peerPubkey = peerInput;
       if (peerInput.includes('/')) {
         await rpc.connectPeer({ address: peerInput });
-        const peerIdMatch = peerInput.match(/\/p2p\/([^/]+)/);
-        if (peerIdMatch) peerId = peerIdMatch[1];
+        peerPubkey = await resolvePeerPubkeyFromMultiaddr(rpc, peerInput, 8_000);
+      }
+
+      if (!peerPubkey.startsWith('0x')) {
+        throw new Error(`Invalid peer pubkey: ${peerPubkey}`);
       }
 
       const idempotencyKey =
         typeof options.idempotencyKey === 'string' && options.idempotencyKey.trim().length > 0
           ? options.idempotencyKey.trim()
-          : `open:${peerId}:${randomUUID()}`;
+          : `open:${peerPubkey}:${randomUUID()}`;
 
       const endpoint = resolveRpcEndpoint(config);
       if (endpoint.target === 'runtime-proxy') {
         const created = await tryCreateRuntimeChannelJob(endpoint.url, {
           params: {
             action: 'open',
-            peerId,
+            peerId: peerPubkey,
             openChannelParams: {
-              peer_id: peerId,
+              pubkey: peerPubkey,
               funding_amount: ckbToShannons(fundingCkb),
               public: !options.private,
             },
@@ -266,7 +307,7 @@ export function createChannelCommand(config: CliConfig): Command {
           const payload = {
             jobId: created.id,
             jobState: created.state,
-            peer: peerId,
+            peer: peerPubkey,
             fundingCkb,
             idempotencyKey,
           };
@@ -286,12 +327,16 @@ export function createChannelCommand(config: CliConfig): Command {
       }
 
       const result = await rpc.openChannel({
-        peer_id: peerId,
+        pubkey: peerPubkey as HexString,
         funding_amount: ckbToShannons(fundingCkb),
         public: !options.private,
       });
 
-      const payload = { temporaryChannelId: result.temporary_channel_id, peer: peerId, fundingCkb };
+      const payload = {
+        temporaryChannelId: result.temporary_channel_id,
+        peer: peerPubkey,
+        fundingCkb,
+      };
       if (json) {
         printJsonSuccess(payload);
       } else {

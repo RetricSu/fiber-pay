@@ -66,14 +66,14 @@ export async function runNodeStatusCommand(
       const channels = await rpc.listChannels({ include_closed: false });
       rpcResponsive = true;
 
-      nodeId = nodeInfo.node_id;
+      nodeId = nodeInfo.pubkey;
       nodeName = nodeInfo.node_name;
       addresses = nodeInfo.addresses;
       chainHash = nodeInfo.chain_hash;
       version = nodeInfo.version;
       peersCount = parseInt(nodeInfo.peers_count, 16);
       try {
-        peerId = await nodeIdToPeerId(nodeInfo.node_id);
+        peerId = await nodeIdToPeerId(nodeInfo.pubkey);
       } catch (error) {
         peerIdError = error instanceof Error ? error.message : String(error);
       }
@@ -81,7 +81,7 @@ export async function runNodeStatusCommand(
       const baseAddress = nodeInfo.addresses[0];
       if (baseAddress) {
         try {
-          multiaddr = await buildMultiaddrFromNodeId(baseAddress, nodeInfo.node_id);
+          multiaddr = await buildMultiaddrFromNodeId(baseAddress, nodeInfo.pubkey);
         } catch (error) {
           multiaddrError = error instanceof Error ? error.message : String(error);
         }

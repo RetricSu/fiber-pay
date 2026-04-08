@@ -18,7 +18,7 @@
  *
  * await node.start({ password: 'user-secret' });
  * const info = await node.getNodeInfo();
- * console.log('Node ID:', info.node_id);
+ * console.log('Node pubkey:', info.pubkey);
  *
  * await node.sendPayment({ invoice: 'fibt1...' });
  * await node.stop();
