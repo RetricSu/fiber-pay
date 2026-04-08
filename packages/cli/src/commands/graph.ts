@@ -17,7 +17,7 @@ function printGraphNodeListHuman(nodes: GraphNodeInfo[]): void {
   console.log('---------------------------------------------------------------------------------');
 
   for (const node of nodes) {
-    const nodeId = truncateMiddle(node.node_id, 10, 8).padEnd(22, ' ');
+    const nodeId = truncateMiddle(node.pubkey, 10, 8).padEnd(22, ' ');
     const alias = (node.node_name || '(unnamed)').slice(0, 20).padEnd(20, ' ');
     const version = (node.version || '?').slice(0, 10).padEnd(10, ' ');
     const minFunding = shannonsToCkb(node.auto_accept_min_ckb_funding_amount)

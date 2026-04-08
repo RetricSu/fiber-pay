@@ -53,13 +53,7 @@ export async function runNodeNetworkCommand(
   // Create lookup maps for efficient data enrichment
   const graphNodesMap = new Map<string, GraphNodeInfo>();
   for (const node of graphNodes.nodes) {
-    graphNodesMap.set(node.node_id, node);
-  }
-
-  // Create peer_id to node_id mapping from connected peers
-  const peerIdToNodeIdMap = new Map<string, string>();
-  for (const peer of localPeers.peers) {
-    peerIdToNodeIdMap.set(peer.peer_id, peer.pubkey);
+    graphNodesMap.set(node.pubkey, node);
   }
 
   const graphChannelsMap = new Map<string, GraphChannelInfo>();
@@ -78,9 +72,7 @@ export async function runNodeNetworkCommand(
 
   // Enrich channel information
   const enrichedChannels: EnrichedChannelInfo[] = localChannels.channels.map((channel) => {
-    // Try to find node_id from peer_id mapping first, then fallback to direct lookup
-    const nodeId = peerIdToNodeIdMap.get(channel.peer_id) || channel.peer_id;
-    const peerNodeInfo = graphNodesMap.get(nodeId);
+    const peerNodeInfo = graphNodesMap.get(channel.pubkey);
     let graphChannelInfo: GraphChannelInfo | undefined;
 
     // Try to find the graph channel info by matching outpoint
@@ -107,7 +99,7 @@ export async function runNodeNetworkCommand(
   const totalChannelCapacity = formatShannonsAsCkb(totalChannelCapacityShannons, 1);
 
   const networkData: NodeNetworkData = {
-    localNodeId: nodeInfo.node_id,
+    localNodeId: nodeInfo.pubkey,
     peers: enrichedPeers,
     channels: enrichedChannels,
     graphNodes: graphNodes.nodes,
@@ -140,13 +132,13 @@ function printNodeNetworkHuman(data: NodeNetworkData): void {
   // Print peers table
   if (data.peers.length > 0) {
     console.log('Peers:');
-    console.log('  PEER_ID                ALIAS                ADDRESS                    VERSION');
+    console.log('  PUBKEY                 ALIAS                ADDRESS                    VERSION');
     console.log(
       '  --------------------------------------------------------------------------------',
     );
 
     for (const peer of data.peers) {
-      const peerId = truncateMiddle(peer.peer_id, 10, 8).padEnd(22, ' ');
+      const pubkey = truncateMiddle(peer.pubkey, 10, 8).padEnd(22, ' ');
       const alias = sanitizeForTerminal(peer.nodeInfo?.node_name || '(unnamed)')
         .slice(0, 20)
         .padEnd(20, ' ');
@@ -154,7 +146,7 @@ function printNodeNetworkHuman(data: NodeNetworkData): void {
       const version = sanitizeForTerminal(peer.nodeInfo?.version || '?')
         .slice(0, 8)
         .padEnd(8, ' ');
-      console.log(`  ${peerId} ${alias} ${address} ${version}`);
+      console.log(`  ${pubkey} ${alias} ${address} ${version}`);
     }
     console.log('');
   }

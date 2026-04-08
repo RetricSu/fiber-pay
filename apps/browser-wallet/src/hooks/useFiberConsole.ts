@@ -230,18 +230,18 @@ export function useFiberConsole(
   );
 
   const disconnectPeer = useCallback(
-    async (peerId: string): Promise<boolean> => {
-      const normalizedPeerId = peerId.trim();
-      if (!normalizedPeerId) {
-        return reportValidationError('Peer ID is required.');
+    async (peerPubkey: string): Promise<boolean> => {
+      const normalizedPeerPubkey = peerPubkey.trim();
+      if (!normalizedPeerPubkey) {
+        return reportValidationError('Peer pubkey is required.');
       }
 
       const result = await runAction('disconnectPeer', async () => {
         const currentNode = ensureNode();
-        await currentNode.disconnectPeer({ peer_id: normalizedPeerId });
+        await currentNode.disconnectPeer({ pubkey: normalizedPeerPubkey as `0x${string}` });
         const peersResult = await currentNode.listPeers();
         setPeers(peersResult.peers);
-        pushActivity('success', `Disconnected peer: ${normalizedPeerId}`);
+        pushActivity('success', `Disconnected peer: ${normalizedPeerPubkey}`);
       });
 
       return result !== null;
@@ -250,12 +250,12 @@ export function useFiberConsole(
   );
 
   const openChannel = useCallback(
-    async (peerId: string, fundingCkb: string): Promise<boolean> => {
-      const normalizedPeerId = peerId.trim();
+    async (peerPubkey: string, fundingCkb: string): Promise<boolean> => {
+      const normalizedPeerPubkey = peerPubkey.trim();
       let fundingAmountHex: `0x${string}`;
 
-      if (!normalizedPeerId) {
-        return reportValidationError('Peer ID is required for opening a channel.');
+      if (!normalizedPeerPubkey) {
+        return reportValidationError('Peer pubkey is required for opening a channel.');
       }
 
       try {
@@ -267,7 +267,7 @@ export function useFiberConsole(
       const result = await runAction('openChannel', async () => {
         const currentNode = ensureNode();
         const openResult = await currentNode.openChannel({
-          peer_id: normalizedPeerId,
+          pubkey: normalizedPeerPubkey as `0x${string}`,
           funding_amount: fundingAmountHex,
         });
 
@@ -276,7 +276,7 @@ export function useFiberConsole(
 
         pushActivity(
           'success',
-          `Channel opened with ${normalizedPeerId} (${fundingCkb} CKB)`,
+          `Channel opened with ${normalizedPeerPubkey} (${fundingCkb} CKB)`,
           `Temporary channel ID: ${openResult.temporary_channel_id}`,
         );
       });

@@ -46,7 +46,7 @@
     "zod": "^4.3.6"
   },
   "peerDependencies": {
-    "@nervosnetwork/fiber-js": "~0.7.1",
+    "@nervosnetwork/fiber-js": "~0.8.0",
     "express": "^4.0.0 || ^5.0.0"
   },
   "peerDependenciesMeta": {

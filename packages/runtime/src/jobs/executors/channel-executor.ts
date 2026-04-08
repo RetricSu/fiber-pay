@@ -45,11 +45,11 @@ export async function* runChannelJob(
         throw new Error('Channel open job requires openChannelParams');
       }
 
-      const targetPeerId = current.params.peerId ?? current.params.openChannelParams.peer_id;
+      const targetPubkey = normalizePubkey(resolveTargetPeer(current.params));
       let temporaryChannelId = current.result?.temporaryChannelId;
 
       if (resumedFromRetry) {
-        const existing = await findTargetChannel(rpc, targetPeerId, current.params.channelId);
+        const existing = await findTargetChannel(rpc, targetPubkey, current.params.channelId);
         if (existing && !isClosed(existing.state.state_name)) {
           current = transitionJobState(current, channelStateMachine, 'channel_opening', {
             patch: {
@@ -102,14 +102,14 @@ export async function* runChannelJob(
         }
 
         const channels = await rpc.listChannels({
-          peer_id: targetPeerId,
+          ...(isHexPrefixed(targetPubkey) ? { pubkey: targetPubkey } : {}),
           include_closed: true,
         });
 
         const candidates = channels.channels.filter((channel) => {
           if (current.params.channelId && channel.channel_id !== current.params.channelId)
             return false;
-          return channel.peer_id === targetPeerId;
+          return getChannelPubkey(channel) === targetPubkey;
         });
 
         const readyMatch = candidates.find(
@@ -325,15 +325,15 @@ function classifyChannelError(error: unknown): ClassifiedError {
   return base;
 }
 
-async function findTargetChannel(rpc: FiberRpcClient, peerId: string, channelId?: `0x${string}`) {
+async function findTargetChannel(rpc: FiberRpcClient, pubkey: string, channelId?: `0x${string}`) {
   const channels = await rpc.listChannels({
-    peer_id: peerId,
+    ...(isHexPrefixed(pubkey) ? { pubkey: pubkey as `0x${string}` } : {}),
     include_closed: true,
   });
 
   return channels.channels.find((channel) => {
     if (channelId && channel.channel_id !== channelId) return false;
-    return channel.peer_id === peerId;
+    return getChannelPubkey(channel) === pubkey;
   });
 }
 
@@ -348,4 +348,25 @@ function isClosed(stateName: string): boolean {
 
 function isTerminalClosed(stateName: string): boolean {
   return stateName === ChannelState.Closed || stateName === 'CLOSED';
+}
+
+function normalizePubkey(value: string): `0x${string}` {
+  // Runtime jobs may carry legacy peer-style ids in tests/old persisted jobs.
+  // Keep matching tolerant here; upstream RPC will still validate actual pubkey format.
+  return value as `0x${string}`;
+}
+
+function resolveTargetPeer(params: ChannelJob['params']): string {
+  if (params.peerId) return params.peerId;
+  if (params.openChannelParams?.pubkey) return params.openChannelParams.pubkey;
+  const legacyPeerId = (params.openChannelParams as { peer_id?: string } | undefined)?.peer_id;
+  return legacyPeerId ?? '';
+}
+
+function isHexPrefixed(value: string): value is `0x${string}` {
+  return value.startsWith('0x');
+}
+
+function getChannelPubkey(channel: { pubkey?: string; peer_id?: string }): string {
+  return channel.pubkey ?? channel.peer_id ?? '';
 }

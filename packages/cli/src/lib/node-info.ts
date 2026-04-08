@@ -21,7 +21,7 @@ export async function runNodeInfoCommand(
   console.log('✅ Node info retrieved');
   console.log(`  Version: ${nodeInfo.version}`);
   console.log(`  Commit: ${nodeInfo.commit_hash}`);
-  console.log(`  Node ID: ${nodeInfo.node_id}`);
+  console.log(`  Node Pubkey: ${nodeInfo.pubkey}`);
   if (nodeInfo.features.length > 0) {
     console.log('  Features:');
     for (const feature of nodeInfo.features) {

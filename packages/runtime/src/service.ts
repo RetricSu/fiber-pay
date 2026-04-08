@@ -396,7 +396,7 @@ export class FiberMonitorService extends EventEmitter {
   }
 
   private extractChannelPeerId(job: ChannelJob): string | undefined {
-    return job.params.peerId ?? job.params.openChannelParams?.peer_id;
+    return job.params.peerId ?? job.params.openChannelParams?.pubkey;
   }
 
   private extractTemporaryChannelId(job: ChannelJob): `0x${string}` | undefined {

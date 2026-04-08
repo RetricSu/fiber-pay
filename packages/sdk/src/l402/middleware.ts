@@ -299,7 +299,7 @@ export class L402Middleware {
       description: `L402 Payment ${resource?.type ?? 'resource'}`,
       currency: this.currency,
       expiry: `0x${this.config.expirySeconds.toString(16)}`,
-      hash_algorithm: 'Sha256' as HashAlgorithm,
+      hash_algorithm: 'sha256' as HashAlgorithm,
     });
 
     const paymentHash = invoiceResult.invoice.data.payment_hash;

@@ -162,8 +162,8 @@ export function formatChannel(channel: Channel): Record<string, unknown> {
   return {
     channelId: channel.channel_id,
     channelIdShort: truncateMiddle(channel.channel_id, 10, 8),
-    peerId: channel.peer_id,
-    peerIdShort: truncateMiddle(channel.peer_id, 10, 8),
+    peerId: channel.pubkey,
+    peerIdShort: truncateMiddle(channel.pubkey, 10, 8),
     state: channel.state.state_name,
     stateLabel: stateLabel(channel.state.state_name),
     stateFlags: channel.state.state_flags,
@@ -210,10 +210,10 @@ export function extractInvoiceMetadata(invoice: CkbInvoice): {
   let expirySeconds: number | undefined;
 
   for (const attr of invoice.data.attrs) {
-    if ('Description' in attr) description = attr.Description;
-    if ('ExpiryTime' in attr) {
+    if ('description' in attr) description = attr.description;
+    if ('expiry_time' in attr) {
       try {
-        expirySeconds = Number(BigInt(attr.ExpiryTime));
+        expirySeconds = Number(BigInt(attr.expiry_time));
       } catch {
         // ignore malformed expiry field
       }
@@ -285,7 +285,7 @@ export function printChannelDetailHuman(channel: Channel): void {
 
   console.log('Channel');
   console.log(`  ID:            ${channel.channel_id}`);
-  console.log(`  Peer:          ${channel.peer_id}`);
+  console.log(`  Peer:          ${channel.pubkey}`);
   console.log(
     `  State:         ${stateLabel(channel.state.state_name)} (${channel.state.state_name})`,
   );
@@ -381,7 +381,7 @@ export function printChannelListHuman(channels: Channel[]): void {
 
   for (const channel of channels) {
     const id = truncateMiddle(channel.channel_id, 10, 8).padEnd(22, ' ');
-    const peer = truncateMiddle(channel.peer_id, 10, 8).padEnd(22, ' ');
+    const peer = truncateMiddle(channel.pubkey, 10, 8).padEnd(22, ' ');
     const state = channel.state.state_name.padEnd(24, ' ');
     const local = `${shannonsToCkb(channel.local_balance)}`.padStart(8, ' ');
     const remote = `${shannonsToCkb(channel.remote_balance)}`.padStart(8, ' ');
@@ -422,9 +422,7 @@ export function printBalanceHuman(data: {
   }
 }
 
-export function printPeerListHuman(
-  peers: Array<{ peer_id: string; pubkey: string; address: string }>,
-): void {
+export function printPeerListHuman(peers: Array<{ pubkey: string; address: string }>): void {
   if (peers.length === 0) {
     console.log('No connected peers.');
     return;
@@ -432,11 +430,10 @@ export function printPeerListHuman(
 
   console.log(`Peers: ${peers.length}`);
   console.log('');
-  console.log('PEER ID                 PUBKEY                  ADDRESS');
-  console.log('--------------------------------------------------------------------------');
+  console.log('PUBKEY                  ADDRESS');
+  console.log('----------------------------------------------------------');
   for (const peer of peers) {
-    const peerId = truncateMiddle(peer.peer_id, 10, 8).padEnd(22, ' ');
     const pubkey = truncateMiddle(peer.pubkey, 10, 8).padEnd(22, ' ');
-    console.log(`${peerId} ${pubkey} ${peer.address}`);
+    console.log(`${pubkey} ${peer.address}`);
   }
 }

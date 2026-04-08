@@ -39,7 +39,7 @@ async function main() {
       description: `Watch example - ${amount} CKB`,
       expiry: toHex(3600),
       payment_preimage: preimage,
-      hash_algorithm: 'Sha256',
+      hash_algorithm: 'sha256',
     });
 
     invoiceHashes.push(invoice.invoice.data.payment_hash);

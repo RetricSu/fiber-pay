@@ -17,7 +17,7 @@ import { shannonsToCkb } from '../utils.js';
  */
 export interface ChannelHealthMetrics {
   channelId: string;
-  peerId: string;
+  pubkey: string;
   localBalanceCkb: number;
   remoteBalanceCkb: number;
   totalCapacityCkb: number;
@@ -52,7 +52,7 @@ export interface RebalanceRecommendation {
 export interface FundingNeed {
   amount: number; // How much funding needed
   reason: string;
-  optimalChannelPeerId?: string; // Recommended peer ID to fund
+  optimalChannelPubkey?: string; // Recommended peer pubkey to fund
   urgency: 'low' | 'normal' | 'high';
   estimatedTimeToDepletion?: number; // Days until liquidity runs out
 }
@@ -204,7 +204,7 @@ export class LiquidityAnalyzer {
 
     return {
       channelId: channel.channel_id,
-      peerId: channel.peer_id,
+      pubkey: channel.pubkey,
       localBalanceCkb: localBalance,
       remoteBalanceCkb: remoteBalance,
       totalCapacityCkb: totalCapacity,
@@ -350,7 +350,7 @@ export class LiquidityAnalyzer {
       needs.push({
         amount: fundingAmount,
         reason: 'Critical liquidity gaps detected in current channels',
-        optimalChannelPeerId: bestChannel?.peerId,
+        optimalChannelPubkey: bestChannel?.pubkey,
         urgency: 'high',
       });
     }

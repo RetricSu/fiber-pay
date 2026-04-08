@@ -63,7 +63,7 @@ describe('InvoiceVerifier', () => {
           data: {
             timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
-            attrs: [{ Description: 'test' }, { ExpiryTime: '0xe10' as `0x${string}` }],
+            attrs: [{ description: 'test' }, { expiry_time: '0xe10' as `0x${string}` }],
           },
         },
       };
@@ -71,8 +71,7 @@ describe('InvoiceVerifier', () => {
       const mockPeersResult: ListPeersResult = {
         peers: [
           {
-            pubkey: '0x02' as `0x${string}`,
-            peer_id: 'QmTest123',
+            pubkey: '0x021234' as `0x${string}`,
             address: '/ip4/127.0.0.1/tcp/8228',
           },
         ],
@@ -105,7 +104,7 @@ describe('InvoiceVerifier', () => {
               `0x${Math.floor((Date.now() - 7200000) / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
             attrs: [
-              { ExpiryTime: '0xe10' as `0x${string}` }, // 1 hour
+              { expiry_time: '0xe10' as `0x${string}` }, // 1 hour
             ],
           },
         },
@@ -137,7 +136,7 @@ describe('InvoiceVerifier', () => {
           data: {
             timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
-            attrs: [{ ExpiryTime: '0xe10' as `0x${string}` }],
+            attrs: [{ expiry_time: '0xe10' as `0x${string}` }],
           },
         },
       };
@@ -170,7 +169,7 @@ describe('InvoiceVerifier', () => {
           data: {
             timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
-            attrs: [{ ExpiryTime: '0xe10' as `0x${string}` }],
+            attrs: [{ expiry_time: '0xe10' as `0x${string}` }],
           },
         },
       };
@@ -200,7 +199,7 @@ describe('InvoiceVerifier', () => {
           data: {
             timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
-            attrs: [{ ExpiryTime: '0xe10' as `0x${string}` }],
+            attrs: [{ expiry_time: '0xe10' as `0x${string}` }],
           },
         },
       };
@@ -230,7 +229,7 @@ describe('InvoiceVerifier', () => {
           data: {
             timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
-            attrs: [{ ExpiryTime: '0xe10' as `0x${string}` }],
+            attrs: [{ expiry_time: '0xe10' as `0x${string}` }],
           },
         },
       };
@@ -239,8 +238,7 @@ describe('InvoiceVerifier', () => {
       mockRpc.listPeers = vi.fn().mockResolvedValue({
         peers: [
           {
-            pubkey: '0x02' as `0x${string}`,
-            peer_id: 'QmTest',
+            pubkey: '0x021234' as `0x${string}`,
             address: '/ip4/127.0.0.1/tcp/8228',
           },
         ],
@@ -264,9 +262,9 @@ describe('InvoiceVerifier', () => {
             timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
             attrs: [
-              { Description: 'Test payment' },
-              { PayeePublicKey: payeePublicKey },
-              { ExpiryTime: '0xe10' as `0x${string}` },
+              { description: 'Test payment' },
+              { payee_public_key: payeePublicKey },
+              { expiry_time: '0xe10' as `0x${string}` },
             ],
           },
         },
@@ -276,8 +274,7 @@ describe('InvoiceVerifier', () => {
       mockRpc.listPeers = vi.fn().mockResolvedValue({
         peers: [
           {
-            pubkey: '0x02' as `0x${string}`,
-            peer_id: 'QmTest',
+            pubkey: '0x021234' as `0x${string}`,
             address: '/ip4/127.0.0.1/tcp/8228',
           },
         ],
@@ -299,7 +296,7 @@ describe('InvoiceVerifier', () => {
           data: {
             timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` as `0x${string}`,
             payment_hash: '0xabcd1234' as `0x${string}`,
-            attrs: [{ ExpiryTime: '0xe10' as `0x${string}` }],
+            attrs: [{ expiry_time: '0xe10' as `0x${string}` }],
           },
         },
       };
@@ -308,8 +305,7 @@ describe('InvoiceVerifier', () => {
       mockRpc.listPeers = vi.fn().mockResolvedValue({
         peers: [
           {
-            pubkey: '0x02' as `0x${string}`,
-            peer_id: 'QmTest',
+            pubkey: '0x021234' as `0x${string}`,
             address: '/ip4/127.0.0.1/tcp/8228',
           },
         ],

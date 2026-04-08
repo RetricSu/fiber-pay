@@ -24,7 +24,7 @@ export function createChannelCommand(config: CliConfig): Command {
   channel
     .command('list')
     .option('--state <state>')
-    .option('--peer <peerId>')
+    .option('--peer <pubkey>')
     .option('--include-closed')
     .option('--json')
     .action(async (options) => {
@@ -32,7 +32,7 @@ export function createChannelCommand(config: CliConfig): Command {
       const stateFilter = parseChannelState(options.state);
       const response = await rpc.listChannels(
         options.peer
-          ? { peer_id: options.peer, include_closed: Boolean(options.includeClosed) }
+          ? { pubkey: options.peer, include_closed: Boolean(options.includeClosed) }
           : { include_closed: Boolean(options.includeClosed) },
       );
       const channels = stateFilter
@@ -82,7 +82,7 @@ export function createChannelCommand(config: CliConfig): Command {
     .option('--timeout <seconds>')
     .option('--on-timeout <behavior>', 'fail | success', 'fail')
     .option('--channel <channelId>')
-    .option('--peer <peerId>')
+    .option('--peer <pubkey>')
     .option('--state <state>')
     .option('--until <state>')
     .option('--include-closed')
@@ -121,7 +121,7 @@ export function createChannelCommand(config: CliConfig): Command {
       while (true) {
         const response = await rpc.listChannels(
           options.peer
-            ? { peer_id: options.peer, include_closed: Boolean(options.includeClosed) }
+            ? { pubkey: options.peer, include_closed: Boolean(options.includeClosed) }
             : { include_closed: Boolean(options.includeClosed) },
         );
         let channels = response.channels;
@@ -217,7 +217,7 @@ export function createChannelCommand(config: CliConfig): Command {
 
   channel
     .command('open')
-    .requiredOption('--peer <peerIdOrMultiaddr>')
+    .requiredOption('--peer <pubkeyOrMultiaddr>')
     .requiredOption('--funding <ckb>')
     .option('--private')
     .option(
@@ -231,26 +231,36 @@ export function createChannelCommand(config: CliConfig): Command {
       const peerInput = options.peer as string;
       const fundingCkb = parseFloat(options.funding);
 
-      let peerId = peerInput;
+      let peerPubkey = peerInput;
       if (peerInput.includes('/')) {
         await rpc.connectPeer({ address: peerInput });
-        const peerIdMatch = peerInput.match(/\/p2p\/([^/]+)/);
-        if (peerIdMatch) peerId = peerIdMatch[1];
+        const peers = await rpc.listPeers();
+        const matched = peers.peers.find((item) => item.address === peerInput);
+        if (!matched) {
+          throw new Error(
+            'Connected to peer address but failed to resolve peer pubkey from list_peers response',
+          );
+        }
+        peerPubkey = matched.pubkey;
+      }
+
+      if (!peerPubkey.startsWith('0x')) {
+        throw new Error(`Invalid peer pubkey: ${peerPubkey}`);
       }
 
       const idempotencyKey =
         typeof options.idempotencyKey === 'string' && options.idempotencyKey.trim().length > 0
           ? options.idempotencyKey.trim()
-          : `open:${peerId}:${randomUUID()}`;
+          : `open:${peerPubkey}:${randomUUID()}`;
 
       const endpoint = resolveRpcEndpoint(config);
       if (endpoint.target === 'runtime-proxy') {
         const created = await tryCreateRuntimeChannelJob(endpoint.url, {
           params: {
             action: 'open',
-            peerId,
+            peerId: peerPubkey,
             openChannelParams: {
-              peer_id: peerId,
+              pubkey: peerPubkey,
               funding_amount: ckbToShannons(fundingCkb),
               public: !options.private,
             },
@@ -266,7 +276,7 @@ export function createChannelCommand(config: CliConfig): Command {
           const payload = {
             jobId: created.id,
             jobState: created.state,
-            peer: peerId,
+            peer: peerPubkey,
             fundingCkb,
             idempotencyKey,
           };
@@ -286,12 +296,16 @@ export function createChannelCommand(config: CliConfig): Command {
       }
 
       const result = await rpc.openChannel({
-        peer_id: peerId,
+        pubkey: peerPubkey as HexString,
         funding_amount: ckbToShannons(fundingCkb),
         public: !options.private,
       });
 
-      const payload = { temporaryChannelId: result.temporary_channel_id, peer: peerId, fundingCkb };
+      const payload = {
+        temporaryChannelId: result.temporary_channel_id,
+        peer: peerPubkey,
+        fundingCkb,
+      };
       if (json) {
         printJsonSuccess(payload);
       } else {

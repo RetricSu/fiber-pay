@@ -13,13 +13,13 @@ Rebalance uses a **circular self-payment** to move liquidity between your own ch
 ## 1.1) Prerequisites (must satisfy)
 
 - Rebalance is meaningful only when you have at least **two usable channels**.
-- Guided mode requires the selected channel peers to be currently resolvable from `peer list` (peer_id -> pubkey mapping).
+- Guided mode requires the selected channel peers to be currently resolvable from `peer list` (peer identity -> pubkey mapping).
 - Use `--dry-run` first and confirm fee/capacity before sending.
 
 Quick checks:
 
 ```bash
-fiber-pay channel list --state ChannelReady --json
+fiber-pay channel list --state CHANNEL_READY --json
 fiber-pay peer list --json
 ```
 

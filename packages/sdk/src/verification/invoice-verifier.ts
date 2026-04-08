@@ -140,8 +140,7 @@ export class InvoiceVerifier {
       const peers = await this.rpc.listPeers();
       if (payeePublicKey) {
         // We have the payee's public key - check if they're connected or reachable
-        // Note: peer_id in Fiber is derived from public key, but format may differ
-        // For now, we check if we have any path to peers (routing will find the payee)
+        // Check whether there is at least one connected peer for route discovery.
         if (peers.peers && peers.peers.length > 0) {
           checks.peerConnected = true;
         } else {
@@ -280,12 +279,12 @@ export class InvoiceVerifier {
   private getExpiryTimestamp(invoice: CkbInvoice | null): number {
     if (!invoice) return 0;
 
-    // Expiry is a duration in seconds, stored as an attribute (ExpiryTime).
+    // Expiry is a duration in seconds, stored as an attribute (expiry_time).
     // Invoice timestamp is in seconds since UNIX epoch.
     try {
       const createdSeconds = fromHex(invoice.data.timestamp as HexString);
       const expiryDeltaSeconds =
-        this.getAttributeU64(invoice.data.attrs, 'ExpiryTime') ?? BigInt(60 * 60);
+        this.getAttributeU64(invoice.data.attrs, 'expiry_time') ?? BigInt(60 * 60);
       return Number(createdSeconds + expiryDeltaSeconds) * 1000;
     } catch {
       // Fall through to default
@@ -297,7 +296,7 @@ export class InvoiceVerifier {
 
   private getAttributeU64(
     attrs: Attribute[],
-    key: 'ExpiryTime' | 'FinalHtlcTimeout' | 'FinalHtlcMinimumExpiryDelta',
+    key: 'expiry_time' | 'final_htlc_timeout' | 'final_htlc_minimum_expiry_delta',
   ): bigint | undefined {
     for (const attr of attrs) {
       if (key in attr) {
@@ -310,8 +309,8 @@ export class InvoiceVerifier {
   private getDescription(invoice: CkbInvoice | null): string | undefined {
     if (!invoice) return undefined;
     for (const attr of invoice.data.attrs) {
-      if ('Description' in attr) {
-        return attr.Description;
+      if ('description' in attr) {
+        return attr.description;
       }
     }
     return undefined;
@@ -319,17 +318,17 @@ export class InvoiceVerifier {
 
   /**
    * Try to extract payee node public key from invoice attributes
-   * The payee public key is embedded in the invoice as a PayeePublicKey attribute
+   * The payee public key is embedded in the invoice as a payee_public_key attribute.
    */
   private extractNodeIdFromInvoice(invoice: CkbInvoice | null): string | undefined {
     if (!invoice) {
       return undefined;
     }
 
-    // Search for PayeePublicKey attribute in the invoice data
+    // Search for payee_public_key attribute in the invoice data.
     for (const attr of invoice.data.attrs) {
-      if ('PayeePublicKey' in attr) {
-        return attr.PayeePublicKey;
+      if ('payee_public_key' in attr) {
+        return attr.payee_public_key;
       }
     }
 

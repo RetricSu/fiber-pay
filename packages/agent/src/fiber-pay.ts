@@ -366,13 +366,13 @@ export class FiberPay {
       const nodeInfo = await this.rpc.nodeInfo();
 
       this.policy.addAuditEntry('NODE_STARTED', true, {
-        nodeId: nodeInfo.node_id,
+        nodeId: nodeInfo.pubkey,
       });
 
       return {
         success: true,
         data: {
-          nodeId: nodeInfo.node_id,
+          nodeId: nodeInfo.pubkey,
         },
         metadata: { timestamp: Date.now() },
       };
@@ -776,7 +776,7 @@ export class FiberPay {
 
       const channels: ChannelSummary[] = result.channels.map((ch) => ({
         id: ch.channel_id,
-        peerId: ch.peer_id,
+        peerId: ch.pubkey,
         localBalanceCkb: shannonsToCkb(ch.local_balance),
         remoteBalanceCkb: shannonsToCkb(ch.remote_balance),
         state: ch.state.state_name,
@@ -846,11 +846,11 @@ export class FiberPay {
       }
 
       const openParams = {
-        peer_id: params.peer,
+        pubkey: params.peer as HexString,
         funding_amount: fundingHex,
         public: params.isPublic ?? true,
       };
-      const idempotencyKey = params.idempotencyKey ?? `open:${openParams.peer_id}:${randomUUID()}`;
+      const idempotencyKey = params.idempotencyKey ?? `open:${openParams.pubkey}:${randomUUID()}`;
 
       let temporaryChannelId: string;
       if (this.runtimeJobManager) {
@@ -979,7 +979,7 @@ export class FiberPay {
       return {
         success: true,
         data: {
-          nodeId: info.node_id,
+          nodeId: info.pubkey,
           version: info.version,
           channelCount: parseInt(info.channel_count, 16),
           peersCount: parseInt(info.peers_count, 16),
@@ -1356,7 +1356,7 @@ export class FiberPay {
         success: true,
         data: {
           id: channel.channel_id,
-          peerId: channel.peer_id,
+          peerId: channel.pubkey,
           localBalanceCkb: shannonsToCkb(channel.local_balance),
           remoteBalanceCkb: shannonsToCkb(channel.remote_balance),
           state: channel.state.state_name,

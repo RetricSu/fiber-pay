@@ -1,6 +1,6 @@
 # @fiber-pay/agent
 
-AI-agent orchestration layer for Fiber Network (targeting Fiber `v0.7.1`).
+AI-agent orchestration layer for Fiber Network (targeting Fiber `v0.8.0`).
 
 This package provides:
 
@@ -137,7 +137,7 @@ See `src/mcp-tools.ts` for complete tool names and JSON schemas.
 ## Compatibility
 
 - Node.js: `>=20`
-- Fiber RPC semantics: aligned with Fiber `v0.7.1`
+- Fiber RPC semantics: aligned with Fiber `v0.8.0`
 
 ## Known gaps
 

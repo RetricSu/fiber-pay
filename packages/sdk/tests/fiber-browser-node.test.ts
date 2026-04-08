@@ -43,7 +43,7 @@ function createMockCredential(opts?: {
 
 const MOCK_NODE_INFO = {
 	version: '0.7.1',
-	node_id: '0xmocknode',
+	pubkey: '0xmocknode',
 	node_name: 'test-browser-node',
 	addresses: [],
 	chain_hash: '0x000',
@@ -117,7 +117,7 @@ describe('FiberBrowserNode', () => {
 		it('should start successfully with password', async () => {
 			const info = await node.start({ password: 'test-pass' });
 
-			expect(info.node_id).toBe('0xmocknode');
+			expect(info.pubkey).toBe('0xmocknode');
 			expect(node.state).toBe('running');
 			expect(node.isRunning).toBe(true);
 			expect(credential.unlock).toHaveBeenCalledWith({ password: 'test-pass' });
@@ -240,7 +240,7 @@ describe('FiberBrowserNode', () => {
 
 		it('should proxy getNodeInfo', async () => {
 			const info = await node.getNodeInfo();
-			expect(info.node_id).toBe('0xmocknode');
+			expect(info.pubkey).toBe('0xmocknode');
 		});
 
 		it('should proxy listPeers', async () => {

@@ -1,6 +1,6 @@
 # @fiber-pay/runtime
 
-Runtime monitor + job orchestration for Fiber (`fnn v0.7.1`).
+Runtime monitor + job orchestration for Fiber (`fnn v0.8.0`).
 
 ## Quick start
 
@@ -63,7 +63,7 @@ fiber-pay --profile rt-b peer connect "$A_MULTIADDR" --timeout 12 --json
 ```bash
 PROXY_A='http://127.0.0.1:9729'
 PROXY_B='http://127.0.0.1:9829'
-PEER_B="$(fiber-pay --profile rt-b node status --json | jq -r '.data.peerId')"
+PEER_B_PUBKEY="$(fiber-pay --profile rt-b node status --json | jq -r '.data.nodeId')"
 
 wait_job() {
   local proxy="$1"; local job_id="$2"
@@ -77,7 +77,7 @@ wait_job() {
 
 # open channel (200 CKB)
 OPEN_JOB_ID="$(curl -fsS -X POST "$PROXY_A/jobs/channel" -H 'content-type: application/json' \
-  -d "{\"params\":{\"action\":\"open\",\"openChannelParams\":{\"peer_id\":\"$PEER_B\",\"funding_amount\":\"0x2e90edd000\"},\"waitForReady\":true,\"pollIntervalMs\":1500},\"options\":{\"idempotencyKey\":\"manual-open-$(date +%s)\"}}" | jq -r '.id')"
+  -d "{\"params\":{\"action\":\"open\",\"openChannelParams\":{\"pubkey\":\"$PEER_B_PUBKEY\",\"funding_amount\":\"0x2e90edd000\"},\"waitForReady\":true,\"pollIntervalMs\":1500},\"options\":{\"idempotencyKey\":\"manual-open-$(date +%s)\"}}" | jq -r '.id')"
 wait_job "$PROXY_A" "$OPEN_JOB_ID"
 CHANNEL_ID="$(curl -fsS "$PROXY_A/jobs/$OPEN_JOB_ID" | jq -r '.result.channelId')"
 

@@ -61,7 +61,7 @@ async function main() {
     description: 'Escrow: payment held until service delivered',
     expiry: toHex(7200), // 2 hours
     payment_hash: paymentHash, // Key difference: hash, not preimage!
-    hash_algorithm: 'Sha256',
+    hash_algorithm: 'sha256',
   });
 
   console.log(`✓ Hold invoice created`);

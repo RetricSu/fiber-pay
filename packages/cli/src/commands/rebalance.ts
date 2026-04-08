@@ -63,7 +63,7 @@ async function executeRebalance(
     process.exit(1);
   }
 
-  const selfPubkey = (await rpc.nodeInfo()).node_id as HexString;
+  const selfPubkey = (await rpc.nodeInfo()).pubkey as HexString;
   const amount = ckbToShannons(amountCkb);
   const isManual = manualHops.length > 0;
   let routeHopCount: number | undefined;
@@ -242,7 +242,7 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
           process.exit(1);
         }
 
-        if (fromChannel.peer_id === toChannel.peer_id) {
+        if (fromChannel.pubkey === toChannel.pubkey) {
           const message =
             'Source and target channels point to the same peer; choose two different channel peers.';
           if (json) {
@@ -254,7 +254,7 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
               details: {
                 fromChannel: fromChannelId,
                 toChannel: toChannelId,
-                peerId: fromChannel.peer_id,
+                peerId: fromChannel.pubkey,
               },
             });
           } else {
@@ -263,27 +263,23 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
           process.exit(1);
         }
 
-        const peers = (await rpc.listPeers()).peers;
-        const pubkeyByPeerId = new Map(peers.map((peer) => [peer.peer_id, peer.pubkey]));
-        const fromPubkey = pubkeyByPeerId.get(fromChannel.peer_id);
-        const toPubkey = pubkeyByPeerId.get(toChannel.peer_id);
+        const fromPubkey = fromChannel.pubkey;
+        const toPubkey = toChannel.pubkey;
 
         if (!fromPubkey || !toPubkey) {
-          const message =
-            'Unable to resolve selected channel peer_id to pubkey for guided rebalance route.';
+          const message = 'Unable to resolve selected channel pubkey for guided rebalance route.';
           if (json) {
             printJsonError({
               code: 'CHANNEL_REBALANCE_INPUT_INVALID',
               message,
               recoverable: true,
               suggestion:
-                'Ensure both peers are connected (`peer list --json`) and retry guided mode, or use `payment rebalance --hops`.',
+                'Ensure channel details are up to date and retry guided mode, or use `payment rebalance --hops`.',
               details: {
                 fromChannel: fromChannelId,
                 toChannel: toChannelId,
-                fromPeerId: fromChannel.peer_id,
-                toPeerId: toChannel.peer_id,
-                resolvedPeers: peers.length,
+                fromPeerId: fromChannel.pubkey,
+                toPeerId: toChannel.pubkey,
               },
             });
           } else {

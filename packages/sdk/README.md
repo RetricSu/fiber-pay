@@ -19,7 +19,7 @@ const client = new FiberRpcClient({
 });
 
 const info = await client.nodeInfo();
-console.log(info.node_id);
+console.log(info.pubkey);
 ```
 
 ## RPC Authentication (Biscuit)
@@ -60,5 +60,5 @@ See [docs/l402-agent-guide.md](../../docs/l402-agent-guide.md) for usage.
 ## Compatibility
 
 - Node.js `>=20`
-- Fiber target: `v0.7.1`
+- Fiber target: `v0.8.0`
 

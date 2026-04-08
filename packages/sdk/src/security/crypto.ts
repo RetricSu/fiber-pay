@@ -186,7 +186,7 @@ function assertNever(x: never): never {
 /**
  * Compute payment hash from preimage using specified algorithm
  * @param preimageHex - Hex-encoded preimage (0x-prefixed)
- * @param algorithm - Hash algorithm: 'CkbHash' or 'Sha256'
+ * @param algorithm - Hash algorithm: 'ckb_hash' or 'sha256'
  * @returns Hex-encoded payment hash (0x-prefixed, 64 hex chars)
  */
 export function hashPreimage(preimageHex: HexString, algorithm: HashAlgorithm): Hash256 {
@@ -194,10 +194,10 @@ export function hashPreimage(preimageHex: HexString, algorithm: HashAlgorithm): 
 
   let hashBytes: Uint8Array;
   switch (algorithm) {
-    case 'Sha256':
+    case 'sha256':
       hashBytes = sha256Hash(data);
       break;
-    case 'CkbHash':
+    case 'ckb_hash':
       hashBytes = ckbHash(data);
       break;
     default:
