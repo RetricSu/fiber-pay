@@ -102,7 +102,19 @@ describe('MigrationManager', () => {
       const result = await mm.check(join(tempDir, 'nonexistent'));
       expect(result.needed).toBe(false);
       expect(result.valid).toBe(true);
+      expect(result.precheckUnsupported).toBe(false);
       expect(result.message).toContain('does not exist');
+    });
+
+    it('marks precheck as unsupported when fnn-migrate has no check mode', async () => {
+      const storePath = createFakeStore(tempDir);
+      const binPath = createFakeMigrateBinary(tempDir);
+      const mm = new MigrationManager(binPath);
+      const result = await mm.check(storePath);
+      expect(result.needed).toBe(false);
+      expect(result.valid).toBe(true);
+      expect(result.precheckUnsupported).toBe(true);
+      expect(result.message).toContain('pre-check is not supported');
     });
   });
 
