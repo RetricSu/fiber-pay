@@ -58,7 +58,15 @@ export { FiberWasmAdapter } from './wasm-adapter.js';
 // =============================================================================
 
 export { scriptToAddress } from '../address.js';
-export { FiberRpcError } from '../rpc/client.js';
+export type {
+  RpcClientConfig,
+  RpcClientConfig as BrowserRpcClientConfig,
+} from '../rpc/client.js';
+export {
+  FiberRpcClient,
+  FiberRpcClient as BrowserRpcClient,
+  FiberRpcError,
+} from '../rpc/client.js';
 export type {
   AbandonChannelParams,
   AcceptChannelParams,

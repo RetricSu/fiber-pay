@@ -14,13 +14,30 @@ pnpm add @fiber-pay/sdk
 import { FiberRpcClient } from '@fiber-pay/sdk';
 
 const client = new FiberRpcClient({
-	url: 'http://127.0.0.1:8227',
-	biscuitToken: process.env.FIBER_RPC_BISCUIT_TOKEN,
+  url: 'http://127.0.0.1:8227',
+  biscuitToken: process.env.FIBER_RPC_BISCUIT_TOKEN,
 });
 
 const info = await client.nodeInfo();
 console.log(info.pubkey);
 ```
+
+## Browser Usage
+
+Use the browser subpath in frontend apps to avoid pulling Node-only modules:
+
+```ts
+import { BrowserRpcClient } from '@fiber-pay/sdk/browser';
+
+const client = new BrowserRpcClient({
+  url: 'http://127.0.0.1:8227',
+});
+
+const info = await client.nodeInfo();
+console.log(info.pubkey);
+```
+
+`@fiber-pay/sdk/browser` also exports `FiberRpcClient` for migration compatibility.
 
 ## RPC Authentication (Biscuit)
 
@@ -34,9 +51,9 @@ Generate token-side permission facts from RPC methods:
 import { renderBiscuitFactsForMethods } from '@fiber-pay/sdk';
 
 const facts = renderBiscuitFactsForMethods([
-	'list_peers',
-	'send_payment',
-	'get_payment',
+  'list_peers',
+  'send_payment',
+  'get_payment',
 ]);
 
 console.log(facts);
