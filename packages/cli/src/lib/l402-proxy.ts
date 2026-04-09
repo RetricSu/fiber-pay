@@ -8,7 +8,7 @@
 
 import { createServer, type Server } from 'node:http';
 import type { Currency } from '@fiber-pay/sdk';
-import { createL402Middleware, FiberRpcClient } from '@fiber-pay/sdk';
+import { createL402Middleware, FiberRpcClient } from '@fiber-pay/sdk/node';
 import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import type { CliConfig } from './config.js';

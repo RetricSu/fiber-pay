@@ -8,6 +8,12 @@ Core SDK for building Fiber Network applications on CKB Lightning.
 pnpm add @fiber-pay/sdk
 ```
 
+## Entrypoints
+
+- `@fiber-pay/sdk` - Universal APIs (browser-safe)
+- `@fiber-pay/sdk/browser` - Browser WASM node and browser credential providers
+- `@fiber-pay/sdk/node` - Node-focused APIs, including L402 middleware utilities
+
 ## Usage
 
 ```ts
@@ -67,7 +73,19 @@ and can be used to prepare `permissions.bc` inputs before signing tokens.
 
 ## L402 Protocol
 
-The SDK includes L402 payment-gating primitives for Express APIs:
+Use the Node entrypoint for L402 payment-gating primitives:
+
+```ts
+import {
+  createL402Middleware,
+  FiberRpcClient,
+  MacaroonService,
+} from '@fiber-pay/sdk/node';
+```
+
+Node entry includes the same universal APIs as root, plus L402 server helpers.
+
+L402 primitives include:
 
 - `MacaroonService` — mint and verify L402 tokens
 - `createL402Middleware()` — Express middleware for 402 challenge-response flow
@@ -78,4 +96,3 @@ See [docs/l402-agent-guide.md](../../docs/l402-agent-guide.md) for usage.
 
 - Node.js `>=20`
 - Fiber target: `v0.8.0`
-
