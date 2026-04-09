@@ -281,7 +281,16 @@ async function runMigrationAndReport(
     process.exit(0);
   }
 
-  if (!migrationCheck.needed) {
+  const precheckUnsupported = migrationCheck.message.includes(
+    'Store pre-check is not supported by this fnn-migrate version',
+  );
+
+  if (precheckUnsupported && forceMigrateAttempt && !json) {
+    console.log('⚠️  Migration pre-check is unavailable for this fnn-migrate version.');
+    console.log('   --force-migrate is set, so migration will be attempted directly.');
+  }
+
+  if (!migrationCheck.needed && !(precheckUnsupported && forceMigrateAttempt)) {
     if (!json) console.log('   Store is compatible, no migration needed.');
     return normalizeMigrationCheck(migrationCheck);
   }

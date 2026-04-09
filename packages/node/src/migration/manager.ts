@@ -60,6 +60,7 @@ export interface MigrationOptions {
 
 export class MigrationManager {
   private migrateBinaryPath: string;
+  private helpTextCache: string | null = null;
 
   constructor(migrateBinaryPath: string) {
     this.migrateBinaryPath = migrateBinaryPath;
@@ -72,8 +73,8 @@ export class MigrationManager {
   /**
    * Check whether the store needs migration or is incompatible.
    *
-   * Runs `fnn-migrate -p <storePath> --check-validate` which exits 0 on
-   * success (no migration needed) and exits 1 with a message otherwise.
+   * Runs `fnn-migrate` compatibility check when supported by the installed
+   * migrate helper.
    */
   async check(storePath: string): Promise<MigrationCheckResult> {
     this.ensureBinaryExists();
@@ -87,13 +88,26 @@ export class MigrationManager {
       };
     }
 
-    try {
-      const { stdout } = await execFileAsync(this.migrateBinaryPath, [
-        '-p',
+    const helpText = await this.getHelpText();
+    const supportsCheckValidate = helpText.includes('--check-validate');
+
+    // Newer fnn-migrate (v0.8.x) removed check mode; in that case we skip
+    // compatibility pre-check instead of hard-failing startup/upgrade.
+    if (!supportsCheckValidate) {
+      return {
+        needed: false,
+        valid: true,
+        message:
+          'Store pre-check is not supported by this fnn-migrate version; skipping compatibility check.',
         storePath,
+      };
+    }
+
+    try {
+      const { stdout, stderr } = await this.execWithStoreTargetArgs(storePath, [
         '--check-validate',
       ]);
-      const output = stdout.trim();
+      const output = `${stdout}\n${stderr}`.trim();
       if (output.includes('validate success')) {
         return {
           needed: false,
@@ -202,8 +216,11 @@ export class MigrationManager {
 
     // Pre-flight check
     const checkResult = await this.check(storePath);
+    const precheckUnsupported = checkResult.message.includes(
+      'Store pre-check is not supported by this fnn-migrate version',
+    );
 
-    if (!checkResult.needed) {
+    if (!checkResult.needed && !(force && precheckUnsupported)) {
       return {
         success: true,
         message: checkResult.message,
@@ -233,11 +250,7 @@ export class MigrationManager {
 
     // Run migration
     try {
-      const { stdout, stderr } = await execFileAsync(this.migrateBinaryPath, [
-        '-p',
-        storePath,
-        '--skip-confirm',
-      ]);
+      const { stdout, stderr } = await this.execMigrateCommand(storePath);
       const output = `${stdout}\n${stderr}`.trim();
 
       if (output.includes('migrated successfully') || output.includes('db migrated')) {
@@ -245,6 +258,15 @@ export class MigrationManager {
           success: true,
           backupPath,
           message: 'Migration completed successfully.',
+          output,
+        };
+      }
+
+      if (output.toLowerCase().includes('no need to migrate')) {
+        return {
+          success: true,
+          backupPath,
+          message: 'Store is already up-to-date; no migration needed.',
           output,
         };
       }
@@ -330,6 +352,91 @@ export class MigrationManager {
           'Re-download the Fiber binary with: fiber-pay binary download --force',
       );
     }
+  }
+
+  private async getHelpText(): Promise<string> {
+    if (this.helpTextCache !== null) {
+      return this.helpTextCache;
+    }
+
+    try {
+      const { stdout, stderr } = await execFileAsync(this.migrateBinaryPath, ['--help']);
+      this.helpTextCache = `${stdout}\n${stderr}`;
+      return this.helpTextCache;
+    } catch (error) {
+      // If help invocation itself fails, treat as unknown capability and rely on
+      // argument-shape fallback at execution time.
+      this.helpTextCache = this.extractStderr(error);
+      return this.helpTextCache;
+    }
+  }
+
+  private async resolveTargetArgCandidates(storePath: string): Promise<string[][]> {
+    const helpText = await this.getHelpText();
+    const fiberDataDir = dirname(storePath);
+    const prefersDirArg = helpText.includes('--dir');
+
+    if (prefersDirArg) {
+      return [
+        ['--dir', fiberDataDir],
+        ['-p', storePath],
+      ];
+    }
+
+    return [
+      ['-p', storePath],
+      ['--dir', fiberDataDir],
+    ];
+  }
+
+  private isArgShapeError(message: string): boolean {
+    const lower = message.toLowerCase();
+    return (
+      lower.includes('unexpected argument') ||
+      lower.includes('found argument') ||
+      lower.includes('unknown option') ||
+      lower.includes('invalid option') ||
+      lower.includes('usage: fnn-migrate')
+    );
+  }
+
+  private async execWithStoreTargetArgs(
+    storePath: string,
+    extraArgs: string[],
+  ): Promise<{ stdout: string; stderr: string }> {
+    const candidates = await this.resolveTargetArgCandidates(storePath);
+    let lastError: unknown;
+
+    for (const targetArgs of candidates) {
+      try {
+        return await execFileAsync(this.migrateBinaryPath, [...targetArgs, ...extraArgs]);
+      } catch (error) {
+        const msg = this.extractStderr(error);
+        if (this.isArgShapeError(msg)) {
+          lastError = error;
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    if (lastError) {
+      throw lastError;
+    }
+    throw new Error('No valid fnn-migrate target argument style found.');
+  }
+
+  private async execMigrateCommand(storePath: string): Promise<{ stdout: string; stderr: string }> {
+    try {
+      return await this.execWithStoreTargetArgs(storePath, ['--skip-confirm']);
+    } catch (error) {
+      const msg = this.extractStderr(error);
+      if (!this.isArgShapeError(msg) || !msg.includes('--skip-confirm')) {
+        throw error;
+      }
+    }
+
+    return this.execWithStoreTargetArgs(storePath, ['-s']);
   }
 
   private extractStderr(error: unknown): string {
