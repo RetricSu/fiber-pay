@@ -1,5 +1,26 @@
 # @fiber-pay/sdk
 
+## 0.2.1
+
+### Patch Changes
+
+- dec5314: # @fiber-pay/sdk
+
+  Add a browser-safe typed RPC client export in `@fiber-pay/sdk/browser`.
+
+  - Export `FiberRpcClient` and `RpcClientConfig` from browser entry
+  - Add `BrowserRpcClient` and `BrowserRpcClientConfig` aliases for clearer frontend DX
+  - Document browser RPC client usage in SDK README
+
+- 3876ef5: # @fiber-pay/sdk
+
+  Refine SDK entrypoint boundaries for better browser safety and developer experience.
+
+  - Add `@fiber-pay/sdk/node` subpath export for Node-focused APIs
+  - Move L402 server exports (`createL402Middleware`, `MacaroonService`, etc.) out of root entry
+  - Keep root entry (`@fiber-pay/sdk`) focused on universal/browser-safe APIs
+  - Update docs and internal usage examples to import L402 APIs from `@fiber-pay/sdk/node`
+
 ## 0.2.0
 
 ### Minor Changes
