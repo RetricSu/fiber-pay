@@ -281,9 +281,11 @@ async function runMigrationAndReport(
     process.exit(0);
   }
 
-  const precheckUnsupported = migrationCheck.message.includes(
-    'Store pre-check is not supported by this fnn-migrate version',
-  );
+  const precheckUnsupported =
+    typeof migrationCheck === 'object' &&
+    migrationCheck !== null &&
+    'precheckUnsupported' in migrationCheck &&
+    Boolean((migrationCheck as { precheckUnsupported?: boolean }).precheckUnsupported);
 
   if (precheckUnsupported && forceMigrateAttempt && !json) {
     console.log('⚠️  Migration pre-check is unavailable for this fnn-migrate version.');

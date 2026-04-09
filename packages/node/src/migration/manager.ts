@@ -22,6 +22,8 @@ export interface MigrationCheckResult {
   needed: boolean;
   /** Whether the store is valid (parseable) */
   valid: boolean;
+  /** Whether this fnn-migrate version does not support pre-check mode */
+  precheckUnsupported: boolean;
   /** Human-readable status message */
   message: string;
   /** Path to the store that was checked */
@@ -83,6 +85,7 @@ export class MigrationManager {
       return {
         needed: false,
         valid: true,
+        precheckUnsupported: false,
         message: 'Store does not exist yet — no migration needed.',
         storePath,
       };
@@ -97,6 +100,7 @@ export class MigrationManager {
       return {
         needed: false,
         valid: true,
+        precheckUnsupported: true,
         message:
           'Store pre-check is not supported by this fnn-migrate version; skipping compatibility check.',
         storePath,
@@ -112,6 +116,7 @@ export class MigrationManager {
         return {
           needed: false,
           valid: true,
+          precheckUnsupported: false,
           message: 'Store is up-to-date, no migration needed.',
           storePath,
         };
@@ -119,6 +124,7 @@ export class MigrationManager {
       return {
         needed: false,
         valid: true,
+        precheckUnsupported: false,
         message: output || 'Store validation passed.',
         storePath,
       };
@@ -135,6 +141,7 @@ export class MigrationManager {
         return {
           needed: true,
           valid: false,
+          precheckUnsupported: false,
           message:
             'Store requires a breaking migration that cannot be auto-migrated. ' +
             'You need to:\n' +
@@ -152,6 +159,7 @@ export class MigrationManager {
         return {
           needed: true,
           valid: true,
+          precheckUnsupported: false,
           message: 'Store needs migration. Run `fiber-pay node upgrade` to migrate.',
           storePath,
         };
@@ -161,6 +169,7 @@ export class MigrationManager {
         return {
           needed: true,
           valid: false,
+          precheckUnsupported: false,
           message: `Store is incompatible: ${stderr}`,
           storePath,
         };
@@ -169,6 +178,7 @@ export class MigrationManager {
       return {
         needed: true,
         valid: false,
+        precheckUnsupported: false,
         message: `Store validation failed: ${stderr}`,
         storePath,
       };
@@ -216,9 +226,7 @@ export class MigrationManager {
 
     // Pre-flight check
     const checkResult = await this.check(storePath);
-    const precheckUnsupported = checkResult.message.includes(
-      'Store pre-check is not supported by this fnn-migrate version',
-    );
+    const precheckUnsupported = checkResult.precheckUnsupported;
 
     if (!checkResult.needed && !(force && precheckUnsupported)) {
       return {
@@ -405,7 +413,7 @@ export class MigrationManager {
     extraArgs: string[],
   ): Promise<{ stdout: string; stderr: string }> {
     const candidates = await this.resolveTargetArgCandidates(storePath);
-    let lastError: unknown;
+    let lastError: unknown = new Error('No valid fnn-migrate target argument style found.');
 
     for (const targetArgs of candidates) {
       try {
@@ -420,10 +428,7 @@ export class MigrationManager {
       }
     }
 
-    if (lastError) {
-      throw lastError;
-    }
-    throw new Error('No valid fnn-migrate target argument style found.');
+    throw lastError;
   }
 
   private async execMigrateCommand(storePath: string): Promise<{ stdout: string; stderr: string }> {
