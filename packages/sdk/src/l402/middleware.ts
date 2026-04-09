@@ -10,7 +10,7 @@
  *   Path B — client provides macaroon only; middleware checks invoice
  *            settlement via Fiber RPC (connected-node flow)
  *
- * Uses `FiberRpcClient` from `@fiber-pay/sdk` directly for invoice
+ * Uses `FiberRpcClient` from `@fiber-pay/sdk/node` directly for invoice
  * creation and settlement checks, eliminating the intermediate
  * InvoiceService abstraction from the upstream fiber-l402 SDK.
  */
@@ -325,7 +325,7 @@ export class L402Middleware {
  * @example
  * ```ts
  * import express from 'express';
- * import { createL402Middleware } from '@fiber-pay/sdk';
+ * import { createL402Middleware } from '@fiber-pay/sdk/node';
  *
  * const app = express();
  *

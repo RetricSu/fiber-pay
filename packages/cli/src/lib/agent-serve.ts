@@ -10,7 +10,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import type { Currency } from '@fiber-pay/sdk';
-import { createL402Middleware, FiberRpcClient } from '@fiber-pay/sdk';
+import { createL402Middleware, FiberRpcClient } from '@fiber-pay/sdk/node';
 import express from 'express';
 import type { CliConfig } from './config.js';
 import { printJsonError, printJsonSuccess } from './format.js';

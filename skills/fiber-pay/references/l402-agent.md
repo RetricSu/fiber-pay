@@ -4,7 +4,7 @@ fiber-pay supports L402 payment-gated APIs and paid AI agent services.
 
 ## SDK: L402 Module
 
-`@fiber-pay/sdk` exports L402 primitives:
+`@fiber-pay/sdk/node` exports L402 primitives:
 
 - `MacaroonService` — mint/verify L402 tokens with configurable caveats
 - `createL402Middleware(config)` — Express middleware for 402 challenge-response

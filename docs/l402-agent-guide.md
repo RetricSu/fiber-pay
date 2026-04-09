@@ -2,7 +2,7 @@
 
 This guide covers two features:
 
-1. **L402 SDK module** — build L402-gated APIs using `@fiber-pay/sdk`
+1. **L402 SDK module** — build L402-gated APIs using `@fiber-pay/sdk/node`
 2. **CLI agent commands** — one-command paid AI agent services
 
 ## Prerequisites
@@ -19,7 +19,7 @@ import {
   createL402Middleware,
   MacaroonService,
   FiberRpcClient,
-} from '@fiber-pay/sdk';
+} from '@fiber-pay/sdk/node';
 ```
 
 ### MacaroonService
@@ -92,6 +92,7 @@ fiber-pay agent serve \
 ```
 
 This starts an HTTP server on the default port `:8402` (configurable via `--port`) with:
+
 - `POST /` — accepts `{"prompt": "..."}`, invokes `acpx <agent> exec` and returns the response
 - L402 payment gate — every request requires payment before the agent runs
 
@@ -111,6 +112,7 @@ echo "review this" | fiber-pay agent call http://host:8402
 ```
 
 The call flow is fully automatic:
+
 1. Sends prompt → receives 402 challenge
 2. Pays the Fiber invoice
 3. Retries with L402 token → returns agent response
