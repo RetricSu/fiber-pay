@@ -1,5 +1,5 @@
 ---
-"@fiber-pay/sdk": minor
+"@fiber-pay/sdk": patch
 ---
 
 # @fiber-pay/sdk
