@@ -281,11 +281,7 @@ async function runMigrationAndReport(
     process.exit(0);
   }
 
-  const precheckUnsupported =
-    typeof migrationCheck === 'object' &&
-    migrationCheck !== null &&
-    'precheckUnsupported' in migrationCheck &&
-    Boolean((migrationCheck as { precheckUnsupported?: boolean }).precheckUnsupported);
+  const precheckUnsupported = migrationCheck.precheckUnsupported;
 
   if (precheckUnsupported && forceMigrateAttempt && !json) {
     console.log('⚠️  Migration pre-check is unavailable for this fnn-migrate version.');
