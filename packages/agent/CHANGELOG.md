@@ -1,5 +1,24 @@
 # @fiber-pay/agent
 
+## 0.2.0
+
+### Minor Changes
+
+- 872c624: Migrate Fiber integration target to v0.8.0 across SDK, runtime, CLI, agent, and browser-facing flows.
+
+  Key updates include pubkey-based RPC fields, v0.8.0 invoice/hash serialization semantics, downstream compatibility fixes, and aligned documentation/examples.
+
+### Patch Changes
+
+- 543461e: feat: add Browser WASM Node and WebAuthn PRF Passkey support
+- Updated dependencies [b912f08]
+- Updated dependencies [872c624]
+- Updated dependencies [43c2cd1]
+- Updated dependencies [543461e]
+  - @fiber-pay/sdk@0.2.0
+  - @fiber-pay/node@0.2.0
+  - @fiber-pay/runtime@0.2.0
+
 ## 0.1.1
 
 ### Patch Changes

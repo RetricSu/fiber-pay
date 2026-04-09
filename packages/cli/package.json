@@ -1,6 +1,6 @@
 {
   "name": "@fiber-pay/cli",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Command-line tool for managing Fiber Network nodes",
   "type": "module",
   "bin": {

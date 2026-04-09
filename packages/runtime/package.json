@@ -1,6 +1,6 @@
 {
   "name": "@fiber-pay/runtime",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Polling monitor and alert runtime for Fiber Network nodes",
   "type": "module",
   "main": "./dist/index.js",
