@@ -6,8 +6,8 @@ import {
   getLockBalanceShannons,
   scriptToAddress,
 } from '@fiber-pay/sdk/browser';
+import { useFiberNode } from '@fiber-pay/react';
 import QRCode from 'qrcode';
-import { useFiberNode } from './hooks/useFiberNode';
 import { useFiberConsole } from './hooks/useFiberConsole';
 import {
   Activity,
@@ -70,10 +70,9 @@ function App() {
   }, []);
 
   const {
-    network,
     startWithPassword,
     startWithPasskey,
-    createPasskey,
+    createPasskeyAndStart,
     stop,
     state,
     nodeInfo,
@@ -81,7 +80,11 @@ function App() {
     isPasskeySupported,
     passkeyUnavailableReason,
     hasPasskeyConfigured,
-  } = useFiberNode(preferredNetwork);
+  } = useFiberNode({
+    network: preferredNetwork,
+    walletId: `wallet-demo-${preferredNetwork}`,
+  });
+  const network = preferredNetwork;
   const {
     nodeInfo: latestNodeInfo,
     peers,
@@ -320,7 +323,7 @@ function App() {
                         Login with Passkey
                       </button>
                     ) : (
-                      <button className="btn btn-primary" onClick={() => void createPasskey('DemoUser')} disabled={isBooting || isStopping}>
+                      <button className="btn btn-primary" onClick={() => void createPasskeyAndStart('DemoUser')} disabled={isBooting || isStopping}>
                         <Play size={16} />
                         Register Passkey
                       </button>

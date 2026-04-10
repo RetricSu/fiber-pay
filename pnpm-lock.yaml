@@ -35,6 +35,9 @@ importers:
 
   apps/browser-wallet:
     dependencies:
+      '@fiber-pay/react':
+        specifier: workspace:*
+        version: link:../../packages/react
       '@fiber-pay/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
