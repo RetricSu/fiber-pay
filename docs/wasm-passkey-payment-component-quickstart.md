@@ -1,10 +1,10 @@
 # Browser WASM + Passkey: Build a Payment UI in Minutes
 
-This guide shows frontend developers how to build a user payment component with `@fiber-pay/sdk/browser` using the smallest possible setup.
+This guide shows frontend developers how to build a user payment component with `@fiber-pay/react` and `@fiber-pay/sdk/browser` using the smallest possible setup.
 
 ## TL;DR
 
-You can build a working browser payment flow with only three building blocks:
+You can build a working browser payment flow with three building blocks:
 
 - `FiberBrowserNode`
 - `PasskeyCredentialProvider`
@@ -18,14 +18,8 @@ import { FiberPayQuickCard } from '@fiber-pay/react';
 
 ## What You Get Today
 
-`@fiber-pay/sdk/browser` currently provides a high-level browser node API, but does **not** ship official React UI components.
-
-You can still move very fast by using:
-
-- SDK primitives from `@fiber-pay/sdk/browser`
-- reference hooks in `apps/browser-wallet/src/hooks/` (`useFiberNode`, `useFiberConsole`, `useFiberPayment`)
-
-If needed, you can copy these hooks into your app or extract them into your internal design system package.
+- `@fiber-pay/react`: official React hooks and starter component (`useFiberNode`, `useFiberPayment`, `FiberPayQuickCard`)
+- `@fiber-pay/sdk/browser`: low-level browser API when you need deeper control
 
 ## 1) Install
 
@@ -59,6 +53,8 @@ console.log('Node pubkey:', info.pubkey);
 That is enough to boot a local browser WASM node with passkey unlock.
 
 ## 3) 30-Line React Hook
+
+If you want full control over UX/state, you can still write your own app hook on top of `@fiber-pay/sdk/browser`.
 
 Use this hook as your app-level integration seam.
 
@@ -182,16 +178,15 @@ await node.newInvoice({ amount: '0x5f5e100', description: 'hello' });
 
 ## 6) Current Abstraction Level (Important)
 
-- SDK: high-level browser node API is ready (`FiberBrowserNode`)
-- SDK: passkey/password/raw-key credential providers are ready
-- SDK: no official React components exported yet
-- Repo demo: has reusable React hooks in `apps/browser-wallet/src/hooks/`
+- React package: official hooks and starter component are available in `@fiber-pay/react`.
+- SDK browser API: still available for advanced integrations and custom abstractions.
+- Demo app: `apps/browser-wallet` is dogfooding `@fiber-pay/react`.
 
-So the current best practice is:
+Recommended approach:
 
-1. Use SDK browser API directly for production logic.
-2. Copy and adapt demo hooks as your app-layer abstraction.
-3. Keep UI component state in your own design system.
+1. Start with `@fiber-pay/react` for fastest integration.
+2. Drop to `@fiber-pay/sdk/browser` when you need custom lifecycle/routing behavior.
+3. Keep final UI/branding in your own component system.
 
 ## 7) Production Notes
 
@@ -202,8 +197,10 @@ So the current best practice is:
 
 ## 8) Reference Paths
 
+- React package entry: `packages/react/src/index.ts`
+- React hooks: `packages/react/src/use-fiber-node.ts`, `packages/react/src/use-fiber-payment.ts`
+- Starter component: `packages/react/src/fiber-pay-quick-card.tsx`
 - SDK browser entry: `packages/sdk/src/browser/index.ts`
 - Browser node API: `packages/sdk/src/browser/fiber-browser-node.ts`
 - Passkey provider: `packages/sdk/src/browser/passkey-credential-provider.ts`
-- Demo hooks: `apps/browser-wallet/src/hooks/useFiberNode.ts`
 - Demo app: `apps/browser-wallet/src/App.tsx`

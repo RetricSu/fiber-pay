@@ -7,8 +7,7 @@ import {
   PasskeyCredentialProvider,
   PasswordCredentialProvider,
 } from '@fiber-pay/sdk/browser';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createDefaultWasmFactory } from './wasm-factory.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface UseFiberNodeOptions {
   network: 'testnet' | 'mainnet';
@@ -37,6 +36,11 @@ function asErrorMessage(error: unknown): string {
   return String(error);
 }
 
+interface NodeEventListeners {
+  stateChange: (nextState: BrowserNodeState) => void;
+  error: (nextError: Error) => void;
+}
+
 export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
   const walletId = options.walletId ?? `wallet-${options.network}`;
   const [state, setState] = useState<BrowserNodeState>('idle');
@@ -46,7 +50,33 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
   const [hasPasskeyConfigured, setHasPasskeyConfigured] = useState(false);
 
   const nodeRef = useRef<FiberBrowserNode | null>(null);
-  const defaultFactory = useMemo(() => createDefaultWasmFactory(), []);
+  const isMountedRef = useRef(true);
+  const nodeListenersRef = useRef<NodeEventListeners | null>(null);
+
+  const detachNodeListeners = useCallback((node: FiberBrowserNode | null) => {
+    if (!node || !nodeListenersRef.current) {
+      return;
+    }
+
+    node.off('stateChange', nodeListenersRef.current.stateChange);
+    node.off('error', nodeListenersRef.current.error);
+    nodeListenersRef.current = null;
+  }, []);
+
+  useEffect(
+    () => () => {
+      isMountedRef.current = false;
+
+      const node = nodeRef.current;
+      nodeRef.current = null;
+
+      if (node) {
+        detachNodeListeners(node);
+        void node.stop().catch(() => {});
+      }
+    },
+    [detachNodeListeners],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -57,9 +87,13 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
           setIsPasskeySupported(supported);
         }
       })
-      .catch(() => {
+      .catch((supportError) => {
         if (!cancelled) {
           setIsPasskeySupported(false);
+        }
+
+        if (supportError instanceof Error) {
+          console.warn('[fiber-pay/react] Failed to detect passkey support:', supportError.message);
         }
       });
 
@@ -73,98 +107,178 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
 
   const initNode = useCallback(
     (credential: PasswordCredentialProvider | PasskeyCredentialProvider) => {
-      if (
-        nodeRef.current &&
-        nodeRef.current.state !== 'idle' &&
-        nodeRef.current.state !== 'stopped'
-      ) {
-        throw new Error('Node already running');
+      if (nodeRef.current) {
+        const existingState = nodeRef.current.state;
+        if (existingState !== 'idle' && existingState !== 'stopped' && existingState !== 'error') {
+          throw new Error('Node already running');
+        }
+
+        detachNodeListeners(nodeRef.current);
+        nodeRef.current = null;
       }
 
-      const node = new FiberBrowserNode({
+      const nodeConfig: ConstructorParameters<typeof FiberBrowserNode>[0] = {
         network: options.network,
         credential,
-        wasmFactory: options.wasmFactory ?? defaultFactory,
         nodeConfig: {
           databasePrefix: `/${walletId}`,
           ...(options.nodeConfig ?? {}),
         },
-      });
+      };
+
+      if (options.wasmFactory) {
+        nodeConfig.wasmFactory = options.wasmFactory;
+      }
+
+      const node = new FiberBrowserNode(nodeConfig);
 
       nodeRef.current = node;
-      node.on('stateChange', (nextState) => {
-        setState(nextState);
-        if (nextState === 'stopped') {
-          setNodeInfo(null);
-        }
-      });
-      node.on('error', (nextError: Error) => {
-        setError(nextError.message);
-      });
+
+      const listeners: NodeEventListeners = {
+        stateChange: (nextState) => {
+          if (!isMountedRef.current) {
+            return;
+          }
+
+          setState(nextState);
+          if (nextState === 'stopped') {
+            setNodeInfo(null);
+          }
+        },
+        error: (nextError: Error) => {
+          if (!isMountedRef.current) {
+            return;
+          }
+
+          setError(nextError.message);
+        },
+      };
+
+      nodeListenersRef.current = listeners;
+      node.on('stateChange', listeners.stateChange);
+      node.on('error', listeners.error);
 
       return node;
     },
-    [defaultFactory, options.network, options.nodeConfig, options.wasmFactory, walletId],
+    [detachNodeListeners, options.network, options.nodeConfig, options.wasmFactory, walletId],
+  );
+
+  const cleanupFailedStart = useCallback(
+    async (node: FiberBrowserNode | null) => {
+      if (!node) {
+        return;
+      }
+
+      try {
+        if (node.state !== 'idle' && node.state !== 'stopped') {
+          await node.stop();
+        }
+      } catch {
+        // Ignore cleanup failures after a start error.
+      } finally {
+        detachNodeListeners(node);
+        if (nodeRef.current === node) {
+          nodeRef.current = null;
+        }
+      }
+    },
+    [detachNodeListeners],
   );
 
   const startWithPassword = useCallback(
     async (password: string) => {
       setError(null);
+      let node: FiberBrowserNode | null = null;
+
       try {
         const credential = new PasswordCredentialProvider(walletId);
-        const node = initNode(credential);
+        node = initNode(credential);
         const info = await node.start({ unlockParams: { password } });
-        setNodeInfo(info);
+        if (isMountedRef.current) {
+          setNodeInfo(info);
+        }
       } catch (startError) {
-        setError(asErrorMessage(startError));
-        setState('error');
+        if (isMountedRef.current) {
+          setError(asErrorMessage(startError));
+        }
+
+        await cleanupFailedStart(node);
       }
     },
-    [initNode, walletId],
+    [cleanupFailedStart, initNode, walletId],
   );
 
   const createPasskeyAndStart = useCallback(
     async (username = 'User') => {
       setError(null);
+      let node: FiberBrowserNode | null = null;
+
       try {
         const credential = new PasskeyCredentialProvider(walletId);
         await credential.register(username);
-        setHasPasskeyConfigured(true);
+        if (isMountedRef.current) {
+          setHasPasskeyConfigured(true);
+        }
 
-        const node = initNode(credential);
+        node = initNode(credential);
         const info = await node.start();
-        setNodeInfo(info);
+        if (isMountedRef.current) {
+          setNodeInfo(info);
+        }
       } catch (startError) {
-        setError(asErrorMessage(startError));
-        setState('error');
+        if (isMountedRef.current) {
+          setError(asErrorMessage(startError));
+        }
+
+        await cleanupFailedStart(node);
       }
     },
-    [initNode, walletId],
+    [cleanupFailedStart, initNode, walletId],
   );
 
   const startWithPasskey = useCallback(async () => {
     setError(null);
+    let node: FiberBrowserNode | null = null;
+
     try {
       const credential = new PasskeyCredentialProvider(walletId);
-      const node = initNode(credential);
+      node = initNode(credential);
       const info = await node.start();
-      setNodeInfo(info);
+      if (isMountedRef.current) {
+        setNodeInfo(info);
+      }
     } catch (startError) {
-      setError(asErrorMessage(startError));
-      setState('error');
+      if (isMountedRef.current) {
+        setError(asErrorMessage(startError));
+      }
+
+      await cleanupFailedStart(node);
     }
-  }, [initNode, walletId]);
+  }, [cleanupFailedStart, initNode, walletId]);
 
   const stop = useCallback(async () => {
-    if (!nodeRef.current) {
+    const node = nodeRef.current;
+    if (!node) {
       return;
     }
+
     try {
-      await nodeRef.current.stop();
+      await node.stop();
     } catch (stopError) {
-      setError(asErrorMessage(stopError));
+      if (isMountedRef.current) {
+        setError(asErrorMessage(stopError));
+      }
+    } finally {
+      detachNodeListeners(node);
+      if (nodeRef.current === node) {
+        nodeRef.current = null;
+      }
+
+      if (isMountedRef.current) {
+        setNodeInfo(null);
+      }
     }
-  }, []);
+  }, [detachNodeListeners]);
 
   return {
     state,

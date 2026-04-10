@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type CSSProperties, useId, useState } from 'react';
 import { useFiberNode } from './use-fiber-node.js';
 import { useFiberPayment } from './use-fiber-payment.js';
 
@@ -8,9 +8,30 @@ export interface FiberPayQuickCardProps {
   passkeyUsername?: string;
 }
 
+const ONE_CKB_SHANNONS = '0x5f5e100';
+
+const cardStyle: CSSProperties = {
+  border: '1px solid #ddd',
+  borderRadius: 8,
+  padding: 16,
+  maxWidth: 520,
+};
+
+const rowStyle: CSSProperties = {
+  display: 'flex',
+  gap: 8,
+};
+
+const rowWithMarginStyle: CSSProperties = {
+  ...rowStyle,
+  marginBottom: 8,
+};
+
 export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
   const network = props.network ?? 'testnet';
   const passkeyUsername = props.passkeyUsername ?? 'User';
+  const passwordInputId = useId();
+  const invoiceInputId = useId();
 
   const {
     node,
@@ -40,7 +61,7 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
     setIsCreatingInvoice(true);
     try {
       const created = await node.newInvoice({
-        amount: '0x5f5e100',
+        amount: ONE_CKB_SHANNONS,
         currency: network === 'mainnet' ? 'Fibb' : 'Fibt',
         description: 'FiberPay QuickCard invoice',
       });
@@ -51,13 +72,13 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
   };
 
   return (
-    <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 16, maxWidth: 520 }}>
+    <div style={cardStyle}>
       <h3>FiberPay Quick Card ({network})</h3>
 
       {!nodeInfo ? (
         <>
           {isPasskeySupported ? (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <div style={rowWithMarginStyle}>
               {hasPasskeyConfigured ? (
                 <button type="button" onClick={() => void startWithPasskey()}>
                   Login with Passkey
@@ -70,8 +91,13 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
             </div>
           ) : null}
 
-          <div style={{ display: 'flex', gap: 8 }}>
+          <label htmlFor={passwordInputId}>Password</label>
+          <div style={rowStyle}>
             <input
+              id={passwordInputId}
+              type="password"
+              autoComplete="current-password"
+              aria-label="Node password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Password"
@@ -90,7 +116,7 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
             <strong>Pubkey:</strong> {nodeInfo.pubkey}
           </p>
 
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <div style={rowWithMarginStyle}>
             <button type="button" onClick={() => void createInvoice()} disabled={isCreatingInvoice}>
               {isCreatingInvoice ? 'Creating...' : 'Create Invoice (1 CKB)'}
             </button>
@@ -105,8 +131,11 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
             </p>
           ) : null}
 
-          <div style={{ display: 'flex', gap: 8 }}>
+          <label htmlFor={invoiceInputId}>Invoice</label>
+          <div style={rowStyle}>
             <input
+              id={invoiceInputId}
+              aria-label="Invoice to pay"
               value={invoiceInput}
               onChange={(event) => setInvoiceInput(event.target.value)}
               placeholder="Paste invoice to pay"
