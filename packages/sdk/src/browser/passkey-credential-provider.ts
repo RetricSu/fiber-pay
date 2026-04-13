@@ -20,6 +20,23 @@ interface AuthenticationExtensionsClientOutputsWithPRF
   };
 }
 
+export type PasskeySupportReason =
+  | 'supported'
+  | 'window-unavailable'
+  | 'insecure-context'
+  | 'webauthn-unavailable'
+  | 'prf-unsupported'
+  | 'unknown';
+
+export interface PasskeySupportStatus {
+  supported: boolean;
+  reason: PasskeySupportReason;
+  isSecureContext: boolean;
+  hasPublicKeyCredential: boolean;
+  hasPlatformAuthenticator: boolean | null;
+  prfCapable: boolean | null;
+}
+
 export class PasskeyCredentialProvider implements CredentialProvider {
   private identifier: string;
   private fiberKey: Uint8Array | null = null;
@@ -34,14 +51,56 @@ export class PasskeyCredentialProvider implements CredentialProvider {
   /**
    * Check if the current browser environment supports Passkeys with the PRF extension.
    */
-  static async isSupported(): Promise<boolean> {
-    if (typeof window === 'undefined' || typeof PublicKeyCredential === 'undefined') return false;
-
-    // Check for platform authenticator (e.g., Face ID / Touch ID)
-    if (PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
-      const isAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-      if (!isAvailable) return false;
+  static async getSupportStatus(): Promise<PasskeySupportStatus> {
+    if (typeof window === 'undefined') {
+      return {
+        supported: false,
+        reason: 'window-unavailable',
+        isSecureContext: false,
+        hasPublicKeyCredential: false,
+        hasPlatformAuthenticator: null,
+        prfCapable: null,
+      };
     }
+
+    const isSecureContext = window.isSecureContext;
+    if (!isSecureContext) {
+      return {
+        supported: false,
+        reason: 'insecure-context',
+        isSecureContext,
+        hasPublicKeyCredential: typeof PublicKeyCredential !== 'undefined',
+        hasPlatformAuthenticator: null,
+        prfCapable: null,
+      };
+    }
+
+    if (typeof PublicKeyCredential === 'undefined') {
+      return {
+        supported: false,
+        reason: 'webauthn-unavailable',
+        isSecureContext,
+        hasPublicKeyCredential: false,
+        hasPlatformAuthenticator: null,
+        prfCapable: null,
+      };
+    }
+
+    let hasPlatformAuthenticator: boolean | null = null;
+
+    // Probe platform authenticator availability for diagnostics only.
+    // It is not a hard requirement because some Linux environments use
+    // non-platform authenticators with WebAuthn + PRF successfully.
+    if (PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+      try {
+        hasPlatformAuthenticator =
+          await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      } catch {
+        hasPlatformAuthenticator = null;
+      }
+    }
+
+    let prfCapable: boolean | null = null;
 
     // Check for PRF extension support capability
     if (
@@ -57,15 +116,38 @@ export class PasskeyCredentialProvider implements CredentialProvider {
           capabilitiesResult instanceof Promise ? await capabilitiesResult : capabilitiesResult
         ) as Record<string, boolean> | undefined;
 
-        if (capabilities && capabilities.prf === false) {
-          return false;
+        if (capabilities && typeof capabilities.prf === 'boolean') {
+          prfCapable = capabilities.prf;
+        }
+
+        if (prfCapable === false) {
+          return {
+            supported: false,
+            reason: 'prf-unsupported',
+            isSecureContext,
+            hasPublicKeyCredential: true,
+            hasPlatformAuthenticator,
+            prfCapable,
+          };
         }
       } catch {
         // Ignore fallback
       }
     }
 
-    return true;
+    return {
+      supported: true,
+      reason: 'supported',
+      isSecureContext,
+      hasPublicKeyCredential: true,
+      hasPlatformAuthenticator,
+      prfCapable,
+    };
+  }
+
+  static async isSupported(): Promise<boolean> {
+    const status = await PasskeyCredentialProvider.getSupportStatus();
+    return status.supported;
   }
 
   getIdentifier(): string {
@@ -182,7 +264,6 @@ export class PasskeyCredentialProvider implements CredentialProvider {
         { type: 'public-key', alg: -257 }, // RS256
       ],
       authenticatorSelection: {
-        authenticatorAttachment: 'platform', // Enforce local device (FaceID/TouchID)
         userVerification: 'required',
         residentKey: 'required',
       },

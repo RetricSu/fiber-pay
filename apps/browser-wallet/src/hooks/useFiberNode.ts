@@ -5,6 +5,7 @@ import {
   PasskeyCredentialProvider,
   type BrowserNodeState,
   type NodeInfoResult,
+  type PasskeySupportStatus,
 } from '@fiber-pay/sdk/browser';
 
 export interface UseFiberNodeResult {
@@ -18,7 +19,27 @@ export interface UseFiberNodeResult {
   stop: () => Promise<void>;
   node: FiberBrowserNode | null;
   isPasskeySupported: boolean;
+  passkeyUnavailableReason: string | null;
   hasPasskeyConfigured: boolean;
+}
+
+function getPasskeyUnavailableReason(status: PasskeySupportStatus): string | null {
+  if (status.supported) {
+    return null;
+  }
+
+  switch (status.reason) {
+    case 'insecure-context':
+      return 'This page is not in a secure context. Browser Passkey mode requires HTTPS or localhost.';
+    case 'webauthn-unavailable':
+      return 'WebAuthn is unavailable in this browser.';
+    case 'prf-unsupported':
+      return 'WebAuthn PRF extension is not available in this browser/authenticator.';
+    case 'window-unavailable':
+      return 'Passkey checks require a browser window environment.';
+    default:
+      return 'Browser Passkey requirements are not met in this environment.';
+  }
 }
 
 export function useFiberNode(network: 'testnet' | 'mainnet'): UseFiberNodeResult {
@@ -26,13 +47,22 @@ export function useFiberNode(network: 'testnet' | 'mainnet'): UseFiberNodeResult
   const [nodeInfo, setNodeInfo] = useState<NodeInfoResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPasskeySupported, setIsPasskeySupported] = useState(false);
+  const [passkeyUnavailableReason, setPasskeyUnavailableReason] = useState<string | null>(null);
   const [hasPasskeyConfigured, setHasPasskeyConfigured] = useState(false);
 
   const nodeRef = useRef<FiberBrowserNode | null>(null);
 
   useEffect(() => {
     // Check support
-    PasskeyCredentialProvider.isSupported().then(setIsPasskeySupported).catch(() => {});
+    PasskeyCredentialProvider.getSupportStatus()
+      .then((status) => {
+        setIsPasskeySupported(status.supported);
+        setPasskeyUnavailableReason(getPasskeyUnavailableReason(status));
+      })
+      .catch(() => {
+        setIsPasskeySupported(false);
+        setPasskeyUnavailableReason('Unable to detect passkey capabilities in this browser.');
+      });
     
     // Check if configured
     const pkProvider = new PasskeyCredentialProvider(`wallet-demo-${network}`);
@@ -132,6 +162,7 @@ export function useFiberNode(network: 'testnet' | 'mainnet'): UseFiberNodeResult
     stop,
     node: nodeRef.current,
     isPasskeySupported,
+    passkeyUnavailableReason,
     hasPasskeyConfigured,
   };
 }

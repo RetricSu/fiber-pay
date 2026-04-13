@@ -79,6 +79,7 @@ function App() {
     nodeInfo,
     node,
     isPasskeySupported,
+    passkeyUnavailableReason,
     hasPasskeyConfigured,
   } = useFiberNode(preferredNetwork);
   const {
@@ -324,6 +325,17 @@ function App() {
                         Register Passkey
                       </button>
                     )}
+                  </div>
+                )}
+
+                {!isPasskeySupported && (
+                  <div className="auth-group auth-card auth-card-disabled">
+                    <p className="field-label">Passkey</p>
+                    <p className="auth-note">Browser Passkey mode requires secure context, WebAuthn, and PRF support.</p>
+                    <div className="alert alert-warning">
+                      <XCircle size={16} />
+                      <span>{passkeyUnavailableReason ?? 'Passkey is unavailable in this browser/environment.'}</span>
+                    </div>
                   </div>
                 )}
 
