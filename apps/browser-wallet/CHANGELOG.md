@@ -1,5 +1,21 @@
 # browser-wallet
 
+## 0.0.3
+
+### Patch Changes
+
+- 1e96626: fix: improve PRF detection for Chrome on Linux
+
+  - Remove fallback detection that triggered unwanted passkey UI
+  - When getClientCapabilities() returns prf: undefined (Chrome on Linux),
+    return 'unknown' status instead of attempting detection
+  - Update UI to show passkey option when capability is 'unknown',
+    allowing users to try passkey on platforms with incomplete capability reporting
+
+- Updated dependencies [76bbe85]
+- Updated dependencies [1e96626]
+  - @fiber-pay/sdk@0.2.2
+
 ## 0.0.2
 
 ### Patch Changes

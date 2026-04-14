@@ -1,5 +1,21 @@
 # @fiber-pay/sdk
 
+## 0.2.2
+
+### Patch Changes
+
+- 76bbe85: Relax browser passkey policy to allow non-platform authenticators (including Linux setups) while still requiring secure context, WebAuthn support, and PRF capability.
+
+  Also remove forced `authenticatorSelection.authenticatorAttachment = "platform"` during passkey registration.
+
+- 1e96626: fix: improve PRF detection for Chrome on Linux
+
+  - Remove fallback detection that triggered unwanted passkey UI
+  - When getClientCapabilities() returns prf: undefined (Chrome on Linux),
+    return 'unknown' status instead of attempting detection
+  - Update UI to show passkey option when capability is 'unknown',
+    allowing users to try passkey on platforms with incomplete capability reporting
+
 ## 0.2.1
 
 ### Patch Changes
