@@ -60,12 +60,11 @@ export function useFiberNode(network: 'testnet' | 'mainnet'): UseFiberNodeResult
     // Check support
     PasskeyCredentialProvider.getSupportStatus()
       .then((status) => {
-        // Support passkey when explicitly supported OR when capability is unknown
-        // This allows users to try passkey on platforms like Chrome/Linux where
-        // getClientCapabilities() returns undefined for PRF
-        const shouldShowPasskey = status.supported || status.reason === 'unknown';
-        setIsPasskeySupported(shouldShowPasskey);
-        setPasskeyUnavailableReason(getPasskeyUnavailableReason(status));
+        // Use helper function to determine if passkey should be shown
+        // Returns null for both 'supported' and 'unknown' cases
+        const reason = getPasskeyUnavailableReason(status);
+        setIsPasskeySupported(reason === null);
+        setPasskeyUnavailableReason(reason);
       })
       .catch(() => {
         setIsPasskeySupported(false);

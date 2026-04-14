@@ -1,6 +1,6 @@
 ---
 "@fiber-pay/sdk": patch
-"@fiber-pay/browser-wallet": patch
+"browser-wallet": patch
 ---
 
 fix: improve PRF detection for Chrome on Linux
