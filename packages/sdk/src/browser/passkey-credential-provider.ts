@@ -119,6 +119,8 @@ export class PasskeyCredentialProvider implements CredentialProvider {
         if (capabilities && typeof capabilities.prf === 'boolean') {
           prfCapable = capabilities.prf;
         }
+        // Note: When capabilities.prf is undefined (e.g., Chrome on Linux),
+        // we keep prfCapable as null and let the UI decide whether to allow the user to try.
       } catch {
         // Probe failed; treat as unknown capability below.
       }

@@ -36,7 +36,9 @@ function getPasskeyUnavailableReason(status: PasskeySupportStatus): string | nul
     case 'prf-unsupported':
       return 'WebAuthn PRF extension is not available in this browser/authenticator.';
     case 'unknown':
-      return 'Unable to verify WebAuthn PRF capability in this browser.';
+      // When PRF capability is unknown, we still allow the user to try
+      // This handles cases like Chrome on Linux where getClientCapabilities() returns undefined
+      return null;
     case 'window-unavailable':
       return 'Passkey checks require a browser window environment.';
     default:
@@ -58,7 +60,11 @@ export function useFiberNode(network: 'testnet' | 'mainnet'): UseFiberNodeResult
     // Check support
     PasskeyCredentialProvider.getSupportStatus()
       .then((status) => {
-        setIsPasskeySupported(status.supported);
+        // Support passkey when explicitly supported OR when capability is unknown
+        // This allows users to try passkey on platforms like Chrome/Linux where
+        // getClientCapabilities() returns undefined for PRF
+        const shouldShowPasskey = status.supported || status.reason === 'unknown';
+        setIsPasskeySupported(shouldShowPasskey);
         setPasskeyUnavailableReason(getPasskeyUnavailableReason(status));
       })
       .catch(() => {
