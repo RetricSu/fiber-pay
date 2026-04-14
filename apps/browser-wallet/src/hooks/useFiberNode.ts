@@ -35,6 +35,8 @@ function getPasskeyUnavailableReason(status: PasskeySupportStatus): string | nul
       return 'WebAuthn is unavailable in this browser.';
     case 'prf-unsupported':
       return 'WebAuthn PRF extension is not available in this browser/authenticator.';
+    case 'unknown':
+      return 'Unable to verify WebAuthn PRF capability in this browser.';
     case 'window-unavailable':
       return 'Passkey checks require a browser window environment.';
     default:
@@ -63,7 +65,7 @@ export function useFiberNode(network: 'testnet' | 'mainnet'): UseFiberNodeResult
         setIsPasskeySupported(false);
         setPasskeyUnavailableReason('Unable to detect passkey capabilities in this browser.');
       });
-    
+
     // Check if configured
     const pkProvider = new PasskeyCredentialProvider(`wallet-demo-${network}`);
     setHasPasskeyConfigured(pkProvider.isConfigured());

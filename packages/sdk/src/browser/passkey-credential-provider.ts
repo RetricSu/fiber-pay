@@ -119,20 +119,20 @@ export class PasskeyCredentialProvider implements CredentialProvider {
         if (capabilities && typeof capabilities.prf === 'boolean') {
           prfCapable = capabilities.prf;
         }
-
-        if (prfCapable === false) {
-          return {
-            supported: false,
-            reason: 'prf-unsupported',
-            isSecureContext,
-            hasPublicKeyCredential: true,
-            hasPlatformAuthenticator,
-            prfCapable,
-          };
-        }
       } catch {
-        // Ignore fallback
+        // Probe failed; treat as unknown capability below.
       }
+    }
+
+    if (prfCapable !== true) {
+      return {
+        supported: false,
+        reason: prfCapable === false ? 'prf-unsupported' : 'unknown',
+        isSecureContext,
+        hasPublicKeyCredential: true,
+        hasPlatformAuthenticator,
+        prfCapable,
+      };
     }
 
     return {
