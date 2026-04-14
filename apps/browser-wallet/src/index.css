@@ -306,6 +306,10 @@ h3 {
   padding: 12px;
 }
 
+.auth-card-disabled {
+  opacity: 0.92;
+}
+
 .auth-note {
   color: var(--text-secondary);
   font-size: 0.82rem;
