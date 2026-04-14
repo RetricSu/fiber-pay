@@ -1,5 +1,5 @@
 ---
-'@fiber-pay/react': minor
+'@fiber-pay/react': patch
 ---
 
 Add a new React package with one-line imports for browser wallet integrations.
