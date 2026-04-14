@@ -1,5 +1,13 @@
 # @fiber-pay/node
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [76bbe85]
+- Updated dependencies [1e96626]
+  - @fiber-pay/sdk@0.2.2
+
 ## 0.2.1
 
 ### Patch Changes
