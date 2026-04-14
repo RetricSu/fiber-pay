@@ -24,9 +24,18 @@ export function App() {
 }
 ```
 
+## Component customization
+
+`FiberPayQuickCard` supports lightweight integration hooks:
+
+- `className`, `style`, `title`
+- `onInvoiceCreated(invoice)`
+- `onPaymentResult(result)`
+- `onError({ scope, message })`
+
 ## Hooks
 
 - `useFiberNode(options)`
 - `useFiberPayment(node)`
 
-`useFiberNode` exposes passkey/password startup and node lifecycle methods.
+`useFiberNode` exposes passkey/password startup, node lifecycle methods, and passkey diagnostics (`passkeySupportReason`, `passkeyUnavailableReason`).

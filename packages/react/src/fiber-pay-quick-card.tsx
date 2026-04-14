@@ -1,4 +1,5 @@
-import { type CSSProperties, useId, useState } from 'react';
+import type { GetPaymentResult } from '@fiber-pay/sdk/browser';
+import { type CSSProperties, useEffect, useId, useState } from 'react';
 import { useFiberNode } from './use-fiber-node.js';
 import { useFiberPayment } from './use-fiber-payment.js';
 
@@ -6,6 +7,12 @@ export interface FiberPayQuickCardProps {
   network?: 'testnet' | 'mainnet';
   walletId?: string;
   passkeyUsername?: string;
+  title?: string;
+  className?: string;
+  style?: CSSProperties;
+  onInvoiceCreated?: (invoice: string) => void;
+  onPaymentResult?: (result: GetPaymentResult) => void;
+  onError?: (error: { scope: 'node' | 'payment' | 'invoice'; message: string }) => void;
 }
 
 const ONE_CKB_SHANNONS = '0x5f5e100';
@@ -30,6 +37,10 @@ const rowWithMarginStyle: CSSProperties = {
 export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
   const network = props.network ?? 'testnet';
   const passkeyUsername = props.passkeyUsername ?? 'User';
+  const title = props.title ?? 'FiberPay Quick Card';
+  const onError = props.onError;
+  const onInvoiceCreated = props.onInvoiceCreated;
+  const onPaymentResult = props.onPaymentResult;
   const passwordInputId = useId();
   const invoiceInputId = useId();
 
@@ -52,6 +63,25 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
   const [invoiceInput, setInvoiceInput] = useState('');
   const [createdInvoice, setCreatedInvoice] = useState('');
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (nodeError) {
+      onError?.({ scope: 'node', message: nodeError });
+    }
+  }, [nodeError, onError]);
+
+  useEffect(() => {
+    if (payError) {
+      onError?.({ scope: 'payment', message: payError });
+    }
+  }, [onError, payError]);
+
+  useEffect(() => {
+    if (paymentResult) {
+      onPaymentResult?.(paymentResult);
+    }
+  }, [onPaymentResult, paymentResult]);
 
   const createInvoice = async () => {
     if (!node) {
@@ -59,6 +89,7 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
     }
 
     setIsCreatingInvoice(true);
+    setInvoiceError(null);
     try {
       const created = await node.newInvoice({
         amount: ONE_CKB_SHANNONS,
@@ -66,14 +97,24 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
         description: 'FiberPay QuickCard invoice',
       });
       setCreatedInvoice(created.invoice_address);
+      onInvoiceCreated?.(created.invoice_address);
+    } catch (createInvoiceError) {
+      const message =
+        createInvoiceError instanceof Error
+          ? createInvoiceError.message
+          : String(createInvoiceError);
+      setInvoiceError(message);
+      onError?.({ scope: 'invoice', message });
     } finally {
       setIsCreatingInvoice(false);
     }
   };
 
   return (
-    <div style={cardStyle}>
-      <h3>FiberPay Quick Card ({network})</h3>
+    <div style={{ ...cardStyle, ...props.style }} className={props.className}>
+      <h3>
+        {title} ({network})
+      </h3>
 
       {!nodeInfo ? (
         <>
@@ -161,6 +202,11 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
       {payError ? (
         <p style={{ color: '#b91c1c' }}>
           <strong>Payment error:</strong> {payError}
+        </p>
+      ) : null}
+      {invoiceError ? (
+        <p style={{ color: '#b91c1c' }}>
+          <strong>Invoice error:</strong> {invoiceError}
         </p>
       ) : null}
     </div>

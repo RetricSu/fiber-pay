@@ -188,6 +188,103 @@ Recommended approach:
 2. Drop to `@fiber-pay/sdk/browser` when you need custom lifecycle/routing behavior.
 3. Keep final UI/branding in your own component system.
 
+## React SDK Tutorial (Dogfood Pattern)
+
+This is the exact integration style currently used by `apps/browser-wallet`:
+
+- Use `useFiberNode` for node lifecycle and passkey diagnostics.
+- Keep business UI in your own component tree.
+- Optionally embed `FiberPayQuickCard` for rapid MVP flows.
+
+### A) Hook-first integration (recommended)
+
+```tsx
+import { useFiberNode } from '@fiber-pay/react';
+
+export function WalletNodePanel() {
+  const {
+    state,
+    node,
+    nodeInfo,
+    isPasskeySupported,
+    passkeySupportReason,
+    passkeyUnavailableReason,
+    hasPasskeyConfigured,
+    startWithPassword,
+    startWithPasskey,
+    createPasskeyAndStart,
+    stop,
+  } = useFiberNode({
+    network: 'testnet',
+    walletId: 'wallet-demo-testnet',
+  });
+
+  if (!nodeInfo) {
+    return (
+      <div>
+        {isPasskeySupported ? (
+          hasPasskeyConfigured ? (
+            <button onClick={() => void startWithPasskey()}>Login with Passkey</button>
+          ) : (
+            <button onClick={() => void createPasskeyAndStart('DemoUser')}>Register Passkey</button>
+          )
+        ) : (
+          <p>
+            Passkey unavailable: {passkeyUnavailableReason} (reason: {passkeySupportReason})
+          </p>
+        )}
+
+        <button onClick={() => void startWithPassword('demo-secret')}>Start with Password</button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p>State: {state}</p>
+      <p>Pubkey: {nodeInfo.pubkey}</p>
+      <p>Node ready: {String(Boolean(node))}</p>
+      <button onClick={() => void stop()}>Stop</button>
+    </div>
+  );
+}
+```
+
+What this gives you:
+
+- Better passkey UX with explicit fallback messaging.
+- Fully custom UI while still using official lifecycle APIs.
+- A clean seam to plug in your own monitoring, logging, and analytics.
+
+### B) Quick MVP with callback instrumentation
+
+`FiberPayQuickCard` now supports callback hooks so you can plug telemetry/alerts without rewriting core flow.
+
+```tsx
+import { FiberPayQuickCard } from '@fiber-pay/react';
+
+export function QuickPaySection() {
+  return (
+    <FiberPayQuickCard
+      network="testnet"
+      title="Demo Quick Pay"
+      className="quick-card"
+      onInvoiceCreated={(invoice) => {
+        console.log('invoice created', invoice);
+      }}
+      onPaymentResult={(result) => {
+        console.log('payment result', result.status);
+      }}
+      onError={(event) => {
+        console.error(`[${event.scope}]`, event.message);
+      }}
+    />
+  );
+}
+```
+
+Use this path when you want to ship a functional payment panel quickly, then progressively replace UI with your own components.
+
 ## 7) Production Notes
 
 - Use HTTPS in production for WebAuthn.

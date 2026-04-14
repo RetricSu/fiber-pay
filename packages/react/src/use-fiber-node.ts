@@ -5,6 +5,8 @@ import {
   type FiberWasmFactory,
   type NodeInfoResult,
   PasskeyCredentialProvider,
+  type PasskeySupportReason,
+  type PasskeySupportStatus,
   PasswordCredentialProvider,
 } from '@fiber-pay/sdk/browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -22,11 +24,35 @@ export interface UseFiberNodeResult {
   nodeInfo: NodeInfoResult | null;
   error: string | null;
   isPasskeySupported: boolean;
+  passkeySupportReason: PasskeySupportReason | null;
+  passkeyUnavailableReason: string | null;
   hasPasskeyConfigured: boolean;
   startWithPassword: (password: string) => Promise<void>;
   createPasskeyAndStart: (username?: string) => Promise<void>;
   startWithPasskey: () => Promise<void>;
   stop: () => Promise<void>;
+}
+
+const PASSKEY_UNAVAILABLE_REASON_TEXT: Record<
+  Exclude<PasskeySupportReason, 'supported'>,
+  string
+> = {
+  'window-unavailable': 'Passkey is not available because there is no browser window context.',
+  'insecure-context': 'Passkey requires a secure context (HTTPS or localhost).',
+  'webauthn-unavailable': 'This browser does not provide WebAuthn support for passkeys.',
+  'prf-unsupported': 'This browser or authenticator does not support WebAuthn PRF.',
+  unknown: 'Passkey support could not be fully detected in this environment.',
+};
+
+export function isPasskeyPotentiallySupported(status: PasskeySupportStatus): boolean {
+  return status.supported || status.reason === 'unknown';
+}
+
+export function toPasskeyUnavailableReason(reason: PasskeySupportReason): string | null {
+  if (reason === 'supported') {
+    return null;
+  }
+  return PASSKEY_UNAVAILABLE_REASON_TEXT[reason];
 }
 
 function asErrorMessage(error: unknown): string {
@@ -47,6 +73,10 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
   const [nodeInfo, setNodeInfo] = useState<NodeInfoResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPasskeySupported, setIsPasskeySupported] = useState(false);
+  const [passkeySupportReason, setPasskeySupportReason] = useState<PasskeySupportReason | null>(
+    null,
+  );
+  const [passkeyUnavailableReason, setPasskeyUnavailableReason] = useState<string | null>(null);
   const [hasPasskeyConfigured, setHasPasskeyConfigured] = useState(false);
 
   const nodeRef = useRef<FiberBrowserNode | null>(null);
@@ -81,15 +111,20 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
   useEffect(() => {
     let cancelled = false;
 
-    PasskeyCredentialProvider.isSupported()
-      .then((supported) => {
+    PasskeyCredentialProvider.getSupportStatus()
+      .then((status) => {
         if (!cancelled) {
+          const supported = isPasskeyPotentiallySupported(status);
           setIsPasskeySupported(supported);
+          setPasskeySupportReason(status.reason);
+          setPasskeyUnavailableReason(supported ? null : toPasskeyUnavailableReason(status.reason));
         }
       })
       .catch((supportError) => {
         if (!cancelled) {
           setIsPasskeySupported(false);
+          setPasskeySupportReason('unknown');
+          setPasskeyUnavailableReason(toPasskeyUnavailableReason('unknown'));
         }
 
         if (supportError instanceof Error) {
@@ -286,6 +321,8 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
     nodeInfo,
     error,
     isPasskeySupported,
+    passkeySupportReason,
+    passkeyUnavailableReason,
     hasPasskeyConfigured,
     startWithPassword,
     createPasskeyAndStart,
