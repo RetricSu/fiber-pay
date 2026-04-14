@@ -113,6 +113,34 @@ describe('PasskeyCredentialProvider.getSupportStatus', () => {
     expect(status.prfCapable).toBeNull();
   });
 
+  it('returns unknown when PRF capability is undefined (Chrome on Linux)', async () => {
+    setWindowSecureContext(true);
+    setPublicKeyCredential({
+      getClientCapabilities: () => ({ prf: undefined }),
+      isUserVerifyingPlatformAuthenticatorAvailable: async () => true,
+    });
+
+    const status = await PasskeyCredentialProvider.getSupportStatus();
+
+    expect(status.supported).toBe(false);
+    expect(status.reason).toBe('unknown');
+    expect(status.prfCapable).toBeNull();
+  });
+
+  it('returns unknown when capabilities object has no prf property', async () => {
+    setWindowSecureContext(true);
+    setPublicKeyCredential({
+      getClientCapabilities: () => ({}),
+      isUserVerifyingPlatformAuthenticatorAvailable: async () => true,
+    });
+
+    const status = await PasskeyCredentialProvider.getSupportStatus();
+
+    expect(status.supported).toBe(false);
+    expect(status.reason).toBe('unknown');
+    expect(status.prfCapable).toBeNull();
+  });
+
   it('returns supported when PRF capability is explicitly true', async () => {
     setWindowSecureContext(true);
     setPublicKeyCredential({
@@ -126,5 +154,43 @@ describe('PasskeyCredentialProvider.getSupportStatus', () => {
     expect(status.reason).toBe('supported');
     expect(status.prfCapable).toBe(true);
     expect(status.hasPlatformAuthenticator).toBe(true);
+  });
+});
+
+describe('PasskeyCredentialProvider.isSupported', () => {
+  it('returns true when explicitly supported', async () => {
+    setWindowSecureContext(true);
+    setPublicKeyCredential({
+      getClientCapabilities: () => ({ prf: true }),
+      isUserVerifyingPlatformAuthenticatorAvailable: async () => true,
+    });
+
+    const isSupported = await PasskeyCredentialProvider.isSupported();
+
+    expect(isSupported).toBe(true);
+  });
+
+  it('returns true when capability is unknown (allows user to try)', async () => {
+    setWindowSecureContext(true);
+    setPublicKeyCredential({
+      getClientCapabilities: () => ({ prf: undefined }),
+      isUserVerifyingPlatformAuthenticatorAvailable: async () => true,
+    });
+
+    const isSupported = await PasskeyCredentialProvider.isSupported();
+
+    expect(isSupported).toBe(true);
+  });
+
+  it('returns false when PRF is explicitly unsupported', async () => {
+    setWindowSecureContext(true);
+    setPublicKeyCredential({
+      getClientCapabilities: () => ({ prf: false }),
+      isUserVerifyingPlatformAuthenticatorAvailable: async () => false,
+    });
+
+    const isSupported = await PasskeyCredentialProvider.isSupported();
+
+    expect(isSupported).toBe(false);
   });
 });

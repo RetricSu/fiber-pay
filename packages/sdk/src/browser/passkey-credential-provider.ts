@@ -119,6 +119,8 @@ export class PasskeyCredentialProvider implements CredentialProvider {
         if (capabilities && typeof capabilities.prf === 'boolean') {
           prfCapable = capabilities.prf;
         }
+        // Note: When capabilities.prf is undefined (e.g., Chrome on Linux),
+        // we keep prfCapable as null and let the UI decide whether to allow the user to try.
       } catch {
         // Probe failed; treat as unknown capability below.
       }
@@ -145,9 +147,16 @@ export class PasskeyCredentialProvider implements CredentialProvider {
     };
   }
 
+  /**
+   * Check if passkey is supported or potentially supported (unknown capability).
+   * Returns true when explicitly supported OR when capability is unknown,
+   * allowing users to attempt passkey on platforms with incomplete capability reporting.
+   */
   static async isSupported(): Promise<boolean> {
     const status = await PasskeyCredentialProvider.getSupportStatus();
-    return status.supported;
+    // Consider both 'supported' and 'unknown' as potentially supported
+    // This allows users to try passkey on platforms like Chrome/Linux
+    return status.supported || status.reason === 'unknown';
   }
 
   getIdentifier(): string {
