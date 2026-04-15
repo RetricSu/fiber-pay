@@ -5,6 +5,7 @@
   "fixed": [
     [
       "@fiber-pay/sdk",
+      "@fiber-pay/react",
       "@fiber-pay/node",
       "@fiber-pay/runtime",
       "@fiber-pay/cli",
