@@ -51,19 +51,26 @@ jobs:
               process.exit(1);
             }
             const version = tag.slice(1);
-            const pkgPaths = [
-              "packages/sdk/package.json",
-              "packages/react/package.json",
-              "packages/node/package.json",
-              "packages/runtime/package.json",
-              "packages/agent/package.json",
-              "packages/cli/package.json"
-            ];
-            const pkgVersions = pkgPaths.map((pkgPath) => {
-              const fullPath = path.join(process.cwd(), pkgPath);
-              const pkg = JSON.parse(fs.readFileSync(fullPath, "utf8"));
-              return { name: pkg.name, version: pkg.version, path: pkgPath };
-            });
+            const packagesRoot = path.join(process.cwd(), "packages");
+            const pkgVersions = fs
+              .readdirSync(packagesRoot, { withFileTypes: true })
+              .filter((entry) => entry.isDirectory())
+              .map((entry) => {
+                const pkgPath = path.join("packages", entry.name, "package.json");
+                const fullPath = path.join(process.cwd(), pkgPath);
+                if (!fs.existsSync(fullPath)) return null;
+                const pkg = JSON.parse(fs.readFileSync(fullPath, "utf8"));
+                if (typeof pkg.name !== "string") return null;
+                if (!pkg.name.startsWith("@fiber-pay/")) return null;
+                if (pkg.private === true) return null;
+                return { name: pkg.name, version: pkg.version, path: pkgPath };
+              })
+              .filter(Boolean)
+              .sort((a, b) => a.name.localeCompare(b.name));
+            if (pkgVersions.length === 0) {
+              console.error("No publishable @fiber-pay/* packages found under packages/*");
+              process.exit(1);
+            }
             const mismatched = pkgVersions.filter((pkg) => pkg.version !== version);
             if (mismatched.length > 0) {
               console.error("Version mismatch with git tag:");
@@ -72,7 +79,7 @@ jobs:
               }
               process.exit(1);
             }
-            console.log(`All package versions match tag ${tag}`);
+            console.log(`All ${pkgVersions.length} package versions match tag ${tag}`);
           '
 
       - name: Build
@@ -101,11 +108,32 @@ jobs:
             echo "NPM_TOKEN is not configured"
             exit 1
           fi
-          pnpm -r \
-            --filter @fiber-pay/sdk \
-            --filter @fiber-pay/react \
-            --filter @fiber-pay/node \
-            --filter @fiber-pay/runtime \
-            --filter @fiber-pay/agent \
-            --filter @fiber-pay/cli \
-            publish --access public --no-git-checks --tag "${{ steps.dist_tag.outputs.value }}"
+          mapfile -t PACKAGES < <(node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const packagesRoot = path.join(process.cwd(), "packages");
+            const names = fs
+              .readdirSync(packagesRoot, { withFileTypes: true })
+              .filter((entry) => entry.isDirectory())
+              .map((entry) => path.join(packagesRoot, entry.name, "package.json"))
+              .filter((pkgPath) => fs.existsSync(pkgPath))
+              .map((pkgPath) => JSON.parse(fs.readFileSync(pkgPath, "utf8")))
+              .filter((pkg) => typeof pkg.name === "string")
+              .filter((pkg) => pkg.name.startsWith("@fiber-pay/"))
+              .filter((pkg) => pkg.private !== true)
+              .map((pkg) => pkg.name)
+              .sort((a, b) => a.localeCompare(b));
+            for (const name of names) {
+              console.log(name);
+            }
+          ')
+
+          if [[ "${#PACKAGES[@]}" -eq 0 ]]; then
+            echo "No publishable @fiber-pay/* packages found under packages/*"
+            exit 1
+          fi
+
+          for pkg in "${PACKAGES[@]}"; do
+            echo "Publishing ${pkg} with dist-tag ${{ steps.dist_tag.outputs.value }}"
+            pnpm --filter "$pkg" publish --access public --no-git-checks --tag "${{ steps.dist_tag.outputs.value }}"
+          done
