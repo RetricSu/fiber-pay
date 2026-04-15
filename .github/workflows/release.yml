@@ -42,31 +42,15 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         run: |
+          export PACKAGES_JSON="$(node scripts/discover-publishable-packages.mjs --json)"
           node -e '
-            const fs = require("fs");
-            const path = require("path");
             const tag = process.env.TAG;
+            const pkgVersions = JSON.parse(process.env.PACKAGES_JSON || "[]");
             if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(tag)) {
               console.error(`Invalid tag format: ${tag}. Expected vX.Y.Z or vX.Y.Z-prerelease`);
               process.exit(1);
             }
             const version = tag.slice(1);
-            const packagesRoot = path.join(process.cwd(), "packages");
-            const pkgVersions = fs
-              .readdirSync(packagesRoot, { withFileTypes: true })
-              .filter((entry) => entry.isDirectory())
-              .map((entry) => {
-                const pkgPath = path.join("packages", entry.name, "package.json");
-                const fullPath = path.join(process.cwd(), pkgPath);
-                if (!fs.existsSync(fullPath)) return null;
-                const pkg = JSON.parse(fs.readFileSync(fullPath, "utf8"));
-                if (typeof pkg.name !== "string") return null;
-                if (!pkg.name.startsWith("@fiber-pay/")) return null;
-                if (pkg.private === true) return null;
-                return { name: pkg.name, version: pkg.version, path: pkgPath };
-              })
-              .filter(Boolean)
-              .sort((a, b) => a.name.localeCompare(b.name));
             if (pkgVersions.length === 0) {
               console.error("No publishable @fiber-pay/* packages found under packages/*");
               process.exit(1);
@@ -108,25 +92,8 @@ jobs:
             echo "NPM_TOKEN is not configured"
             exit 1
           fi
-          mapfile -t PACKAGES < <(node -e '
-            const fs = require("fs");
-            const path = require("path");
-            const packagesRoot = path.join(process.cwd(), "packages");
-            const names = fs
-              .readdirSync(packagesRoot, { withFileTypes: true })
-              .filter((entry) => entry.isDirectory())
-              .map((entry) => path.join(packagesRoot, entry.name, "package.json"))
-              .filter((pkgPath) => fs.existsSync(pkgPath))
-              .map((pkgPath) => JSON.parse(fs.readFileSync(pkgPath, "utf8")))
-              .filter((pkg) => typeof pkg.name === "string")
-              .filter((pkg) => pkg.name.startsWith("@fiber-pay/"))
-              .filter((pkg) => pkg.private !== true)
-              .map((pkg) => pkg.name)
-              .sort((a, b) => a.localeCompare(b));
-            for (const name of names) {
-              console.log(name);
-            }
-          ')
+          PACKAGES_OUTPUT="$(node scripts/discover-publishable-packages.mjs)"
+          mapfile -t PACKAGES <<< "$PACKAGES_OUTPUT"
 
           if [[ "${#PACKAGES[@]}" -eq 0 ]]; then
             echo "No publishable @fiber-pay/* packages found under packages/*"
