@@ -1,0 +1,15 @@
+# @fiber-pay/react
+
+## 0.2.3
+
+### Patch Changes
+
+- 000909c: Add a new React package with one-line imports for browser wallet integrations.
+
+  Included in this release:
+
+  - `useFiberNode` hook for passkey/password startup and node lifecycle
+  - `useFiberPayment` hook for invoice payment flow
+  - `FiberPayQuickCard` starter component for fast integration
+  - browser-wallet dogfooding integration using `@fiber-pay/react`
+  - @fiber-pay/sdk@0.2.3

@@ -1,5 +1,13 @@
 # browser-wallet
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [000909c]
+  - @fiber-pay/react@0.2.3
+  - @fiber-pay/sdk@0.2.3
+
 ## 0.0.3
 
 ### Patch Changes
