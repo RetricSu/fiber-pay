@@ -53,6 +53,7 @@ jobs:
             const version = tag.slice(1);
             const pkgPaths = [
               "packages/sdk/package.json",
+              "packages/react/package.json",
               "packages/node/package.json",
               "packages/runtime/package.json",
               "packages/agent/package.json",
@@ -102,6 +103,7 @@ jobs:
           fi
           pnpm -r \
             --filter @fiber-pay/sdk \
+            --filter @fiber-pay/react \
             --filter @fiber-pay/node \
             --filter @fiber-pay/runtime \
             --filter @fiber-pay/agent \
