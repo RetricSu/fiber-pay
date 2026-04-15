@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { type ChannelState, ckbToShannons, type HexString, nodeIdToPeerId } from '@fiber-pay/sdk';
+import {
+  type ChannelState,
+  ckbToShannons,
+  ensureHexPrefix,
+  type HexString,
+  nodeIdToPeerId,
+} from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import { sleep } from '../lib/async.js';
 import type { CliConfig } from '../lib/config.js';
@@ -275,9 +281,7 @@ export function createChannelCommand(config: CliConfig): Command {
         peerPubkey = await resolvePeerPubkeyFromMultiaddr(rpc, peerInput, 8_000);
       }
 
-      if (!peerPubkey.startsWith('0x')) {
-        throw new Error(`Invalid peer pubkey: ${peerPubkey}`);
-      }
+      peerPubkey = ensureHexPrefix(peerPubkey);
 
       const idempotencyKey =
         typeof options.idempotencyKey === 'string' && options.idempotencyKey.trim().length > 0

@@ -1,4 +1,4 @@
-import { ChannelState, type FiberRpcClient } from '@fiber-pay/sdk';
+import { ChannelState, ensureHexPrefix, type FiberRpcClient } from '@fiber-pay/sdk';
 import { sleep } from '../../utils/async.js';
 import { classifyRpcError } from '../error-classifier.js';
 import { applyRetryOrFail, transitionJobState } from '../executor-utils.js';
@@ -351,9 +351,7 @@ function isTerminalClosed(stateName: string): boolean {
 }
 
 function normalizePubkey(value: string): `0x${string}` {
-  // Runtime jobs may carry legacy peer-style ids in tests/old persisted jobs.
-  // Keep matching tolerant here; upstream RPC will still validate actual pubkey format.
-  return value as `0x${string}`;
+  return ensureHexPrefix(value);
 }
 
 function resolveTargetPeer(params: ChannelJob['params']): string {
@@ -364,9 +362,9 @@ function resolveTargetPeer(params: ChannelJob['params']): string {
 }
 
 function isHexPrefixed(value: string): value is `0x${string}` {
-  return value.startsWith('0x');
+  return /^0x/i.test(value);
 }
 
 function getChannelPubkey(channel: { pubkey?: string; peer_id?: string }): string {
-  return channel.pubkey ?? channel.peer_id ?? '';
+  return ensureHexPrefix(channel.pubkey ?? channel.peer_id ?? '');
 }

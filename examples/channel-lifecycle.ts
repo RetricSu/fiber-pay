@@ -15,7 +15,7 @@
  * Run: PEER_ADDR="/ip4/x.x.x.x/tcp/8228/p2p/QmXXX" npx tsx examples/channel-lifecycle.ts
  */
 
-import { ckbToShannons, FiberRpcClient, shannonsToCkb } from '@fiber-pay/sdk';
+import { ckbToShannons, ensureHexPrefix, FiberRpcClient, shannonsToCkb } from '@fiber-pay/sdk';
 
 const RPC_URL = process.env.FIBER_RPC_URL || 'http://127.0.0.1:8227';
 
@@ -56,17 +56,18 @@ async function main() {
   const connectedPeer = discovered.peers.find((peer) => peer.address === PEER_ADDR);
   const targetPubkey = process.env.PEER_PUBKEY ?? connectedPeer?.pubkey;
 
-  if (!targetPubkey || !targetPubkey.startsWith('0x')) {
+  if (!targetPubkey) {
     console.error('Could not resolve peer pubkey. Set PEER_PUBKEY=0x... and retry.');
     process.exit(1);
   }
+  const normalizedPubkey = ensureHexPrefix(targetPubkey);
 
   // 2. Open a channel
   const fundingCkb = 200; // 200 CKB minimum recommended
   console.log(`Opening channel with ${fundingCkb} CKB funding...`);
 
   const channel = await client.openChannel({
-    pubkey: targetPubkey as `0x${string}`,
+    pubkey: normalizedPubkey,
     funding_amount: ckbToShannons(fundingCkb),
     public: true,
   });

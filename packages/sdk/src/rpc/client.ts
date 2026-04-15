@@ -621,4 +621,11 @@ export class FiberRpcClient {
 // Re-export utility functions
 // =============================================================================
 
-export { ckbToShannons, fromHex, randomBytes32, shannonsToCkb, toHex } from '../utils.js';
+export {
+  ckbToShannons,
+  ensureHexPrefix,
+  fromHex,
+  randomBytes32,
+  shannonsToCkb,
+  toHex,
+} from '../utils.js';
