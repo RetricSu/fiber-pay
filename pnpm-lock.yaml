@@ -97,6 +97,58 @@ importers:
         specifier: ^6.0.0
         version: 6.4.1(@types/node@24.12.0)(yaml@2.8.2)
 
+  apps/react-quick-card:
+    dependencies:
+      '@fiber-pay/react':
+        specifier: workspace:*
+        version: link:../../packages/react
+      '@fiber-pay/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@nervosnetwork/fiber-js':
+        specifier: ~0.8.0
+        version: 0.8.0
+      react:
+        specifier: ^19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.2.4(react@19.2.4)
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.39.4
+        version: 9.39.4
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      '@vitejs/plugin-react':
+        specifier: ^4.7.0
+        version: 4.7.0(vite@6.4.1(@types/node@25.1.0)(yaml@2.8.2))
+      eslint:
+        specifier: ^9.39.4
+        version: 9.39.4
+      eslint-plugin-react-hooks:
+        specifier: ^7.0.1
+        version: 7.0.1(eslint@9.39.4)
+      eslint-plugin-react-refresh:
+        specifier: ^0.5.2
+        version: 0.5.2(eslint@9.39.4)
+      globals:
+        specifier: ^17.4.0
+        version: 17.4.0
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.57.0
+        version: 8.58.0(eslint@9.39.4)(typescript@5.9.3)
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.1(@types/node@25.1.0)(yaml@2.8.2)
+
   e2e/wasm-smoke:
     dependencies:
       '@nervosnetwork/fiber-js':
@@ -3597,6 +3649,18 @@ snapshots:
       '@types/babel__core': 7.20.5
       react-refresh: 0.17.0
       vite: 6.4.1(@types/node@24.12.0)(yaml@2.8.2)
+    transitivePeerDependencies:
+      - supports-color
+
+  '@vitejs/plugin-react@4.7.0(vite@6.4.1(@types/node@25.1.0)(yaml@2.8.2))':
+    dependencies:
+      '@babel/core': 7.29.0
+      '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.29.0)
+      '@babel/plugin-transform-react-jsx-source': 7.27.1(@babel/core@7.29.0)
+      '@rolldown/pluginutils': 1.0.0-beta.27
+      '@types/babel__core': 7.20.5
+      react-refresh: 0.17.0
+      vite: 6.4.1(@types/node@25.1.0)(yaml@2.8.2)
     transitivePeerDependencies:
       - supports-color
 
