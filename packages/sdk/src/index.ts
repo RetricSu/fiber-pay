@@ -56,6 +56,7 @@ export {
   buildMultiaddrFromNodeId,
   buildMultiaddrFromRpcUrl,
   ckbToShannons,
+  ensureHexPrefix,
   fromHex,
   nodeIdToPeerId,
   randomBytes32,

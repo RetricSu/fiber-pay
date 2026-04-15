@@ -15,6 +15,18 @@ export function toHex(value: number | bigint): HexString {
 }
 
 /**
+ * Ensure a string has a `0x` hex prefix. If missing, prepend it.
+ * Handles case-insensitive prefixes (e.g. `0X`) to avoid double-prefixing.
+ */
+export function ensureHexPrefix(value: string): HexString {
+  const trimmed = value.trim();
+  if (/^0x/i.test(trimmed)) {
+    return trimmed as HexString;
+  }
+  return `0x${trimmed}` as HexString;
+}
+
+/**
  * Convert hex string to bigint
  */
 export function fromHex(hex: HexString): bigint {
