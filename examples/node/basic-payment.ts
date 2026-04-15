@@ -7,7 +7,7 @@
  * - Running Fiber node with at least one ChannelReady channel
  * - Testnet CKB funded
  *
- * Run: npx tsx examples/basic-payment.ts
+ * Run: npx tsx examples/node/basic-payment.ts
  */
 
 import { ckbToShannons, FiberRpcClient, randomBytes32, shannonsToCkb, toHex } from '@fiber-pay/sdk';

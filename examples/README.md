@@ -2,6 +2,8 @@
 
 Runnable TypeScript examples demonstrating common Fiber Network payment flows.
 
+- `node/` — Node.js / CLI script examples using `@fiber-pay/sdk`
+
 ## Prerequisites
 
 1. **Running Fiber node** — Either start one via `fiber-pay node start` or connect to an existing node
@@ -13,30 +15,30 @@ Runnable TypeScript examples demonstrating common Fiber Network payment flows.
 
 ```bash
 # From the repo root
-npx tsx examples/basic-payment.ts
+npx tsx examples/node/basic-payment.ts
 
 # Or with environment variables
-FIBER_RPC_URL=http://127.0.0.1:8227 npx tsx examples/basic-payment.ts
+FIBER_RPC_URL=http://127.0.0.1:8227 npx tsx examples/node/basic-payment.ts
 ```
 
 ## Examples
 
-### [basic-payment.ts](basic-payment.ts)
+### [basic-payment.ts](node/basic-payment.ts)
 Connect to a node, check balance, create an invoice, and send a payment.
 Demonstrates `waitForPayment()` to poll until the payment settles.
 
-### [hold-invoice.ts](hold-invoice.ts)
+### [hold-invoice.ts](node/hold-invoice.ts)
 Create a hold invoice (escrow pattern) where funds are locked until the
 receiver reveals the preimage. Demonstrates:
 - Creating an invoice with `payment_hash` (no preimage upfront)
 - Waiting for `Accepted` status
 - Settling with `settle_invoice`
 
-### [channel-lifecycle.ts](channel-lifecycle.ts)
+### [channel-lifecycle.ts](node/channel-lifecycle.ts)
 Open a channel, wait for it to become ready using `waitForChannelReady()`,
 send a test payment, then cooperatively close the channel.
 
-### [watch-incoming.ts](watch-incoming.ts)
+### [watch-incoming.ts](node/watch-incoming.ts)
 Watch for incoming payments using `watchIncomingPayments()` with
 `AbortController` for graceful shutdown.
 
