@@ -250,11 +250,11 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
               code: 'CHANNEL_REBALANCE_INPUT_INVALID',
               message,
               recoverable: true,
-              suggestion: 'Select channels with different peer ids for guided rebalance.',
+              suggestion: 'Select channels with different pubkeys for guided rebalance.',
               details: {
                 fromChannel: fromChannelId,
                 toChannel: toChannelId,
-                peerId: fromChannel.pubkey,
+                pubkey: fromChannel.pubkey,
               },
             });
           } else {
@@ -278,8 +278,8 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
               details: {
                 fromChannel: fromChannelId,
                 toChannel: toChannelId,
-                fromPeerId: fromChannel.pubkey,
-                toPeerId: toChannel.pubkey,
+                fromPubkey: fromChannel.pubkey,
+                toPubkey: toChannel.pubkey,
               },
             });
           } else {
