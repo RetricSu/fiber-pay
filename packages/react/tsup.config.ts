@@ -1,0 +1,12 @@
+import { defineConfig } from 'tsup';
+
+export default defineConfig({
+  entry: ['src/index.ts'],
+  format: ['esm'],
+  dts: true,
+  clean: true,
+  sourcemap: true,
+  target: 'es2022',
+  outDir: 'dist',
+  external: ['react', 'react/jsx-runtime', '@nervosnetwork/fiber-js'],
+});

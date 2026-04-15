@@ -11,10 +11,10 @@
     "test:run": "pnpm -r test:run",
     "typecheck": "pnpm -r typecheck",
     "clean": "pnpm -r exec rm -rf dist",
-    "lint": "biome check --error-on-warnings packages/sdk/src packages/cli/src packages/node/src packages/agent/src packages/runtime/src",
-    "lint:fix": "biome check --write packages/sdk/src packages/cli/src packages/node/src packages/agent/src packages/runtime/src",
-    "format": "biome format --write packages/sdk/src packages/cli/src packages/node/src packages/agent/src packages/runtime/src",
-    "format:check": "biome format packages/sdk/src packages/cli/src packages/node/src packages/agent/src packages/runtime/src",
+    "lint": "biome check --error-on-warnings packages/sdk/src packages/react/src packages/cli/src packages/node/src packages/agent/src packages/runtime/src",
+    "lint:fix": "biome check --write packages/sdk/src packages/react/src packages/cli/src packages/node/src packages/agent/src packages/runtime/src",
+    "format": "biome format --write packages/sdk/src packages/react/src packages/cli/src packages/node/src packages/agent/src packages/runtime/src",
+    "format:check": "biome format packages/sdk/src packages/react/src packages/cli/src packages/node/src packages/agent/src packages/runtime/src",
     "changeset": "changeset",
     "changeset:status": "changeset status",
     "changeset:version": "changeset version",
@@ -57,7 +57,7 @@
     ]
   },
   "lint-staged": {
-    "packages/{sdk,cli,node,agent,runtime}/src/**/*.{ts,js}": [
+    "packages/{sdk,react,cli,node,agent,runtime}/src/**/*.{ts,tsx,js}": [
       "biome check --write --no-errors-on-unmatched --error-on-warnings"
     ]
   }

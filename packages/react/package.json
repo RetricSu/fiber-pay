@@ -1,0 +1,50 @@
+{
+  "name": "@fiber-pay/react",
+  "version": "0.2.1",
+  "description": "React hooks and components for Fiber browser payments",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "keywords": [
+    "fiber",
+    "ckb",
+    "react",
+    "passkey",
+    "wasm",
+    "payment"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "sideEffects": false,
+  "dependencies": {
+    "@fiber-pay/sdk": "workspace:*",
+    "@nervosnetwork/fiber-js": "~0.8.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0 || ^19.0.0"
+  }
+}

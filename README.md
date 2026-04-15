@@ -9,6 +9,7 @@ Fiber target: `v0.8.0`
 `fiber-pay` is built to make Fiber programmable for both humans and AI agents:
 
 - `@fiber-pay/sdk`: typed building blocks for Fiber RPC, verification, policy logic, and L402 protocol (now supports native WebAssembly execution in the Browser!)
+- `@fiber-pay/react`: one-line React hooks + starter payment component for browser WASM and passkey flows
 - `@fiber-pay/cli`: stable operator + automation interface with machine-readable output
 - `@fiber-pay/runtime`: orchestration runtime for jobs, monitoring, retries, and proxy-facing automation loops
 - `@fiber-pay/node`: easy handling for the local `fnn` binary lifecycle
@@ -35,6 +36,12 @@ Follow this document https://raw.githubusercontent.com/RetricSu/fiber-pay/refs/h
 If you are operating `fiber-pay` manually (not through an AI agent), start here:
 
 - [docs/human-quickstart.md](docs/human-quickstart.md)
+
+## Browser WASM + Passkey quickstart
+
+Build a browser payment UI component quickly with SDK browser APIs:
+
+- [docs/wasm-passkey-payment-component-quickstart.md](docs/wasm-passkey-payment-component-quickstart.md)
 
 ## Development
 

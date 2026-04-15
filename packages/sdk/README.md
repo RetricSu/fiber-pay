@@ -45,6 +45,16 @@ console.log(info.pubkey);
 
 `@fiber-pay/sdk/browser` also exports `FiberRpcClient` for migration compatibility.
 
+If you want one-line React imports (hooks + starter component), use:
+
+```ts
+import { FiberPayQuickCard, useFiberNode, useFiberPayment } from '@fiber-pay/react';
+```
+
+For a frontend-first quickstart (WASM + Passkey + minimal React payment component), see:
+
+- [docs/wasm-passkey-payment-component-quickstart.md](../../docs/wasm-passkey-payment-component-quickstart.md)
+
 ## RPC Authentication (Biscuit)
 
 - Pass `biscuitToken` to `new FiberRpcClient(...)`.
