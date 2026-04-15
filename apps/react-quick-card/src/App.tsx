@@ -3,17 +3,14 @@ import { FiberPayQuickCard } from '@fiber-pay/react';
 
 export function App() {
   const handleInvoiceCreated = (invoice: string) => {
-    // eslint-disable-next-line no-console
     console.log('Invoice created:', invoice);
   };
 
   const handlePaymentResult = (result: GetPaymentResult) => {
-    // eslint-disable-next-line no-console
     console.log('Payment result:', result);
   };
 
   const handleError = (error: { scope: 'node' | 'payment' | 'invoice'; message: string }) => {
-    // eslint-disable-next-line no-console
     console.error('FiberPay error:', error);
   };
 
