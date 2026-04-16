@@ -189,8 +189,9 @@ describe('runAgentServeCommand', () => {
       server?.close();
     });
 
-    it('passes sessionId to acpx via -s flag', async () => {
+    it('passes sessionId to acpx via -s flag and ensures session first', async () => {
       mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'ses_123\tcreated', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'hello session', stderr: '', exit_code: 0 });
 
       const { server, url } = await startTestServer();
@@ -205,10 +206,15 @@ describe('runAgentServeCommand', () => {
       const body = (await response.json()) as { response: string; agent: string };
       expect(body.response).toBe('hello session');
 
-      const agentExecCall = mockExec.mock.calls[1];
+      const ensureCall = mockExec.mock.calls[1];
+      const ensureArgs = ensureCall[1] as string[];
+      expect(ensureArgs).toEqual(['codex', 'sessions', 'ensure', '--name', 'my-session-123']);
+
+      const agentExecCall = mockExec.mock.calls[2];
       const execArgs = agentExecCall[1] as string[];
       expect(execArgs).toContain('-s');
       expect(execArgs).toContain('my-session-123');
+      expect(execArgs).not.toContain('exec');
 
       server?.close();
     });

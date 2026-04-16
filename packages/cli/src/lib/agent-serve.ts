@@ -96,33 +96,8 @@ async function runAcpx(
   },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const client = new BoxliteClient(options.boxliteUrl, options.boxliteBoxId);
-  // Some agents (e.g. opencode) do not support global flags like --format or --approve-all.
   const supportsGlobalFlags = !['opencode'].includes(agent);
-  const args: string[] = [];
 
-  if (supportsGlobalFlags) {
-    args.push('--format', options.format || 'quiet');
-
-    if (options.approveAll) {
-      args.push('--approve-all');
-    }
-
-    if (options.cwd) {
-      args.push('--cwd', '/workspace');
-    }
-
-    if (options.timeoutSeconds > 0) {
-      args.push('--timeout', String(options.timeoutSeconds));
-    }
-  }
-
-  args.push(agent);
-  if (options.sessionId) {
-    args.push('-s', options.sessionId);
-  }
-  args.push('exec', prompt);
-
-  // Prevent lingering agent processes from breaking ACP initialization for new sessions.
   if (agent === 'opencode') {
     try {
       await client.exec(
@@ -132,6 +107,44 @@ async function runAcpx(
       );
     } catch {}
   }
+
+  if (options.sessionId) {
+    await client.exec('acpx', [agent, 'sessions', 'ensure', '--name', options.sessionId], {
+      env: buildSafeEnv(),
+      cwd: '/workspace',
+      timeout: 10,
+    });
+
+    const args: string[] = [];
+    if (supportsGlobalFlags) {
+      args.push('--format', options.format || 'quiet');
+      if (options.approveAll) args.push('--approve-all');
+      if (options.cwd) args.push('--cwd', '/workspace');
+      if (options.timeoutSeconds > 0) args.push('--timeout', String(options.timeoutSeconds));
+    }
+    args.push(agent, '-s', options.sessionId, prompt);
+
+    const result = await client.exec('acpx', args, {
+      env: buildSafeEnv(),
+      cwd: '/workspace',
+      timeout: options.timeoutSeconds,
+    });
+
+    return {
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.exit_code,
+    };
+  }
+
+  const args: string[] = [];
+  if (supportsGlobalFlags) {
+    args.push('--format', options.format || 'quiet');
+    if (options.approveAll) args.push('--approve-all');
+    if (options.cwd) args.push('--cwd', '/workspace');
+    if (options.timeoutSeconds > 0) args.push('--timeout', String(options.timeoutSeconds));
+  }
+  args.push(agent, 'exec', prompt);
 
   const result = await client.exec('acpx', args, {
     env: buildSafeEnv(),
