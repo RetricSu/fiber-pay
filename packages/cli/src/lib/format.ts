@@ -162,8 +162,8 @@ export function formatChannel(channel: Channel): Record<string, unknown> {
   return {
     channelId: channel.channel_id,
     channelIdShort: truncateMiddle(channel.channel_id, 10, 8),
-    peerId: channel.pubkey,
-    peerIdShort: truncateMiddle(channel.pubkey, 10, 8),
+    pubkey: channel.pubkey,
+    pubkeyShort: truncateMiddle(channel.pubkey, 10, 8),
     state: channel.state.state_name,
     stateLabel: stateLabel(channel.state.state_name),
     stateFlags: channel.state.state_flags,

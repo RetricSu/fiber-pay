@@ -41,9 +41,7 @@ export async function runNodeStatusCommand(
   let addresses: string[] = [];
   let chainHash: string | null = null;
   let version: string | null = null;
-  let peerId: string | null = null;
   let peersCount = 0;
-  let peerIdError: string | null = null;
   let multiaddr: string | null = null;
   let multiaddrError: string | null = null;
   let multiaddrInferred = false;
@@ -72,11 +70,6 @@ export async function runNodeStatusCommand(
       chainHash = nodeInfo.chain_hash;
       version = nodeInfo.version;
       peersCount = parseInt(nodeInfo.peers_count, 16);
-      try {
-        peerId = await nodeIdToPeerId(nodeInfo.pubkey);
-      } catch (error) {
-        peerIdError = error instanceof Error ? error.message : String(error);
-      }
 
       const baseAddress = nodeInfo.addresses[0];
       if (baseAddress) {
@@ -85,9 +78,10 @@ export async function runNodeStatusCommand(
         } catch (error) {
           multiaddrError = error instanceof Error ? error.message : String(error);
         }
-      } else if (peerId) {
+      } else {
         try {
-          multiaddr = buildMultiaddrFromRpcUrl(config.rpcUrl, peerId);
+          const inferredPeerId = await nodeIdToPeerId(nodeInfo.pubkey);
+          multiaddr = buildMultiaddrFromRpcUrl(config.rpcUrl, inferredPeerId);
           multiaddrInferred = true;
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);
@@ -152,9 +146,7 @@ export async function runNodeStatusCommand(
     addresses,
     chainHash,
     version,
-    peerId,
     peersCount,
-    peerIdError,
     multiaddr,
     multiaddrError,
     multiaddrInferred,
@@ -212,7 +204,7 @@ export async function runNodeStatusCommand(
   if (output.running) {
     console.log(`✅ Node is running (PID: ${output.pid})`);
     if (output.rpcResponsive) {
-      console.log(`   Node ID: ${String(output.nodeId)}`);
+      console.log(`   Pubkey: ${String(output.nodeId)}`);
       if (output.nodeName) {
         console.log(`   Name: ${sanitizeForTerminal(output.nodeName)}`);
       }
@@ -222,16 +214,11 @@ export async function runNodeStatusCommand(
       if (output.chainHash) {
         console.log(`   Chain Hash: ${String(output.chainHash)}`);
       }
-      if (output.peerId) {
-        console.log(`   Peer ID: ${String(output.peerId)}`);
-      } else if (output.peerIdError) {
-        console.log(`   Peer ID: unavailable (${String(output.peerIdError)})`);
-      }
       console.log(`   RPC: ${String(output.rpcUrl)}`);
       console.log(`   RPC Client: ${String(output.rpcTarget)} (${String(output.resolvedRpcUrl)})`);
       if (output.multiaddr) {
         const inferredSuffix = output.multiaddrInferred
-          ? ' (inferred from RPC + peerId; no advertised addresses)'
+          ? ' (inferred from RPC + pubkey; no advertised addresses)'
           : '';
         console.log(`   Multiaddr: ${String(output.multiaddr)}${inferredSuffix}`);
       } else if (output.multiaddrError) {
