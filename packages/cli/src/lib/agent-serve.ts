@@ -171,6 +171,13 @@ export async function runAgentServeCommand(
   const timeoutSeconds = parseInt(options.timeout, 10);
   const boxliteUrl = options.boxliteUrl || process.env.BOXLITE_URL || 'http://localhost:8100';
   const boxliteBoxId = options.boxliteBoxId || process.env.BOXLITE_BOX_ID || 'fiber-pay-agent';
+
+  // TODO: BoxLite only supports an allowNet whitelist, which is either too
+  // permissive or too restrictive for production agents that need to browse.
+  // A better long-term approach is to run a small host-side HTTP proxy that
+  // supports a denyList (e.g. localhost / 127.0.0.1 / RFC-1918 IPs) and let
+  // the Box route all outbound traffic through it. This gives us blacklist
+  // semantics for security while keeping the agent free to search and fetch.
   const rootKey = options.rootKey || process.env.L402_ROOT_KEY;
 
   if (Number.isNaN(port) || port < 0 || port > 65535) {
