@@ -213,6 +213,69 @@ describe('runAgentServeCommand', () => {
       server?.close();
     });
 
+    it('passes format option to acpx and returns parsed data for json format', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({
+        stdout: '{"jsonrpc":"2.0","id":1}\n{"jsonrpc":"2.0","result":"done"}',
+        stderr: '',
+        exit_code: 0,
+      });
+
+      const { server, url } = await startTestServer({ format: 'json' });
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'test json' }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        response: string;
+        agent: string;
+        format: string;
+        data: Array<Record<string, unknown>>;
+      };
+      expect(body.response).toBe('{"jsonrpc":"2.0","id":1}\n{"jsonrpc":"2.0","result":"done"}');
+      expect(body.format).toBe('json');
+      expect(body.data).toEqual([
+        { jsonrpc: '2.0', id: 1 },
+        { jsonrpc: '2.0', result: 'done' },
+      ]);
+
+      const agentExecCall = mockExec.mock.calls[1];
+      const execArgs = agentExecCall[1] as string[];
+      expect(execArgs).toContain('--format');
+      expect(execArgs).toContain('json');
+
+      server?.close();
+    });
+
+    it('allows request body to override CLI format option', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'plain text', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer({ format: 'json' });
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'test override', format: 'quiet' }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { response: string; format?: string };
+      expect(body.response).toBe('plain text');
+      expect(body.format).toBeUndefined();
+
+      const agentExecCall = mockExec.mock.calls[1];
+      const execArgs = agentExecCall[1] as string[];
+      expect(execArgs).toContain('--format');
+      expect(execArgs).toContain('quiet');
+
+      server?.close();
+    });
+
     it('does not pass FIBER_RPC_BISCUIT_TOKEN to BoxLite /exec', async () => {
       const originalFiberToken = process.env.FIBER_RPC_BISCUIT_TOKEN;
       const originalOpenaiKey = process.env.OPENAI_API_KEY;

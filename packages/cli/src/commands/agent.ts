@@ -21,6 +21,7 @@ export function createAgentCommand(config: CliConfig): Command {
     .option('--cwd <path>', 'Working directory for agent execution')
     .option('--approve-all', 'Auto-approve all agent tool calls')
     .option('--timeout <seconds>', 'Max agent execution time per request', '300')
+    .option('--format <fmt>', 'Agent output format passed to acpx (text, json, quiet)', 'quiet')
     .option(
       '--boxlite-url <url>',
       'BoxLite API URL',

@@ -26,6 +26,7 @@ export interface AgentServeOptions {
   cwd?: string;
   approveAll?: boolean;
   timeout: string;
+  format?: string;
   boxliteUrl?: string;
   boxliteBoxId?: string;
   json?: boolean;
@@ -91,6 +92,7 @@ function runAcpx(
     boxliteUrl: string;
     boxliteBoxId: string;
     sessionId?: string;
+    format?: string;
   },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const client = new BoxliteClient(options.boxliteUrl, options.boxliteBoxId);
@@ -99,7 +101,7 @@ function runAcpx(
   const args: string[] = [];
 
   if (supportsGlobalFlags) {
-    args.push('--format', 'quiet');
+    args.push('--format', options.format || 'quiet');
 
     if (options.approveAll) {
       args.push('--approve-all');
@@ -294,6 +296,7 @@ export async function runAgentServeCommand(
     const requestId = getRequestId(req);
     const prompt = req.body?.prompt;
     const sessionId = req.body?.sessionId;
+    const requestFormat = typeof req.body?.format === 'string' ? req.body.format : options.format;
     if (!prompt || typeof prompt !== 'string') {
       if (!asJson) {
         console.log(`[REQ ${requestId}] invalid request body: missing string prompt`);
@@ -309,7 +312,7 @@ export async function runAgentServeCommand(
     try {
       if (!asJson) {
         console.log(
-          `[REQ ${requestId}] payment accepted, invoking agent=${options.agent} promptChars=${prompt.length}${sessionId ? ` session=${sessionId}` : ''}`,
+          `[REQ ${requestId}] payment accepted, invoking agent=${options.agent} promptChars=${prompt.length}${sessionId ? ` session=${sessionId}` : ''}${requestFormat && requestFormat !== 'quiet' ? ` format=${requestFormat}` : ''}`,
         );
       }
 
@@ -320,6 +323,7 @@ export async function runAgentServeCommand(
         boxliteUrl,
         boxliteBoxId,
         sessionId: typeof sessionId === 'string' ? sessionId : undefined,
+        format: requestFormat,
       });
 
       const durationMs = Date.now() - startTime;
@@ -344,10 +348,23 @@ export async function runAgentServeCommand(
         console.log(`[REQ ${requestId}] agent completed duration=${durationMs}ms`);
       }
 
+      let data: unknown;
+      if (requestFormat === 'json') {
+        try {
+          data = result.stdout
+            .trim()
+            .split('\n')
+            .filter((line) => line.trim().length > 0)
+            .map((line) => JSON.parse(line));
+        } catch {}
+      }
+
       res.json({
         response: result.stdout.trim(),
         agent: options.agent,
         durationMs,
+        ...(requestFormat && requestFormat !== 'quiet' ? { format: requestFormat } : {}),
+        ...(data !== undefined ? { data } : {}),
       });
     } catch (error) {
       if (!asJson) {
