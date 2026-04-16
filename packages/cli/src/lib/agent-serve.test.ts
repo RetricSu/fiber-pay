@@ -189,6 +189,30 @@ describe('runAgentServeCommand', () => {
       server?.close();
     });
 
+    it('passes sessionId to acpx via -s flag', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'hello session', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'say hello', sessionId: 'my-session-123' }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { response: string; agent: string };
+      expect(body.response).toBe('hello session');
+
+      const agentExecCall = mockExec.mock.calls[1];
+      const execArgs = agentExecCall[1] as string[];
+      expect(execArgs).toContain('-s');
+      expect(execArgs).toContain('my-session-123');
+
+      server?.close();
+    });
+
     it('does not pass FIBER_RPC_BISCUIT_TOKEN to BoxLite /exec', async () => {
       const originalFiberToken = process.env.FIBER_RPC_BISCUIT_TOKEN;
       const originalOpenaiKey = process.env.OPENAI_API_KEY;

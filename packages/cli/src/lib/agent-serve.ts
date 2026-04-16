@@ -90,6 +90,7 @@ function runAcpx(
     timeoutSeconds: number;
     boxliteUrl: string;
     boxliteBoxId: string;
+    sessionId?: string;
   },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const client = new BoxliteClient(options.boxliteUrl, options.boxliteBoxId);
@@ -113,7 +114,11 @@ function runAcpx(
     }
   }
 
-  args.push(agent, 'exec', prompt);
+  args.push(agent);
+  if (options.sessionId) {
+    args.push('-s', options.sessionId);
+  }
+  args.push('exec', prompt);
 
   return client
     .exec('acpx', args, {
@@ -288,6 +293,7 @@ export async function runAgentServeCommand(
   app.post('/', async (req: AgentServeRequest, res) => {
     const requestId = getRequestId(req);
     const prompt = req.body?.prompt;
+    const sessionId = req.body?.sessionId;
     if (!prompt || typeof prompt !== 'string') {
       if (!asJson) {
         console.log(`[REQ ${requestId}] invalid request body: missing string prompt`);
@@ -303,7 +309,7 @@ export async function runAgentServeCommand(
     try {
       if (!asJson) {
         console.log(
-          `[REQ ${requestId}] payment accepted, invoking agent=${options.agent} promptChars=${prompt.length}`,
+          `[REQ ${requestId}] payment accepted, invoking agent=${options.agent} promptChars=${prompt.length}${sessionId ? ` session=${sessionId}` : ''}`,
         );
       }
 
@@ -313,6 +319,7 @@ export async function runAgentServeCommand(
         timeoutSeconds,
         boxliteUrl,
         boxliteBoxId,
+        sessionId: typeof sessionId === 'string' ? sessionId : undefined,
       });
 
       const durationMs = Date.now() - startTime;
