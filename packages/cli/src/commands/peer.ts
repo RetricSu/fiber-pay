@@ -97,7 +97,7 @@ export function createPeerCommand(config: CliConfig): Command {
       if (isPubkey(trimmedInput)) {
         const normalized = normalizePubkey(trimmedInput) as HexString;
         if (options.address) {
-          const address = String(options.address).trim();
+          const address = String(options.address).trim().replace(/\/+$/, '');
           if (!address.startsWith('/')) {
             throw new Error('Invalid --address: expected a multiaddr starting with "/"');
           }
