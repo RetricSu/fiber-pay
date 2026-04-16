@@ -12,7 +12,7 @@
  * - Running Fiber node with on-chain CKB for funding
  * - A reachable peer to connect to
  *
- * Run: PEER_ADDR="/ip4/x.x.x.x/tcp/8228/p2p/QmXXX" npx tsx examples/node/channel-lifecycle.ts
+ * Run: PEER_ADDR="/ip4/x.x.x.x/tcp/8228/p2p/QmXXX" npx tsx apps/node-examples/channel-lifecycle.ts
  */
 
 import { ckbToShannons, ensureHexPrefix, FiberRpcClient, shannonsToCkb } from '@fiber-pay/sdk';
@@ -52,7 +52,7 @@ async function main() {
     console.log('✓ Already connected to peer\n');
   }
 
-  const discovered = await client.listPeers({});
+  const discovered = await client.listPeers();
   const connectedPeer = discovered.peers.find((peer) => peer.address === PEER_ADDR);
   const targetPubkey = process.env.PEER_PUBKEY ?? connectedPeer?.pubkey;
 
