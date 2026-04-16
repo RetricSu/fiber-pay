@@ -82,7 +82,7 @@ function buildSafeEnv(): Record<string, string> {
   return env;
 }
 
-function runAcpx(
+async function runAcpx(
   agent: string,
   prompt: string,
   options: {
@@ -122,17 +122,28 @@ function runAcpx(
   }
   args.push('exec', prompt);
 
-  return client
-    .exec('acpx', args, {
-      env: buildSafeEnv(),
-      cwd: '/workspace',
-      timeout: options.timeoutSeconds,
-    })
-    .then((result) => ({
-      stdout: result.stdout,
-      stderr: result.stderr,
-      exitCode: result.exit_code,
-    }));
+  // Prevent lingering agent processes from breaking ACP initialization for new sessions.
+  if (agent === 'opencode') {
+    try {
+      await client.exec(
+        'sh',
+        ['-c', 'killall -9 .opencode 2>/dev/null; killall -9 opencode 2>/dev/null; true'],
+        { timeout: 5 },
+      );
+    } catch {}
+  }
+
+  const result = await client.exec('acpx', args, {
+    env: buildSafeEnv(),
+    cwd: '/workspace',
+    timeout: options.timeoutSeconds,
+  });
+
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exitCode: result.exit_code,
+  };
 }
 
 export async function runAgentServeCommand(
