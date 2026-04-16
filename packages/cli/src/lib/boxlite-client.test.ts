@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BoxliteClient, BoxliteError } from './boxlite-client.js';
 
+function sseOutput(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}`;
+}
+
 describe('BoxliteClient', () => {
   let client: BoxliteClient;
   let originalFetch: typeof globalThis.fetch;
@@ -55,15 +59,20 @@ describe('BoxliteClient', () => {
 
   describe('exec', () => {
     it('returns stdout, stderr, and exit_code on success', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          stdout: 'hello',
-          stderr: '',
-          exit_code: 0,
-        }),
-      });
+      const stdoutB64 = Buffer.from('hello', 'utf-8').toString('base64');
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ execution_id: 'exec-1' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () =>
+            `${sseOutput('stdout', { data: stdoutB64 })}\n\n${sseOutput('exit', { exit_code: 0 })}\n\n`,
+        });
 
       const result = await client.exec('echo', ['hello']);
 
@@ -72,7 +81,8 @@ describe('BoxliteClient', () => {
         stderr: '',
         exit_code: 0,
       });
-      expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect(globalThis.fetch).toHaveBeenNthCalledWith(
+        1,
         'http://localhost:8100/v1/default/boxes/test-box/exec',
         {
           method: 'POST',
@@ -80,18 +90,28 @@ describe('BoxliteClient', () => {
           body: JSON.stringify({ command: 'echo', args: ['hello'] }),
         },
       );
+      expect(globalThis.fetch).toHaveBeenNthCalledWith(
+        2,
+        'http://localhost:8100/v1/default/boxes/test-box/executions/exec-1/output',
+        { method: 'GET' },
+      );
     });
 
-    it('returns non-zero exit code when command fails on the server', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          stdout: '',
-          stderr: 'command not found',
-          exit_code: 127,
-        }),
-      });
+    it('returns non-zero exit code from async output endpoint', async () => {
+      const stderrB64 = Buffer.from('command not found', 'utf-8').toString('base64');
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ execution_id: 'exec-2' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () =>
+            `${sseOutput('stderr', { data: stderrB64 })}\n\n${sseOutput('exit', { exit_code: 127 })}\n\n`,
+        });
 
       const result = await client.exec('missing-cmd', []);
 
@@ -102,53 +122,126 @@ describe('BoxliteClient', () => {
       });
     });
 
-    it('throws BOX_NOT_FOUND when the box does not exist', async () => {
+    it('throws BOX_NOT_FOUND when the box does not exist on exec', async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 404,
       });
 
-      await expect(client.exec('echo', ['hi'])).rejects.toThrow(BoxliteError);
       await expect(client.exec('echo', ['hi'])).rejects.toMatchObject({
         code: 'BOX_NOT_FOUND',
         message: expect.stringContaining('BoxLite'),
       });
     });
 
-    it('throws EXEC_FAILED when the server returns a non-OK status other than 404', async () => {
+    it('throws EXEC_FAILED when the server returns a non-OK status other than 404 on exec', async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 500,
         text: async () => 'Internal Server Error',
       });
 
-      await expect(client.exec('echo', ['hi'])).rejects.toThrow(BoxliteError);
       await expect(client.exec('echo', ['hi'])).rejects.toMatchObject({
         code: 'EXEC_FAILED',
         message: expect.stringContaining('BoxLite'),
       });
     });
 
-    it('throws BOXLITE_UNREACHABLE on network error', async () => {
+    it('throws BOXLITE_UNREACHABLE on network error during exec', async () => {
       globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
 
-      await expect(client.exec('echo', ['hi'])).rejects.toThrow(BoxliteError);
       await expect(client.exec('echo', ['hi'])).rejects.toMatchObject({
         code: 'BOXLITE_UNREACHABLE',
         message: expect.stringContaining('BoxLite'),
       });
     });
 
-    it('includes optional env, cwd, and timeout in the request body', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          stdout: '',
-          stderr: '',
-          exit_code: 0,
-        }),
+    it('throws BOX_NOT_FOUND when output endpoint returns 404', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ execution_id: 'exec-3' }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+        });
+
+      await expect(client.exec('echo', ['hi'])).rejects.toMatchObject({
+        code: 'BOX_NOT_FOUND',
       });
+    });
+
+    it('throws EXEC_FAILED when output endpoint returns non-OK status', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ execution_id: 'exec-4' }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: async () => 'Internal Server Error',
+        });
+
+      await expect(client.exec('echo', ['hi'])).rejects.toMatchObject({
+        code: 'EXEC_FAILED',
+      });
+    });
+
+    it('throws BOXLITE_UNREACHABLE on network error during polling', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ execution_id: 'exec-5' }),
+        })
+        .mockRejectedValueOnce(new TypeError('fetch failed'));
+
+      await expect(client.exec('echo', ['hi'])).rejects.toMatchObject({
+        code: 'BOXLITE_UNREACHABLE',
+      });
+    });
+
+    it('throws EXEC_FAILED when polling times out', async () => {
+      const stdoutB64 = Buffer.from('hello', 'utf-8').toString('base64');
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ execution_id: 'exec-6' }),
+        })
+        .mockResolvedValue({
+          ok: true,
+          status: 200,
+          text: async () => `${sseOutput('stdout', { data: stdoutB64 })}\n\n`,
+        });
+
+      await expect(client.exec('echo', ['hello'], { timeout: 0 })).rejects.toMatchObject({
+        code: 'EXEC_FAILED',
+        message: 'BoxLite exec timed out',
+      });
+    });
+
+    it('includes optional env, cwd, and timeout in the request body', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ execution_id: 'exec-7' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => `${sseOutput('exit', { exit_code: 0 })}\n\n`,
+        });
 
       await client.exec('node', ['app.js'], {
         env: { NODE_ENV: 'test' },
@@ -156,7 +249,8 @@ describe('BoxliteClient', () => {
         timeout: 5000,
       });
 
-      expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect(globalThis.fetch).toHaveBeenNthCalledWith(
+        1,
         'http://localhost:8100/v1/default/boxes/test-box/exec',
         {
           method: 'POST',

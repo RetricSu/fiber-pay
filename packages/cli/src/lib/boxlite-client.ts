@@ -42,6 +42,62 @@ export class BoxliteClient {
     return `${this.baseUrl}/v1/default/boxes/${encodeURIComponent(this.boxId)}`;
   }
 
+  private parseExecutionOutput(text: string): {
+    stdout: string;
+    stderr: string;
+    exit_code?: number;
+  } {
+    const lines = text.split(/\r?\n/);
+    let currentEvent: string | null = null;
+    let stdout = '';
+    let stderr = '';
+    let exit_code: number | undefined;
+
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        currentEvent = line.slice(7).trim();
+      } else if (line.startsWith('data: ')) {
+        const dataStr = line.slice(6);
+        if (!currentEvent) continue;
+        try {
+          const payload = JSON.parse(dataStr) as unknown;
+          if (
+            currentEvent === 'stdout' &&
+            payload &&
+            typeof payload === 'object' &&
+            'data' in payload
+          ) {
+            stdout += Buffer.from(
+              String((payload as Record<string, unknown>).data),
+              'base64',
+            ).toString('utf-8');
+          } else if (
+            currentEvent === 'stderr' &&
+            payload &&
+            typeof payload === 'object' &&
+            'data' in payload
+          ) {
+            stderr += Buffer.from(
+              String((payload as Record<string, unknown>).data),
+              'base64',
+            ).toString('utf-8');
+          } else if (
+            currentEvent === 'exit' &&
+            payload &&
+            typeof payload === 'object' &&
+            'exit_code' in payload
+          ) {
+            exit_code = Number((payload as Record<string, unknown>).exit_code);
+          }
+        } catch {
+          // ignore malformed JSON
+        }
+      }
+    }
+
+    return { stdout, stderr, exit_code };
+  }
+
   /**
    * Check whether the box exists on the BoxLite server.
    * @returns `true` if the box exists, `false` if it does not
@@ -100,6 +156,7 @@ export class BoxliteClient {
       body.timeout = options.timeout;
     }
 
+    let executionId: string;
     try {
       const response = await fetch(`${this.getBoxUrl()}/exec`, {
         method: 'POST',
@@ -124,12 +181,8 @@ export class BoxliteClient {
       if (
         typeof data !== 'object' ||
         data === null ||
-        !('stdout' in data) ||
-        !('stderr' in data) ||
-        !('exit_code' in data) ||
-        typeof (data as Record<string, unknown>).stdout !== 'string' ||
-        typeof (data as Record<string, unknown>).stderr !== 'string' ||
-        typeof (data as Record<string, unknown>).exit_code !== 'number'
+        !('execution_id' in data) ||
+        typeof (data as Record<string, unknown>).execution_id !== 'string'
       ) {
         throw new BoxliteError(
           'EXEC_FAILED',
@@ -137,17 +190,64 @@ export class BoxliteClient {
         );
       }
 
-      return {
-        stdout: (data as Record<string, unknown>).stdout as string,
-        stderr: (data as Record<string, unknown>).stderr as string,
-        exit_code: (data as Record<string, unknown>).exit_code as number,
-      };
+      executionId = (data as Record<string, unknown>).execution_id as string;
     } catch (error) {
       if (error instanceof BoxliteError) {
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);
       throw new BoxliteError('BOXLITE_UNREACHABLE', `BoxLite server is unreachable: ${message}`);
+    }
+
+    const timeoutMs = (options?.timeout ?? 60) * 1000;
+    const startTime = Date.now();
+    let accumulatedStdout = '';
+    let accumulatedStderr = '';
+
+    while (true) {
+      try {
+        const response = await fetch(
+          `${this.getBoxUrl()}/executions/${encodeURIComponent(executionId)}/output`,
+          { method: 'GET' },
+        );
+
+        if (response.status === 404) {
+          throw new BoxliteError('BOX_NOT_FOUND', `BoxLite box "${this.boxId}" was not found.`);
+        }
+
+        if (!response.ok) {
+          const text = await response.text().catch(() => 'unknown error');
+          throw new BoxliteError(
+            'EXEC_FAILED',
+            `BoxLite exec failed with status ${response.status}: ${text}`,
+          );
+        }
+
+        const text = await response.text();
+        const parsed = this.parseExecutionOutput(text);
+        accumulatedStdout += parsed.stdout;
+        accumulatedStderr += parsed.stderr;
+
+        if (parsed.exit_code !== undefined) {
+          return {
+            stdout: accumulatedStdout,
+            stderr: accumulatedStderr,
+            exit_code: parsed.exit_code,
+          };
+        }
+      } catch (error) {
+        if (error instanceof BoxliteError) {
+          throw error;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        throw new BoxliteError('BOXLITE_UNREACHABLE', `BoxLite server is unreachable: ${message}`);
+      }
+
+      if (Date.now() - startTime > timeoutMs) {
+        throw new BoxliteError('EXEC_FAILED', 'BoxLite exec timed out');
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
 }
