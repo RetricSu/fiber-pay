@@ -10,6 +10,7 @@
 import { createServer, type Server } from 'node:http';
 import type { Currency } from '@fiber-pay/sdk';
 import { createL402Middleware, FiberRpcClient } from '@fiber-pay/sdk/node';
+import cors from 'cors';
 import express from 'express';
 import { BoxliteClient, BoxliteError } from './boxlite-client.js';
 import type { CliConfig } from './config.js';
@@ -231,6 +232,7 @@ export async function runAgentServeCommand(
   const currency: Currency = config.network === 'mainnet' ? 'Fibb' : 'Fibt';
 
   const app = express();
+  app.use(cors());
   app.use(express.json());
 
   let requestCounter = 0;
