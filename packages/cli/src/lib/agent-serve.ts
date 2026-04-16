@@ -3,15 +3,15 @@
  *
  * Starts an Express server that:
  * 1. Gates all requests behind L402 payment via createL402Middleware()
- * 2. On paid POST /, spawns `acpx <agent> exec --format quiet '<prompt>'`
+ * 2. On paid POST /, runs `acpx <agent> exec --format quiet '<prompt>'` inside a BoxLite sandbox
  * 3. Returns the agent's response as JSON
  */
 
-import { execFileSync, spawn } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import type { Currency } from '@fiber-pay/sdk';
 import { createL402Middleware, FiberRpcClient } from '@fiber-pay/sdk/node';
 import express from 'express';
+import { BoxliteClient, BoxliteError } from './boxlite-client.js';
 import type { CliConfig } from './config.js';
 import { printJsonError, printJsonSuccess } from './format.js';
 
@@ -25,6 +25,8 @@ export interface AgentServeOptions {
   cwd?: string;
   approveAll?: boolean;
   timeout: string;
+  boxliteUrl?: string;
+  boxliteBoxId?: string;
   json?: boolean;
 }
 
@@ -61,63 +63,62 @@ function getRequestId(req: AgentServeRequest): number {
   return req._fiberPayRequestId ?? 0;
 }
 
+function buildSafeEnv(): Record<string, string> {
+  const allowed = [
+    'PATH',
+    'OPENAI_API_KEY',
+    'ANTHROPIC_API_KEY',
+    'OPENCODE_API_KEY',
+    'GEMINI_API_KEY',
+  ];
+  const env: Record<string, string> = { HOME: '/home/boxlite' };
+  for (const key of allowed) {
+    if (process.env[key] !== undefined) {
+      env[key] = process.env[key] as string;
+    }
+  }
+  return env;
+}
+
 function runAcpx(
   agent: string,
   prompt: string,
-  options: { cwd?: string; approveAll?: boolean; timeoutSeconds: number },
+  options: {
+    cwd?: string;
+    approveAll?: boolean;
+    timeoutSeconds: number;
+    boxliteUrl: string;
+    boxliteBoxId: string;
+  },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  return new Promise((resolve) => {
-    const args = ['--format', 'quiet'];
+  const client = new BoxliteClient(options.boxliteUrl, options.boxliteBoxId);
+  const args = ['--format', 'quiet'];
 
-    if (options.approveAll) {
-      args.push('--approve-all');
-    }
+  if (options.approveAll) {
+    args.push('--approve-all');
+  }
 
-    if (options.cwd) {
-      args.push('--cwd', options.cwd);
-    }
+  if (options.cwd) {
+    args.push('--cwd', '/workspace');
+  }
 
-    if (options.timeoutSeconds > 0) {
-      args.push('--timeout', String(options.timeoutSeconds));
-    }
+  if (options.timeoutSeconds > 0) {
+    args.push('--timeout', String(options.timeoutSeconds));
+  }
 
-    args.push(agent, 'exec', prompt);
+  args.push(agent, 'exec', prompt);
 
-    const child = spawn('acpx', args, {
-      cwd: options.cwd || process.cwd(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env },
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    child.stdout.on('data', (data: Buffer) => {
-      stdout += data.toString();
-    });
-
-    child.stderr.on('data', (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    // Force kill after timeout + 30s grace
-    const killTimer = setTimeout(
-      () => {
-        child.kill('SIGKILL');
-      },
-      (options.timeoutSeconds + 30) * 1000,
-    );
-
-    child.on('close', (code) => {
-      clearTimeout(killTimer);
-      resolve({ stdout, stderr, exitCode: code ?? 1 });
-    });
-
-    child.on('error', (err) => {
-      clearTimeout(killTimer);
-      resolve({ stdout: '', stderr: err.message, exitCode: 1 });
-    });
-  });
+  return client
+    .exec('acpx', args, {
+      env: buildSafeEnv(),
+      cwd: '/workspace',
+      timeout: options.timeoutSeconds,
+    })
+    .then((result) => ({
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.exit_code,
+    }));
 }
 
 export async function runAgentServeCommand(
@@ -130,9 +131,11 @@ export async function runAgentServeCommand(
   const priceCkb = parseFloat(options.price);
   const expirySeconds = parseInt(options.expiry, 10);
   const timeoutSeconds = parseInt(options.timeout, 10);
+  const boxliteUrl = options.boxliteUrl || process.env.BOXLITE_URL || 'http://localhost:8100';
+  const boxliteBoxId = options.boxliteBoxId || process.env.BOXLITE_BOX_ID || 'fiber-pay-agent';
   const rootKey = options.rootKey || process.env.L402_ROOT_KEY;
 
-  if (Number.isNaN(port) || port < 1 || port > 65535) {
+  if (Number.isNaN(port) || port < 0 || port > 65535) {
     if (asJson) {
       printJsonError({
         code: 'AGENT_SERVE_INVALID_PORT',
@@ -177,21 +180,39 @@ export async function runAgentServeCommand(
     process.exit(1);
   }
 
-  // Pre-flight: check acpx is installed
+  // Pre-flight: check BoxLite connectivity and acpx availability
+  const client = new BoxliteClient(boxliteUrl, boxliteBoxId);
   try {
-    execFileSync('acpx', ['--version'], { stdio: 'ignore' });
-  } catch {
+    const boxExists = await client.checkBoxExists();
+    if (!boxExists) {
+      const message = `BoxLite box "${boxliteBoxId}" was not found.`;
+      if (asJson) {
+        printJsonError({
+          code: 'AGENT_SERVE_BOXLITE_BOX_NOT_FOUND',
+          message,
+          recoverable: true,
+          suggestion: 'Create the box in BoxLite or check the --boxlite-box-id value.',
+        });
+      } else {
+        console.error(`Error: ${message}`);
+        console.error('  Create the box in BoxLite or check the --boxlite-box-id value.');
+      }
+      process.exit(1);
+    }
+    await client.exec('acpx', ['--version'], { timeout: 10 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const displayMessage = `BoxLite is unreachable or misconfigured: ${message}`;
     if (asJson) {
       printJsonError({
-        code: 'AGENT_SERVE_ACPX_NOT_FOUND',
-        message: 'acpx is not installed or not in PATH.',
+        code: 'AGENT_SERVE_BOXLITE_ERROR',
+        message: displayMessage,
         recoverable: true,
-        suggestion: 'Install acpx globally: npm install -g acpx',
+        suggestion: 'Ensure BoxLite is running and the box exists.',
       });
     } else {
-      console.error('Error: acpx is not installed or not in PATH.');
-      console.error('  Install it with: npm install -g acpx');
-      console.error('  See: https://github.com/openclaw/acpx');
+      console.error(`Error: ${displayMessage}`);
+      console.error('  Ensure BoxLite is running and the box exists.');
     }
     process.exit(1);
   }
@@ -282,6 +303,8 @@ export async function runAgentServeCommand(
         cwd: options.cwd,
         approveAll: options.approveAll,
         timeoutSeconds,
+        boxliteUrl,
+        boxliteBoxId,
       });
 
       const durationMs = Date.now() - startTime;
@@ -315,6 +338,16 @@ export async function runAgentServeCommand(
       if (!asJson) {
         const message = error instanceof Error ? error.message : String(error);
         console.log(`[REQ ${requestId}] agent execution error: ${message}`);
+      }
+
+      if (error instanceof BoxliteError) {
+        res.status(502).json({
+          error: 'Agent execution failed.',
+          agent: options.agent,
+          stderr: error.message.slice(0, 1000),
+          durationMs: Date.now() - startTime,
+        });
+        return;
       }
 
       res.status(500).json({
@@ -365,6 +398,8 @@ export async function runAgentServeCommand(
       expirySeconds,
       currency,
       fiberRpcUrl: config.rpcUrl,
+      boxliteUrl,
+      boxliteBoxId,
     });
   } else {
     console.log('Agent service started');
@@ -375,6 +410,7 @@ export async function runAgentServeCommand(
     console.log(`  Timeout:    ${timeoutSeconds}s per agent call`);
     console.log(`  Currency:   ${currency}`);
     console.log(`  Fiber RPC:  ${config.rpcUrl}`);
+    console.log(`  BoxLite:    ${boxliteUrl} (box: ${boxliteBoxId})`);
     console.log('');
     console.log('Endpoint:');
     console.log(`  POST ${listenUrl}/  {"prompt": "your question"}`);

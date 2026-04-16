@@ -21,6 +21,16 @@ export function createAgentCommand(config: CliConfig): Command {
     .option('--cwd <path>', 'Working directory for agent execution')
     .option('--approve-all', 'Auto-approve all agent tool calls')
     .option('--timeout <seconds>', 'Max agent execution time per request', '300')
+    .option(
+      '--boxlite-url <url>',
+      'BoxLite API URL',
+      process.env.BOXLITE_URL || 'http://localhost:8100',
+    )
+    .option(
+      '--boxlite-box-id <id>',
+      'BoxLite box ID',
+      process.env.BOXLITE_BOX_ID || 'fiber-pay-agent',
+    )
     .option('--json')
     .addHelpText(
       'after',
