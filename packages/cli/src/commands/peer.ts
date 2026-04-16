@@ -1,4 +1,4 @@
-import { type HexString, nodeIdToPeerId } from '@fiber-pay/sdk';
+import { buildMultiaddrFromNodeId, type HexString, nodeIdToPeerId } from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import type { CliConfig } from '../lib/config.js';
 import { printJsonSuccess, printPeerListHuman } from '../lib/format.js';
@@ -84,6 +84,7 @@ export function createPeerCommand(config: CliConfig): Command {
   peer
     .command('connect')
     .argument('<multiaddrOrPubkey>')
+    .option('--address <addr>', 'Optional peer address (multiaddr) to connect to')
     .option('--timeout <sec>', 'Wait timeout for peer to appear in peer list', '8')
     .option('--json')
     .action(async (input, options) => {
@@ -95,12 +96,28 @@ export function createPeerCommand(config: CliConfig): Command {
 
       if (isPubkey(trimmedInput)) {
         const normalized = normalizePubkey(trimmedInput) as HexString;
-        connectParams = { pubkey: normalized };
-        targetForWait = normalized;
+        if (options.address) {
+          const address = String(options.address).trim().replace(/\/+$/, '');
+          if (!address.startsWith('/')) {
+            throw new Error('Invalid --address: expected a multiaddr starting with "/"');
+          }
+          const multiaddr = await buildMultiaddrFromNodeId(address, normalized);
+          connectParams = { address: multiaddr };
+          targetForWait = normalized;
+        } else {
+          connectParams = { pubkey: normalized };
+          targetForWait = normalized;
+        }
       } else if (trimmedInput.startsWith('/')) {
         const peerId = extractPeerIdFromMultiaddr(trimmedInput);
         if (!peerId) {
-          throw new Error('Invalid multiaddr: missing /p2p/<peerId> suffix');
+          throw new Error(
+            'Invalid multiaddr: missing /p2p/<peerId> suffix. ' +
+              'Provide a bare multiaddr with --address when using a pubkey as the first argument.',
+          );
+        }
+        if (options.address) {
+          throw new Error('Cannot use --address when the first argument is already a multiaddr');
         }
         connectParams = { address: trimmedInput };
         targetForWait = peerId;
