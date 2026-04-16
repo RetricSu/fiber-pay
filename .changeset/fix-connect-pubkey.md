@@ -1,5 +1,5 @@
 ---
-"@fiber-pay/cli": minor
+"@fiber-pay/cli": patch
 ---
 
 fix(cli): support pubkey in peer connect and unify pubkey terminology for v0.8.0
