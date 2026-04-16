@@ -7,6 +7,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["*.ts"],
+  "include": ["**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
