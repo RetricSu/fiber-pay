@@ -6,9 +6,14 @@ import { createReadyRpcClient } from '../lib/rpc.js';
 
 function isPubkey(value: string): boolean {
   const trimmed = value.trim();
-  if (!trimmed.startsWith('0x')) return false;
-  const hex = trimmed.slice(2);
-  return /^[0-9a-fA-F]+$/.test(hex) && hex.length === 66;
+  const withoutPrefix = trimmed.replace(/^0x/i, '');
+  return /^[0-9a-fA-F]+$/.test(withoutPrefix) && withoutPrefix.length === 66;
+}
+
+function normalizePubkey(value: string): string {
+  const trimmed = value.trim();
+  const withoutPrefix = trimmed.replace(/^0x/i, '');
+  return `0x${withoutPrefix.toLowerCase()}`;
 }
 
 function extractPeerIdFromMultiaddr(address: string): string | undefined {
@@ -21,9 +26,11 @@ async function findPeerByTarget(
   target: string,
 ) {
   const peers = await rpc.listPeers();
+  const targetIsPubkey = isPubkey(target);
+  const normalizedTarget = targetIsPubkey ? normalizePubkey(target) : target;
   for (const peer of peers.peers) {
-    if (isPubkey(target)) {
-      if (peer.pubkey === target) {
+    if (targetIsPubkey) {
+      if (normalizePubkey(peer.pubkey) === normalizedTarget) {
         return peer;
       }
       continue;
@@ -87,8 +94,9 @@ export function createPeerCommand(config: CliConfig): Command {
       let targetForWait: string;
 
       if (isPubkey(trimmedInput)) {
-        connectParams = { pubkey: trimmedInput as HexString };
-        targetForWait = trimmedInput;
+        const normalized = normalizePubkey(trimmedInput) as HexString;
+        connectParams = { pubkey: normalized };
+        targetForWait = normalized;
       } else if (trimmedInput.startsWith('/')) {
         const peerId = extractPeerIdFromMultiaddr(trimmedInput);
         if (!peerId) {
@@ -98,7 +106,7 @@ export function createPeerCommand(config: CliConfig): Command {
         targetForWait = peerId;
       } else {
         throw new Error(
-          'Invalid argument: expected a pubkey (0x-prefixed 66 hex chars) or a multiaddr starting with "/"',
+          'Invalid argument: expected a pubkey (66 hex chars) or a multiaddr starting with "/"',
         );
       }
 
@@ -131,13 +139,14 @@ export function createPeerCommand(config: CliConfig): Command {
     .option('--json')
     .action(async (pubkey, options) => {
       const rpc = await createReadyRpcClient(config);
-      await rpc.disconnectPeer({ pubkey: pubkey as HexString });
+      const normalized = normalizePubkey(pubkey) as HexString;
+      await rpc.disconnectPeer({ pubkey: normalized });
 
       if (options.json) {
-        printJsonSuccess({ pubkey, message: 'Disconnected' });
+        printJsonSuccess({ pubkey: normalized, message: 'Disconnected' });
       } else {
         console.log('✅ Disconnected peer');
-        console.log(`  Peer Pubkey: ${pubkey}`);
+        console.log(`  Peer Pubkey: ${normalized}`);
       }
     });
 
