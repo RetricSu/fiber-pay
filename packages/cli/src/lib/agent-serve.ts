@@ -92,18 +92,24 @@ function runAcpx(
   },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const client = new BoxliteClient(options.boxliteUrl, options.boxliteBoxId);
-  const args = ['--format', 'quiet'];
+  // Some agents (e.g. opencode) do not support global flags like --format or --approve-all.
+  const supportsGlobalFlags = !['opencode'].includes(agent);
+  const args: string[] = [];
 
-  if (options.approveAll) {
-    args.push('--approve-all');
-  }
+  if (supportsGlobalFlags) {
+    args.push('--format', 'quiet');
 
-  if (options.cwd) {
-    args.push('--cwd', '/workspace');
-  }
+    if (options.approveAll) {
+      args.push('--approve-all');
+    }
 
-  if (options.timeoutSeconds > 0) {
-    args.push('--timeout', String(options.timeoutSeconds));
+    if (options.cwd) {
+      args.push('--cwd', '/workspace');
+    }
+
+    if (options.timeoutSeconds > 0) {
+      args.push('--timeout', String(options.timeoutSeconds));
+    }
   }
 
   args.push(agent, 'exec', prompt);
