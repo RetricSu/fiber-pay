@@ -98,14 +98,29 @@ async function runAcpx(
   const client = new BoxliteClient(options.boxliteUrl, options.boxliteBoxId);
   const supportsGlobalFlags = !['opencode'].includes(agent);
 
-  if (agent === 'opencode') {
-    try {
-      await client.exec(
-        'sh',
-        ['-c', 'killall -9 .opencode 2>/dev/null; killall -9 opencode 2>/dev/null; true'],
-        { timeout: 5 },
-      );
-    } catch {}
+  async function execPrompt(): Promise<{
+    stdout: string;
+    stderr: string;
+    exit_code: number;
+  }> {
+    const args: string[] = [];
+    if (supportsGlobalFlags) {
+      args.push('--format', options.format || 'quiet');
+      if (options.approveAll) args.push('--approve-all');
+      if (options.cwd) args.push('--cwd', '/workspace');
+      if (options.timeoutSeconds > 0) args.push('--timeout', String(options.timeoutSeconds));
+    }
+    if (options.sessionId) {
+      args.push(agent, '-s', options.sessionId, prompt);
+    } else {
+      args.push(agent, 'exec', prompt);
+    }
+
+    return client.exec('acpx', args, {
+      env: buildSafeEnv(),
+      cwd: '/workspace',
+      timeout: options.timeoutSeconds,
+    });
   }
 
   if (options.sessionId) {
@@ -115,20 +130,23 @@ async function runAcpx(
       timeout: 10,
     });
 
-    const args: string[] = [];
-    if (supportsGlobalFlags) {
-      args.push('--format', options.format || 'quiet');
-      if (options.approveAll) args.push('--approve-all');
-      if (options.cwd) args.push('--cwd', '/workspace');
-      if (options.timeoutSeconds > 0) args.push('--timeout', String(options.timeoutSeconds));
-    }
-    args.push(agent, '-s', options.sessionId, prompt);
+    let result = await execPrompt();
 
-    const result = await client.exec('acpx', args, {
-      env: buildSafeEnv(),
-      cwd: '/workspace',
-      timeout: options.timeoutSeconds,
-    });
+    if (result.exit_code !== 0 && !options.sessionId.startsWith('__')) {
+      try {
+        await client.exec('acpx', [agent, 'sessions', 'close', options.sessionId], {
+          env: buildSafeEnv(),
+          cwd: '/workspace',
+          timeout: 10,
+        });
+      } catch {}
+      await client.exec('acpx', [agent, 'sessions', 'ensure', '--name', options.sessionId], {
+        env: buildSafeEnv(),
+        cwd: '/workspace',
+        timeout: 10,
+      });
+      result = await execPrompt();
+    }
 
     return {
       stdout: result.stdout,
@@ -137,21 +155,7 @@ async function runAcpx(
     };
   }
 
-  const args: string[] = [];
-  if (supportsGlobalFlags) {
-    args.push('--format', options.format || 'quiet');
-    if (options.approveAll) args.push('--approve-all');
-    if (options.cwd) args.push('--cwd', '/workspace');
-    if (options.timeoutSeconds > 0) args.push('--timeout', String(options.timeoutSeconds));
-  }
-  args.push(agent, 'exec', prompt);
-
-  const result = await client.exec('acpx', args, {
-    env: buildSafeEnv(),
-    cwd: '/workspace',
-    timeout: options.timeoutSeconds,
-  });
-
+  const result = await execPrompt();
   return {
     stdout: result.stdout,
     stderr: result.stderr,

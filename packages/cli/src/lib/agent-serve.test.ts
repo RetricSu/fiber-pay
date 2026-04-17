@@ -219,6 +219,44 @@ describe('runAgentServeCommand', () => {
       server?.close();
     });
 
+    it('retries session prompt after closing and re-ensuring on failure', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'ses_123\tcreated', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: 'agent needs reconnect', exit_code: 1 });
+      mockExec.mockResolvedValueOnce({ stdout: 'closed', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'ses_123\tcreated', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'hello retry', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'say hello', sessionId: 'my-session-123' }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { response: string; agent: string };
+      expect(body.response).toBe('hello retry');
+
+      const closeCall = mockExec.mock.calls[3];
+      expect(closeCall[1] as string[]).toEqual(['codex', 'sessions', 'close', 'my-session-123']);
+
+      const retryEnsureCall = mockExec.mock.calls[4];
+      expect(retryEnsureCall[1] as string[]).toEqual([
+        'codex',
+        'sessions',
+        'ensure',
+        '--name',
+        'my-session-123',
+      ]);
+
+      const retryExecCall = mockExec.mock.calls[5];
+      expect(retryExecCall[1] as string[]).toContain('-s');
+
+      server?.close();
+    });
+
     it('passes format option to acpx and returns parsed data for json format', async () => {
       mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({
