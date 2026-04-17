@@ -182,6 +182,11 @@ export async function runAgentServeCommand(
   // supports a denyList (e.g. localhost / 127.0.0.1 / RFC-1918 IPs) and let
   // the Box route all outbound traffic through it. This gives us blacklist
   // semantics for security while keeping the agent free to search and fetch.
+  //
+  // The same proxy can also act as an API-key shim: the Box talks to a
+  // host-local pseudo-provider endpoint (e.g. http://host:8101/v1/chat) so
+  // the real ANTHROPIC_API_KEY never enters the sandbox at all. This removes
+  // the prompt-injection key-exfiltration vector entirely.
   const rootKey = options.rootKey || process.env.L402_ROOT_KEY;
 
   if (Number.isNaN(port) || port < 0 || port > 65535) {
