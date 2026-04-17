@@ -93,7 +93,7 @@ describe('BoxliteClient', () => {
       expect(globalThis.fetch).toHaveBeenNthCalledWith(
         2,
         'http://localhost:8100/v1/default/boxes/test-box/executions/exec-1/output',
-        { method: 'GET' },
+        expect.objectContaining({ method: 'GET' }),
       );
     });
 
@@ -351,7 +351,52 @@ describe('BoxliteClient', () => {
 
       expect(chunks).toEqual([
         { stdout: 'hello ', stderr: '' },
-        { stdout: 'world', stderr: '', exit_code: 0 },
+        { stdout: 'world', stderr: '' },
+        { stdout: '', stderr: '', exit_code: 0 },
+      ]);
+    });
+
+    it('parses stdout chunks incrementally from a streaming response body', async () => {
+      const stdoutA = Buffer.from('A', 'utf-8').toString('base64');
+      const stdoutB = Buffer.from('B', 'utf-8').toString('base64');
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(`event: stdout\ndata: ${JSON.stringify({ data: stdoutA })}\n\n`),
+          );
+          controller.enqueue(
+            encoder.encode(
+              `event: stdout\ndata: ${JSON.stringify({ data: stdoutB })}\n\nevent: exit\ndata: ${JSON.stringify({ exit_code: 0 })}\n\n`,
+            ),
+          );
+          controller.close();
+        },
+      });
+
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ execution_id: 'exec-stream-body' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          body: stream,
+          text: async () => '',
+        });
+
+      const chunks: Array<{ stdout: string; stderr: string; exit_code?: number }> = [];
+      for await (const chunk of client.execStream('echo', ['hello'])) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toEqual([
+        { stdout: 'A', stderr: '' },
+        { stdout: 'B', stderr: '' },
+        { stdout: '', stderr: '', exit_code: 0 },
       ]);
     });
 

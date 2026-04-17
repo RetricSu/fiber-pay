@@ -49,60 +49,128 @@ export class BoxliteClient {
     return `${this.baseUrl}/v1/default/boxes/${encodeURIComponent(this.boxId)}`;
   }
 
-  private parseExecutionOutput(text: string): {
-    stdout: string;
-    stderr: string;
-    exit_code?: number;
-  } {
-    const lines = text.split(/\r?\n/);
+  private parseExecutionFrame(frame: string): ExecStreamChunk | undefined {
+    const lines = frame.split(/\r?\n/);
     let currentEvent: string | null = null;
-    let stdout = '';
-    let stderr = '';
-    let exit_code: number | undefined;
+    const dataLines: string[] = [];
 
     for (const line of lines) {
       if (line.startsWith('event: ')) {
         currentEvent = line.slice(7).trim();
       } else if (line.startsWith('data: ')) {
-        const dataStr = line.slice(6);
-        if (!currentEvent) continue;
-        try {
-          const payload = JSON.parse(dataStr) as unknown;
-          if (
-            currentEvent === 'stdout' &&
-            payload &&
-            typeof payload === 'object' &&
-            'data' in payload
-          ) {
-            stdout += Buffer.from(
-              String((payload as Record<string, unknown>).data),
-              'base64',
-            ).toString('utf-8');
-          } else if (
-            currentEvent === 'stderr' &&
-            payload &&
-            typeof payload === 'object' &&
-            'data' in payload
-          ) {
-            stderr += Buffer.from(
-              String((payload as Record<string, unknown>).data),
-              'base64',
-            ).toString('utf-8');
-          } else if (
-            currentEvent === 'exit' &&
-            payload &&
-            typeof payload === 'object' &&
-            'exit_code' in payload
-          ) {
-            exit_code = Number((payload as Record<string, unknown>).exit_code);
-          }
-        } catch {
-          // ignore malformed JSON
+        dataLines.push(line.slice(6));
+      }
+    }
+
+    if (!currentEvent || dataLines.length === 0) {
+      return undefined;
+    }
+
+    try {
+      const payload = JSON.parse(dataLines.join('\n')) as unknown;
+      if (
+        currentEvent === 'stdout' &&
+        payload &&
+        typeof payload === 'object' &&
+        'data' in payload
+      ) {
+        return {
+          stdout: Buffer.from(String((payload as Record<string, unknown>).data), 'base64').toString(
+            'utf-8',
+          ),
+          stderr: '',
+        };
+      }
+
+      if (
+        currentEvent === 'stderr' &&
+        payload &&
+        typeof payload === 'object' &&
+        'data' in payload
+      ) {
+        return {
+          stdout: '',
+          stderr: Buffer.from(String((payload as Record<string, unknown>).data), 'base64').toString(
+            'utf-8',
+          ),
+        };
+      }
+
+      if (
+        currentEvent === 'exit' &&
+        payload &&
+        typeof payload === 'object' &&
+        'exit_code' in payload
+      ) {
+        const exit_code = Number((payload as Record<string, unknown>).exit_code);
+        if (!Number.isNaN(exit_code)) {
+          return { stdout: '', stderr: '', exit_code };
+        }
+      }
+    } catch {
+      // ignore malformed JSON
+    }
+
+    return undefined;
+  }
+
+  private parseExecutionOutput(text: string): ExecStreamChunk[] {
+    const frames = text
+      .split(/\r?\n\r?\n+/)
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+
+    const chunks: ExecStreamChunk[] = [];
+    for (const frame of frames) {
+      const chunk = this.parseExecutionFrame(frame);
+      if (chunk) {
+        chunks.push(chunk);
+      }
+    }
+
+    return chunks;
+  }
+
+  private async *readExecutionOutput(
+    response: Response,
+  ): AsyncGenerator<ExecStreamChunk, void, void> {
+    if (!response.body || typeof response.body.getReader !== 'function') {
+      const text = await response.text();
+      for (const chunk of this.parseExecutionOutput(text)) {
+        yield chunk;
+      }
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split(/\r?\n\r?\n/);
+      buffer = frames.pop() ?? '';
+
+      for (const frame of frames) {
+        const chunk = this.parseExecutionFrame(frame.trim());
+        if (chunk) {
+          yield chunk;
         }
       }
     }
 
-    return { stdout, stderr, exit_code };
+    buffer += decoder.decode();
+    for (const frame of buffer.split(/\r?\n\r?\n+/)) {
+      const chunk = this.parseExecutionFrame(frame.trim());
+      if (chunk) {
+        yield chunk;
+      }
+    }
   }
 
   /**
@@ -220,11 +288,11 @@ export class BoxliteClient {
     }
   }
 
-  private async fetchExecutionOutput(executionId: string): Promise<ExecStreamChunk> {
+  private async fetchExecutionOutput(executionId: string, signal?: AbortSignal): Promise<Response> {
     try {
       const response = await fetch(
         `${this.getBoxUrl()}/executions/${encodeURIComponent(executionId)}/output`,
-        { method: 'GET' },
+        { method: 'GET', signal },
       );
 
       if (response.status === 404) {
@@ -239,9 +307,11 @@ export class BoxliteClient {
         );
       }
 
-      const text = await response.text();
-      return this.parseExecutionOutput(text);
+      return response;
     } catch (error) {
+      if (signal?.aborted) {
+        throw error;
+      }
       if (error instanceof BoxliteError) {
         throw error;
       }
@@ -265,22 +335,63 @@ export class BoxliteClient {
         throw new BoxliteError('EXEC_FAILED', 'BoxLite exec aborted');
       }
 
-      const chunk = await this.fetchExecutionOutput(executionId);
-
-      if (chunk.stdout.length > 0 || chunk.stderr.length > 0 || chunk.exit_code !== undefined) {
-        yield chunk;
-      }
-
-      if (chunk.exit_code !== undefined) {
-        return;
-      }
-
-      if (Date.now() - startTime > timeoutMs) {
+      const elapsedMs = Date.now() - startTime;
+      if (elapsedMs > timeoutMs) {
         await this.cancelExecution(executionId);
         throw new BoxliteError('EXEC_FAILED', 'BoxLite exec timed out');
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const timeoutRemainingMs = Math.max(1, timeoutMs - elapsedMs);
+      const outputAbort = new AbortController();
+      const onAbort = () => outputAbort.abort();
+      options?.signal?.addEventListener('abort', onAbort, { once: true });
+      const timeoutHandle = setTimeout(() => outputAbort.abort(), timeoutRemainingMs);
+
+      let sawExit = false;
+
+      try {
+        const response = await this.fetchExecutionOutput(executionId, outputAbort.signal);
+
+        for await (const chunk of this.readExecutionOutput(response)) {
+          if (chunk.stdout.length > 0 || chunk.stderr.length > 0 || chunk.exit_code !== undefined) {
+            yield chunk;
+          }
+
+          if (chunk.exit_code !== undefined) {
+            sawExit = true;
+            return;
+          }
+        }
+      } catch (error) {
+        const abortedByCaller = options?.signal?.aborted === true;
+        const timedOut = outputAbort.signal.aborted && !abortedByCaller;
+
+        if (abortedByCaller) {
+          await this.cancelExecution(executionId);
+          throw new BoxliteError('EXEC_FAILED', 'BoxLite exec aborted');
+        }
+
+        if (timedOut) {
+          await this.cancelExecution(executionId);
+          throw new BoxliteError('EXEC_FAILED', 'BoxLite exec timed out');
+        }
+
+        if (error instanceof BoxliteError) {
+          throw error;
+        }
+
+        const message = error instanceof Error ? error.message : String(error);
+        throw new BoxliteError('BOXLITE_UNREACHABLE', `BoxLite server is unreachable: ${message}`);
+      } finally {
+        clearTimeout(timeoutHandle);
+        options?.signal?.removeEventListener('abort', onAbort);
+      }
+
+      if (sawExit) {
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
     }
   }
 
