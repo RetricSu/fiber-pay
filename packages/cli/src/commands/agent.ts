@@ -20,7 +20,7 @@ export function createAgentCommand(config: CliConfig): Command {
     .option('--expiry <seconds>', 'Token expiry in seconds', '3600')
     .option('--cwd <path>', 'Working directory for agent execution')
     .option('--approve-all', 'Auto-approve all agent tool calls')
-    .option('--timeout <seconds>', 'Max agent execution time per request', '300')
+    .option('--timeout <seconds>', 'Max agent execution time per request', '3600')
     .option('--format <fmt>', 'Agent output format passed to acpx (text, json, quiet)', 'quiet')
     .option(
       '--boxlite-url <url>',
@@ -52,7 +52,7 @@ export function createAgentCommand(config: CliConfig): Command {
     .argument('<url>', 'Agent service URL (e.g. http://host:8402)')
     .option('--prompt <text>', 'Prompt text to send')
     .option('--file <path>', 'Read prompt from file')
-    .option('--timeout <seconds>', 'Request timeout in seconds', '300')
+    .option('--timeout <seconds>', 'Request timeout in seconds', '3600')
     .option('--json')
     .action(async (url, options) => {
       await runAgentCallCommand(config, url, options);

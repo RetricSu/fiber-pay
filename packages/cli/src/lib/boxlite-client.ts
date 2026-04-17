@@ -2,6 +2,7 @@ export interface ExecOptions {
   env?: Record<string, string>;
   cwd?: string;
   timeout?: number;
+  signal?: AbortSignal;
 }
 
 export interface ExecResult {
@@ -131,10 +132,22 @@ export class BoxliteClient {
   }
 
   /**
+   * Best-effort cancellation of a running BoxLite execution.
+   * This does not throw on failure; it is meant for cleanup only.
+   */
+  async cancelExecution(executionId: string): Promise<void> {
+    try {
+      await fetch(`${this.getBoxUrl()}/executions/${encodeURIComponent(executionId)}/cancel`, {
+        method: 'POST',
+      });
+    } catch {}
+  }
+
+  /**
    * Execute a command inside the box.
    * @param command - The command to run
    * @param args - Arguments for the command
-   * @param options - Optional execution settings (env, cwd, timeout)
+   * @param options - Optional execution settings (env, cwd, timeout, signal)
    * @returns The execution result including stdout, stderr, and exit code
    * @throws {BoxliteError} with code `BOX_NOT_FOUND` if the box does not exist
    * @throws {BoxliteError} with code `EXEC_FAILED` if the command execution fails on the server
@@ -205,6 +218,11 @@ export class BoxliteClient {
     let accumulatedStderr = '';
 
     while (true) {
+      if (options?.signal?.aborted) {
+        await this.cancelExecution(executionId);
+        throw new BoxliteError('EXEC_FAILED', 'BoxLite exec aborted');
+      }
+
       try {
         const response = await fetch(
           `${this.getBoxUrl()}/executions/${encodeURIComponent(executionId)}/output`,
@@ -244,6 +262,7 @@ export class BoxliteClient {
       }
 
       if (Date.now() - startTime > timeoutMs) {
+        await this.cancelExecution(executionId);
         throw new BoxliteError('EXEC_FAILED', 'BoxLite exec timed out');
       }
 

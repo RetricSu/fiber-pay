@@ -64,7 +64,7 @@ const baseOptions: AgentServeOptions = {
   host: '127.0.0.1',
   price: '0.1',
   expiry: '3600',
-  timeout: '300',
+  timeout: '3600',
   rootKey: 'a'.repeat(64),
   boxliteUrl: 'http://localhost:8100',
   boxliteBoxId: 'test-box',
@@ -253,6 +253,57 @@ describe('runAgentServeCommand', () => {
 
       const retryExecCall = mockExec.mock.calls[5];
       expect(retryExecCall[1] as string[]).toContain('-s');
+
+      server?.close();
+    });
+
+    it('closes session when execPrompt throws a BoxliteError', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'ses_123\tcreated', stderr: '', exit_code: 0 });
+      mockExec.mockRejectedValueOnce(new BoxliteError('EXEC_FAILED', 'BoxLite exec timed out'));
+      mockExec.mockResolvedValueOnce({ stdout: 'closed', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'say hello', sessionId: 'my-session-123' }),
+      });
+
+      expect(response.status).toBe(502);
+
+      const closeCall = mockExec.mock.calls.find(
+        (call) =>
+          (call[1] as string[]).includes('close') &&
+          (call[1] as string[]).includes('my-session-123'),
+      );
+      expect(closeCall).toBeDefined();
+
+      server?.close();
+    });
+
+    it('closes session when ensure throws a BoxliteError', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
+      mockExec.mockRejectedValueOnce(new BoxliteError('EXEC_FAILED', 'BoxLite exec timed out'));
+      mockExec.mockResolvedValueOnce({ stdout: 'closed', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'say hello', sessionId: 'my-session-123' }),
+      });
+
+      expect(response.status).toBe(502);
+
+      const closeCalls = mockExec.mock.calls.filter(
+        (call) =>
+          (call[1] as string[]).includes('close') &&
+          (call[1] as string[]).includes('my-session-123'),
+      );
+      expect(closeCalls.length).toBeGreaterThanOrEqual(1);
 
       server?.close();
     });

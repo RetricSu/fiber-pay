@@ -123,29 +123,55 @@ async function runAcpx(
     });
   }
 
+  async function closeSession(): Promise<void> {
+    if (!options.sessionId || options.sessionId.startsWith('__')) return;
+    try {
+      await client.exec('acpx', [agent, 'sessions', 'close', options.sessionId], {
+        env: buildSafeEnv(),
+        cwd: '/workspace',
+        timeout: 10,
+      });
+    } catch {}
+  }
+
   if (options.sessionId) {
-    await client.exec('acpx', [agent, 'sessions', 'ensure', '--name', options.sessionId], {
-      env: buildSafeEnv(),
-      cwd: '/workspace',
-      timeout: 10,
-    });
-
-    let result = await execPrompt();
-
-    if (result.exit_code !== 0 && !options.sessionId.startsWith('__')) {
-      try {
-        await client.exec('acpx', [agent, 'sessions', 'close', options.sessionId], {
-          env: buildSafeEnv(),
-          cwd: '/workspace',
-          timeout: 10,
-        });
-      } catch {}
+    try {
       await client.exec('acpx', [agent, 'sessions', 'ensure', '--name', options.sessionId], {
         env: buildSafeEnv(),
         cwd: '/workspace',
         timeout: 10,
       });
+    } catch (err) {
+      await closeSession();
+      throw err;
+    }
+
+    let result: { stdout: string; stderr: string; exit_code: number };
+    try {
       result = await execPrompt();
+    } catch (err) {
+      await closeSession();
+      throw err;
+    }
+
+    if (result.exit_code !== 0 && !options.sessionId.startsWith('__')) {
+      await closeSession();
+      try {
+        await client.exec('acpx', [agent, 'sessions', 'ensure', '--name', options.sessionId], {
+          env: buildSafeEnv(),
+          cwd: '/workspace',
+          timeout: 10,
+        });
+      } catch (ensureErr) {
+        await closeSession();
+        throw ensureErr;
+      }
+      try {
+        result = await execPrompt();
+      } catch (err) {
+        await closeSession();
+        throw err;
+      }
     }
 
     return {
@@ -410,6 +436,17 @@ export async function runAgentServeCommand(
       if (!asJson) {
         const message = error instanceof Error ? error.message : String(error);
         console.log(`[REQ ${requestId}] agent execution error: ${message}`);
+      }
+
+      if (typeof sessionId === 'string' && !sessionId.startsWith('__')) {
+        try {
+          const cleanupClient = new BoxliteClient(boxliteUrl, boxliteBoxId);
+          await cleanupClient.exec('acpx', [options.agent, 'sessions', 'close', sessionId], {
+            env: buildSafeEnv(),
+            cwd: '/workspace',
+            timeout: 10,
+          });
+        } catch {}
       }
 
       if (error instanceof BoxliteError) {

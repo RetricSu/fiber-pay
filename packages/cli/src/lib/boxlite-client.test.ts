@@ -229,6 +229,60 @@ describe('BoxliteClient', () => {
       });
     });
 
+    it('calls cancel endpoint when polling times out', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ execution_id: 'exec-cancel' }),
+        })
+        .mockResolvedValue({
+          ok: true,
+          status: 200,
+          text: async () => `${sseOutput('stdout', { data: '' })}\n\n`,
+        });
+
+      await expect(client.exec('echo', ['hello'], { timeout: 0 })).rejects.toMatchObject({
+        code: 'EXEC_FAILED',
+      });
+
+      const cancelCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+        (call) => typeof call[0] === 'string' && call[0].includes('/executions/exec-cancel/cancel'),
+      );
+      expect(cancelCall).toBeDefined();
+      if (cancelCall) {
+        expect(cancelCall[1]).toMatchObject({ method: 'POST' });
+      }
+    });
+
+    it('throws EXEC_FAILED when aborted via signal', async () => {
+      const controller = new AbortController();
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ execution_id: 'exec-abort' }),
+      });
+
+      const execPromise = client.exec('echo', ['hello'], { signal: controller.signal });
+      controller.abort();
+
+      await expect(execPromise).rejects.toMatchObject({
+        code: 'EXEC_FAILED',
+        message: 'BoxLite exec aborted',
+      });
+
+      const cancelCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+        (call) => typeof call[0] === 'string' && call[0].includes('/executions/exec-abort/cancel'),
+      );
+      expect(cancelCall).toBeDefined();
+    });
+
+    it('cancelExecution does not throw on failure', async () => {
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error('network error'));
+      await expect(client.cancelExecution('exec-x')).resolves.toBeUndefined();
+    });
+
     it('includes optional env, cwd, and timeout in the request body', async () => {
       globalThis.fetch = vi
         .fn()
