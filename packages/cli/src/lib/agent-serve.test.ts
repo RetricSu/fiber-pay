@@ -16,6 +16,7 @@ vi.mock('@fiber-pay/sdk/node', () => ({
 
 const mockCheckBoxExists = vi.fn();
 const mockExec = vi.fn();
+const mockExecStream = vi.fn();
 
 vi.mock('./boxlite-client.js', () => {
   class MockBoxliteError extends Error {
@@ -31,6 +32,7 @@ vi.mock('./boxlite-client.js', () => {
     return {
       checkBoxExists: mockCheckBoxExists,
       exec: mockExec,
+      execStream: mockExecStream,
     };
   }
 
@@ -94,6 +96,7 @@ describe('runAgentServeCommand', () => {
   beforeEach(() => {
     mockCheckBoxExists.mockReset();
     mockExec.mockReset();
+    mockExecStream.mockReset();
     delete globalThis.__testServer;
     process.exit = vi.fn().mockImplementation((code: number) => {
       throw new Error(`process.exit(${code})`);
@@ -165,6 +168,71 @@ describe('runAgentServeCommand', () => {
       const body = (await response.json()) as { response: string; agent: string };
       expect(body.response).toBe('hello world');
       expect(body.agent).toBe('codex');
+
+      server?.close();
+    });
+
+    it('streams SSE chunk/done events when stream mode is requested', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
+      mockExecStream.mockReturnValueOnce(
+        (async function* () {
+          yield { stdout: 'hello ', stderr: '' };
+          yield { stdout: 'world', stderr: '' };
+          yield { stdout: '', stderr: '', exit_code: 0 };
+        })(),
+      );
+
+      const { server, url } = await startTestServer();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify({ prompt: 'say hello', stream: 'sse' }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/event-stream');
+
+      const body = await response.text();
+      expect(body).toContain('event: chunk');
+      expect(body).toContain('"type":"stdout"');
+      expect(body).toContain('"text":"hello "');
+      expect(body).toContain('"text":"world"');
+      expect(body).toContain('event: done');
+      expect(body).toContain('"agent":"codex"');
+
+      server?.close();
+    });
+
+    it('streams SSE error event when execution fails in stream mode', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
+      mockExecStream.mockReturnValueOnce({
+        [Symbol.asyncIterator]: () => ({
+          next: async () => {
+            throw new BoxliteError('EXEC_FAILED', 'stream failed');
+          },
+        }),
+      });
+
+      const { server, url } = await startTestServer();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify({ prompt: 'fail stream', stream: 'sse' }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(body).toContain('event: error');
+      expect(body).toContain('"code":"EXEC_FAILED"');
+      expect(body).toContain('"message":"stream failed"');
 
       server?.close();
     });

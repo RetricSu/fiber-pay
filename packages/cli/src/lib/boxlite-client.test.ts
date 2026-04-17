@@ -320,4 +320,71 @@ describe('BoxliteClient', () => {
       );
     });
   });
+
+  describe('execStream', () => {
+    it('yields incremental chunks until exit event appears', async () => {
+      const stdoutA = Buffer.from('hello ', 'utf-8').toString('base64');
+      const stdoutB = Buffer.from('world', 'utf-8').toString('base64');
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ execution_id: 'exec-stream-1' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => `${sseOutput('stdout', { data: stdoutA })}\n\n`,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () =>
+            `${sseOutput('stdout', { data: stdoutB })}\n\n${sseOutput('exit', { exit_code: 0 })}\n\n`,
+        });
+
+      const chunks: Array<{ stdout: string; stderr: string; exit_code?: number }> = [];
+      for await (const chunk of client.execStream('echo', ['hello'])) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toEqual([
+        { stdout: 'hello ', stderr: '' },
+        { stdout: 'world', stderr: '', exit_code: 0 },
+      ]);
+    });
+
+    it('throws EXEC_FAILED on timeout and cancels execution', async () => {
+      const stdout = Buffer.from('still running', 'utf-8').toString('base64');
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ execution_id: 'exec-stream-timeout' }),
+        })
+        .mockResolvedValue({
+          ok: true,
+          status: 200,
+          text: async () => `${sseOutput('stdout', { data: stdout })}\n\n`,
+        });
+
+      const readAll = async () => {
+        for await (const _chunk of client.execStream('echo', ['hello'], { timeout: 0 })) {
+        }
+      };
+
+      await expect(readAll()).rejects.toMatchObject({
+        code: 'EXEC_FAILED',
+        message: 'BoxLite exec timed out',
+      });
+
+      const cancelCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+        (call) =>
+          typeof call[0] === 'string' && call[0].includes('/executions/exec-stream-timeout/cancel'),
+      );
+      expect(cancelCall).toBeDefined();
+    });
+  });
 });

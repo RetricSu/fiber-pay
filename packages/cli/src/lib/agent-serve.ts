@@ -4,7 +4,7 @@
  * Starts an Express server that:
  * 1. Gates all requests behind L402 payment via createL402Middleware()
  * 2. On paid POST /, runs `acpx <agent> exec --format quiet '<prompt>'` inside a BoxLite sandbox
- * 3. Returns the agent's response as JSON
+ * 3. Returns either JSON (default) or SSE stream (`stream: "sse"` or Accept header)
  */
 
 import { createServer, type Server } from 'node:http';
@@ -65,6 +65,32 @@ function getRequestId(req: AgentServeRequest): number {
   return req._fiberPayRequestId ?? 0;
 }
 
+function shouldUseSse(req: AgentServeRequest): boolean {
+  const streamMode = req.body?.stream;
+  if (streamMode === true || streamMode === 'sse') {
+    return true;
+  }
+
+  const acceptHeader = req.headers.accept;
+  if (typeof acceptHeader !== 'string') {
+    return false;
+  }
+
+  return acceptHeader.includes('text/event-stream');
+}
+
+function parseJsonLines(text: string): Array<Record<string, unknown>> | undefined {
+  try {
+    return text
+      .trim()
+      .split('\n')
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+  } catch {
+    return undefined;
+  }
+}
+
 function buildSafeEnv(): Record<string, string> {
   const allowed = [
     'PATH',
@@ -93,16 +119,14 @@ async function runAcpx(
     boxliteBoxId: string;
     sessionId?: string;
     format?: string;
+    signal?: AbortSignal;
+    onChunk?: (chunk: { type: 'stdout' | 'stderr'; text: string }) => void;
   },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const client = new BoxliteClient(options.boxliteUrl, options.boxliteBoxId);
   const supportsGlobalFlags = !['opencode'].includes(agent);
 
-  async function execPrompt(): Promise<{
-    stdout: string;
-    stderr: string;
-    exit_code: number;
-  }> {
+  async function execPrompt(): Promise<{ stdout: string; stderr: string; exit_code: number }> {
     const args: string[] = [];
     if (supportsGlobalFlags) {
       args.push('--format', options.format || 'quiet');
@@ -116,11 +140,46 @@ async function runAcpx(
       args.push(agent, 'exec', prompt);
     }
 
-    return client.exec('acpx', args, {
+    const execOptions = {
       env: buildSafeEnv(),
       cwd: '/workspace',
       timeout: options.timeoutSeconds,
-    });
+      signal: options.signal,
+    };
+
+    if (!options.onChunk) {
+      return client.exec('acpx', args, execOptions);
+    }
+
+    let stdout = '';
+    let stderr = '';
+    let exitCode: number | undefined;
+
+    for await (const chunk of client.execStream('acpx', args, execOptions)) {
+      if (chunk.stdout.length > 0) {
+        stdout += chunk.stdout;
+        options.onChunk({ type: 'stdout', text: chunk.stdout });
+      }
+
+      if (chunk.stderr.length > 0) {
+        stderr += chunk.stderr;
+        options.onChunk({ type: 'stderr', text: chunk.stderr });
+      }
+
+      if (chunk.exit_code !== undefined) {
+        exitCode = chunk.exit_code;
+      }
+    }
+
+    if (exitCode === undefined) {
+      throw new BoxliteError('EXEC_FAILED', 'BoxLite exec returned without exit code');
+    }
+
+    return {
+      stdout,
+      stderr,
+      exit_code: exitCode,
+    };
   }
 
   async function closeSession(): Promise<void> {
@@ -374,12 +433,112 @@ export async function runAgentServeCommand(
     }
 
     const startTime = Date.now();
+    const normalizedSessionId = typeof sessionId === 'string' ? sessionId : undefined;
+    const useSse = shouldUseSse(req);
 
     try {
       if (!asJson) {
         console.log(
-          `[REQ ${requestId}] payment accepted, invoking agent=${options.agent} promptChars=${prompt.length}${sessionId ? ` session=${sessionId}` : ''}${requestFormat && requestFormat !== 'quiet' ? ` format=${requestFormat}` : ''}`,
+          `[REQ ${requestId}] payment accepted, invoking agent=${options.agent} promptChars=${prompt.length}${sessionId ? ` session=${sessionId}` : ''}${requestFormat && requestFormat !== 'quiet' ? ` format=${requestFormat}` : ''}${useSse ? ' stream=sse' : ''}`,
         );
+      }
+
+      if (useSse) {
+        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders();
+
+        let streamClosed = false;
+        let clientClosed = false;
+        const abortController = new AbortController();
+
+        const heartbeat = setInterval(() => {
+          if (!streamClosed && !res.writableEnded) {
+            res.write(': keep-alive\n\n');
+          }
+        }, 15000);
+
+        const closeStream = () => {
+          if (streamClosed) {
+            return;
+          }
+          streamClosed = true;
+          clearInterval(heartbeat);
+          if (!res.writableEnded) {
+            res.end();
+          }
+        };
+
+        const sendSse = (event: string, data: unknown) => {
+          if (streamClosed || res.writableEnded) {
+            return;
+          }
+          res.write(`event: ${event}\n`);
+          res.write(`data: ${JSON.stringify(data)}\n\n`);
+        };
+
+        const handleDisconnect = () => {
+          if (streamClosed) {
+            return;
+          }
+          clientClosed = true;
+          abortController.abort();
+        };
+
+        req.on('aborted', handleDisconnect);
+        res.on('close', handleDisconnect);
+
+        const result = await runAcpx(options.agent, prompt, {
+          cwd: options.cwd,
+          approveAll: options.approveAll,
+          timeoutSeconds,
+          boxliteUrl,
+          boxliteBoxId,
+          sessionId: normalizedSessionId,
+          format: requestFormat,
+          signal: abortController.signal,
+          onChunk: (chunk) => {
+            sendSse('chunk', chunk);
+          },
+        });
+
+        if (clientClosed) {
+          closeStream();
+          return;
+        }
+
+        const durationMs = Date.now() - startTime;
+
+        if (result.exitCode !== 0) {
+          if (!asJson) {
+            console.log(
+              `[REQ ${requestId}] agent failed exit=${result.exitCode} duration=${durationMs}ms`,
+            );
+          }
+
+          sendSse('error', {
+            code: 'EXEC_FAILED',
+            message: result.stderr.slice(0, 1000) || 'Agent execution failed.',
+            agent: options.agent,
+            durationMs,
+          });
+          closeStream();
+          return;
+        }
+
+        if (!asJson) {
+          console.log(`[REQ ${requestId}] agent completed duration=${durationMs}ms`);
+        }
+
+        sendSse('done', {
+          durationMs,
+          agent: options.agent,
+          ...(requestFormat && requestFormat !== 'quiet' ? { format: requestFormat } : {}),
+        });
+        closeStream();
+        return;
       }
 
       const result = await runAcpx(options.agent, prompt, {
@@ -388,7 +547,7 @@ export async function runAgentServeCommand(
         timeoutSeconds,
         boxliteUrl,
         boxliteBoxId,
-        sessionId: typeof sessionId === 'string' ? sessionId : undefined,
+        sessionId: normalizedSessionId,
         format: requestFormat,
       });
 
@@ -414,16 +573,7 @@ export async function runAgentServeCommand(
         console.log(`[REQ ${requestId}] agent completed duration=${durationMs}ms`);
       }
 
-      let data: unknown;
-      if (requestFormat === 'json') {
-        try {
-          data = result.stdout
-            .trim()
-            .split('\n')
-            .filter((line) => line.trim().length > 0)
-            .map((line) => JSON.parse(line));
-        } catch {}
-      }
+      const data = requestFormat === 'json' ? parseJsonLines(result.stdout) : undefined;
 
       res.json({
         response: result.stdout.trim(),
@@ -438,15 +588,56 @@ export async function runAgentServeCommand(
         console.log(`[REQ ${requestId}] agent execution error: ${message}`);
       }
 
-      if (typeof sessionId === 'string' && !sessionId.startsWith('__')) {
+      if (typeof normalizedSessionId === 'string' && !normalizedSessionId.startsWith('__')) {
         try {
           const cleanupClient = new BoxliteClient(boxliteUrl, boxliteBoxId);
-          await cleanupClient.exec('acpx', [options.agent, 'sessions', 'close', sessionId], {
-            env: buildSafeEnv(),
-            cwd: '/workspace',
-            timeout: 10,
-          });
+          await cleanupClient.exec(
+            'acpx',
+            [options.agent, 'sessions', 'close', normalizedSessionId],
+            {
+              env: buildSafeEnv(),
+              cwd: '/workspace',
+              timeout: 10,
+            },
+          );
         } catch {}
+      }
+
+      if (useSse) {
+        if (!res.headersSent) {
+          res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-cache, no-transform');
+          res.setHeader('Connection', 'keep-alive');
+          res.setHeader('X-Accel-Buffering', 'no');
+          res.flushHeaders();
+        }
+
+        if (!res.writableEnded) {
+          if (error instanceof BoxliteError) {
+            res.write('event: error\n');
+            res.write(
+              `data: ${JSON.stringify({
+                code: error.code,
+                message: error.message.slice(0, 1000),
+                agent: options.agent,
+                durationMs: Date.now() - startTime,
+              })}\n\n`,
+            );
+          } else {
+            res.write('event: error\n');
+            res.write(
+              `data: ${JSON.stringify({
+                code: 'INTERNAL_ERROR',
+                message: error instanceof Error ? error.message : String(error),
+                agent: options.agent,
+                durationMs: Date.now() - startTime,
+              })}\n\n`,
+            );
+          }
+
+          res.end();
+        }
+        return;
       }
 
       if (error instanceof BoxliteError) {

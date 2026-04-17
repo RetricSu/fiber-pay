@@ -11,6 +11,12 @@ export interface ExecResult {
   exit_code: number;
 }
 
+export interface ExecStreamChunk {
+  stdout: string;
+  stderr: string;
+  exit_code?: number;
+}
+
 export type BoxliteErrorCode = 'BOXLITE_UNREACHABLE' | 'BOX_NOT_FOUND' | 'EXEC_FAILED';
 
 export class BoxliteError extends Error {
@@ -143,17 +149,11 @@ export class BoxliteClient {
     } catch {}
   }
 
-  /**
-   * Execute a command inside the box.
-   * @param command - The command to run
-   * @param args - Arguments for the command
-   * @param options - Optional execution settings (env, cwd, timeout, signal)
-   * @returns The execution result including stdout, stderr, and exit code
-   * @throws {BoxliteError} with code `BOX_NOT_FOUND` if the box does not exist
-   * @throws {BoxliteError} with code `EXEC_FAILED` if the command execution fails on the server
-   * @throws {BoxliteError} with code `BOXLITE_UNREACHABLE` if the server cannot be reached
-   */
-  async exec(command: string, args: string[], options?: ExecOptions): Promise<ExecResult> {
+  private buildExecBody(
+    command: string,
+    args: string[],
+    options?: ExecOptions,
+  ): Record<string, unknown> {
     const body: Record<string, unknown> = {
       command,
       args,
@@ -169,12 +169,19 @@ export class BoxliteClient {
       body.timeout = options.timeout;
     }
 
-    let executionId: string;
+    return body;
+  }
+
+  private async createExecution(
+    command: string,
+    args: string[],
+    options?: ExecOptions,
+  ): Promise<string> {
     try {
       const response = await fetch(`${this.getBoxUrl()}/exec`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(this.buildExecBody(command, args, options)),
       });
 
       if (response.status === 404) {
@@ -203,7 +210,7 @@ export class BoxliteClient {
         );
       }
 
-      executionId = (data as Record<string, unknown>).execution_id as string;
+      return (data as Record<string, unknown>).execution_id as string;
     } catch (error) {
       if (error instanceof BoxliteError) {
         throw error;
@@ -211,11 +218,46 @@ export class BoxliteClient {
       const message = error instanceof Error ? error.message : String(error);
       throw new BoxliteError('BOXLITE_UNREACHABLE', `BoxLite server is unreachable: ${message}`);
     }
+  }
 
+  private async fetchExecutionOutput(executionId: string): Promise<ExecStreamChunk> {
+    try {
+      const response = await fetch(
+        `${this.getBoxUrl()}/executions/${encodeURIComponent(executionId)}/output`,
+        { method: 'GET' },
+      );
+
+      if (response.status === 404) {
+        throw new BoxliteError('BOX_NOT_FOUND', `BoxLite box "${this.boxId}" was not found.`);
+      }
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => 'unknown error');
+        throw new BoxliteError(
+          'EXEC_FAILED',
+          `BoxLite exec failed with status ${response.status}: ${text}`,
+        );
+      }
+
+      const text = await response.text();
+      return this.parseExecutionOutput(text);
+    } catch (error) {
+      if (error instanceof BoxliteError) {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      throw new BoxliteError('BOXLITE_UNREACHABLE', `BoxLite server is unreachable: ${message}`);
+    }
+  }
+
+  async *execStream(
+    command: string,
+    args: string[],
+    options?: ExecOptions,
+  ): AsyncGenerator<ExecStreamChunk, void, void> {
+    const executionId = await this.createExecution(command, args, options);
     const timeoutMs = (options?.timeout ?? 60) * 1000;
     const startTime = Date.now();
-    let accumulatedStdout = '';
-    let accumulatedStderr = '';
 
     while (true) {
       if (options?.signal?.aborted) {
@@ -223,42 +265,14 @@ export class BoxliteClient {
         throw new BoxliteError('EXEC_FAILED', 'BoxLite exec aborted');
       }
 
-      try {
-        const response = await fetch(
-          `${this.getBoxUrl()}/executions/${encodeURIComponent(executionId)}/output`,
-          { method: 'GET' },
-        );
+      const chunk = await this.fetchExecutionOutput(executionId);
 
-        if (response.status === 404) {
-          throw new BoxliteError('BOX_NOT_FOUND', `BoxLite box "${this.boxId}" was not found.`);
-        }
+      if (chunk.stdout.length > 0 || chunk.stderr.length > 0 || chunk.exit_code !== undefined) {
+        yield chunk;
+      }
 
-        if (!response.ok) {
-          const text = await response.text().catch(() => 'unknown error');
-          throw new BoxliteError(
-            'EXEC_FAILED',
-            `BoxLite exec failed with status ${response.status}: ${text}`,
-          );
-        }
-
-        const text = await response.text();
-        const parsed = this.parseExecutionOutput(text);
-        accumulatedStdout += parsed.stdout;
-        accumulatedStderr += parsed.stderr;
-
-        if (parsed.exit_code !== undefined) {
-          return {
-            stdout: accumulatedStdout,
-            stderr: accumulatedStderr,
-            exit_code: parsed.exit_code,
-          };
-        }
-      } catch (error) {
-        if (error instanceof BoxliteError) {
-          throw error;
-        }
-        const message = error instanceof Error ? error.message : String(error);
-        throw new BoxliteError('BOXLITE_UNREACHABLE', `BoxLite server is unreachable: ${message}`);
+      if (chunk.exit_code !== undefined) {
+        return;
       }
 
       if (Date.now() - startTime > timeoutMs) {
@@ -268,5 +282,39 @@ export class BoxliteClient {
 
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
+  }
+
+  /**
+   * Execute a command inside the box.
+   * @param command - The command to run
+   * @param args - Arguments for the command
+   * @param options - Optional execution settings (env, cwd, timeout, signal)
+   * @returns The execution result including stdout, stderr, and exit code
+   * @throws {BoxliteError} with code `BOX_NOT_FOUND` if the box does not exist
+   * @throws {BoxliteError} with code `EXEC_FAILED` if the command execution fails on the server
+   * @throws {BoxliteError} with code `BOXLITE_UNREACHABLE` if the server cannot be reached
+   */
+  async exec(command: string, args: string[], options?: ExecOptions): Promise<ExecResult> {
+    let accumulatedStdout = '';
+    let accumulatedStderr = '';
+    let exitCode: number | undefined;
+
+    for await (const chunk of this.execStream(command, args, options)) {
+      accumulatedStdout += chunk.stdout;
+      accumulatedStderr += chunk.stderr;
+      if (chunk.exit_code !== undefined) {
+        exitCode = chunk.exit_code;
+      }
+    }
+
+    if (exitCode === undefined) {
+      throw new BoxliteError('EXEC_FAILED', 'BoxLite exec returned without exit code');
+    }
+
+    return {
+      stdout: accumulatedStdout,
+      stderr: accumulatedStderr,
+      exit_code: exitCode,
+    };
   }
 }
