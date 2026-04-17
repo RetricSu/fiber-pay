@@ -148,24 +148,16 @@ curl -X POST http://localhost:8100/v1/default/boxes/fiber-pay-agent/start
 
 The agent service requires [acpx](https://github.com/openclaw/acpx) to be installed globally inside the Box. `acpx` 0.5.3+ requires Node.js >= 22.12.0, which is why we use `node:22-alpine` above.
 
+Use the `boxlite` CLI to run commands inside the Box:
+
 ```bash
-curl -X POST http://localhost:8100/v1/default/boxes/BOX_ID/exec \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "npm",
-    "args": ["install", "-g", "acpx@0.5.3"]
-  }'
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- npm install -g acpx@0.5.3
 ```
 
 Wait for the execution to complete, then verify:
 
 ```bash
-curl -X POST http://localhost:8100/v1/default/boxes/BOX_ID/exec \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "acpx",
-    "args": ["--version"]
-  }'
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- acpx --version
 ```
 
 ## Install agent CLIs
@@ -179,96 +171,69 @@ The OpenCode CLI is distributed as `opencode-ai` on npm. On Alpine Linux (musl l
 **Step 1: Install gcompat**
 
 ```bash
-curl -X POST http://localhost:8100/v1/default/boxes/BOX_ID/exec \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "apk",
-    "args": ["add", "gcompat"]
-  }'
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- apk add gcompat
 ```
 
 **Step 2: Install opencode-ai**
 
 ```bash
-curl -X POST http://localhost:8100/v1/default/boxes/BOX_ID/exec \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "npm",
-    "args": ["install", "-g", "opencode-ai@latest"]
-  }'
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- npm install -g opencode-ai@latest
 ```
 
 **Step 3: Fix the binary (Alpine / musl only)**
 
-BoxLite 0.8.2 on Alpine may install a glibc-linked `opencode-linux-arm64` binary that silently fails. Verify the actual version inside the Box:
+BoxLite 0.8.2 on Alpine may install a glibc-linked binary that silently fails. Verify the actual version inside the Box:
 
 ```bash
-curl -X POST http://localhost:8100/v1/default/boxes/BOX_ID/exec \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "opencode",
-    "args": ["--version"]
-  }'
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- opencode --version
 ```
 
-If it reports **1.3.11** instead of **1.4.6**, or if `acpx opencode exec` later fails with `Script not found "acp"`, manually replace the cached binary with the musl build:
+If it reports **1.3.11** instead of **1.4.6+**, or if `acpx opencode exec` later fails with `Script not found "acp"`, manually replace the cached binary with the musl build:
 
 ```bash
-curl -X POST http://localhost:8100/v1/default/boxes/BOX_ID/exec \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "sh",
-    "args": ["-c", "cp /usr/local/lib/node_modules/opencode-ai/node_modules/opencode-linux-arm64-musl/bin/opencode /usr/local/lib/node_modules/opencode-ai/bin/.opencode && chmod +x /usr/local/lib/node_modules/opencode-ai/bin/.opencode"]
-  }'
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- sh -c \
+  'MUSL_BIN=$(find /usr/local/lib/node_modules/opencode-ai/node_modules -name "opencode" -path "*musl*" | head -1) && \
+   cp "$MUSL_BIN" /usr/local/lib/node_modules/opencode-ai/bin/.opencode && \
+   chmod +x /usr/local/lib/node_modules/opencode-ai/bin/.opencode'
 ```
 
 ### Claude agent
 
 ```bash
-curl -X POST http://localhost:8100/v1/default/boxes/BOX_ID/exec \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "npm",
-    "args": ["install", "-g", "@anthropic-ai/claude-code"]
-  }'
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- npm install -g @anthropic-ai/claude-code
 ```
 
 ### Codex agent
 
 ```bash
-curl -X POST http://localhost:8100/v1/default/boxes/BOX_ID/exec \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "npm",
-    "args": ["install", "-g", "codex-cli"]
-  }'
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- npm install -g codex-cli
 ```
 
 ## Copy local agent configuration into the Box
 
 If you have local agent configuration files (e.g. for OpenCode), copy them into the Box so the agent behaves the same way as on your host machine.
 
-For OpenCode, the config lives at `~/.config/opencode/` on your host. Copy both `opencode.json` and `oh-my-openagent.json` into the Box for both `/root` and `/home/boxlite`:
+For OpenCode, the config lives at `~/.config/opencode/` on your host. Copy both `opencode.json` and `oh-my-openagent.json` into the Box:
 
 ```bash
-# Create directories
-curl -X POST http://localhost:8100/v1/default/boxes/BOX_ID/exec \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "mkdir",
-    "args": ["-p", "/root/.config/opencode", "/home/boxlite/.config/opencode"]
-  }'
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- mkdir -p /root/.config/opencode
 
-# Write opencode.json (repeat for oh-my-openagent.json)
-curl -X POST http://localhost:8100/v1/default/boxes/BOX_ID/exec \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "sh",
-    "args": ["-c", "cat > /root/.config/opencode/opencode.json << 'EOF'\n{ ...your opencode.json content... }\nEOF"]
-  }'
+# Write opencode.json via heredoc
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- sh -c \
+  "cat > /root/.config/opencode/opencode.json << 'EOF'
+{ ...your opencode.json content... }
+EOF"
+
+# Repeat for oh-my-openagent.json if you have one
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- sh -c \
+  "cat > /root/.config/opencode/oh-my-openagent.json << 'EOF'
+{ ...your oh-my-openagent.json content... }
+EOF"
 ```
 
 > **Tip**: It is easiest to write the files using a heredoc inside an `sh -c` exec, as shown above.
+>
+> **Warning**: `boxlite cp` can sometimes create a directory instead of a plain file at the destination (e.g. `opencode.json/`). If you use `boxlite cp`, verify the result with `ls -la` inside the Box and prefer the heredoc method if you hit this issue.
 
 ## Configure network isolation
 
@@ -327,17 +292,13 @@ Add only the exact API endpoints your agent needs. If you are unsure of a domain
 
 Agent API keys belong inside the Box environment. Fiber secrets must **never** be passed to the Box.
 
-Set agent keys using the BoxLite exec API or by recreating the Box with an updated `env` object.
+**Recommended approach**: If your local agent configuration already includes provider authentication (e.g. `~/.config/opencode/opencode.json` and `oh-my-openagent.json`), copy those config files into the Box instead of embedding raw API keys into environment variables or `/etc/profile`. This avoids leaking secrets in shell history and process listings.
 
-**Example: set `OPENAI_API_KEY` via exec**
+If you still need to set a key via environment, use the BoxLite exec API:
 
 ```bash
-curl -X POST http://localhost:8100/v1/default/boxes/BOX_ID/exec \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "sh",
-    "args": ["-c", "echo export OPENAI_API_KEY=sk-your-openai-key >> /etc/profile"]
-  }'
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- sh -c \
+  'echo export OPENAI_API_KEY=sk-your-openai-key >> /etc/profile'
 ```
 
 Replace `sk-your-openai-key` with your actual OpenAI API key.
@@ -370,6 +331,7 @@ fiber-pay agent serve \
   --agent opencode \
   --price 0.1 \
   --approve-all \
+  --host 0.0.0.0 \
   --boxlite-url http://localhost:8100 \
   --boxlite-box-id fiber-pay-agent \
   --port 8402
@@ -442,25 +404,18 @@ If you already created the Box without a disk, delete it and recreate it with `d
 If `fiber-pay agent serve` exits with an acpx error, install it inside the Box:
 
 ```bash
-curl -X POST http://localhost:8100/v1/default/boxes/BOX_ID/exec \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "npm",
-    "args": ["install", "-g", "acpx@0.5.3"]
-  }'
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- npm install -g acpx@0.5.3
 ```
 
 ### opencode fails with "Script not found 'acp'"
 
-This happens when the wrong platform binary is active (the glibc `opencode-linux-arm64` binary on Alpine). Fix it by manually copying the musl binary:
+This happens when the wrong platform binary is active (the glibc binary on Alpine). Fix it by manually copying the musl binary:
 
 ```bash
-curl -X POST http://localhost:8100/v1/default/boxes/BOX_ID/exec \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "sh",
-    "args": ["-c", "cp /usr/local/lib/node_modules/opencode-ai/node_modules/opencode-linux-arm64-musl/bin/opencode /usr/local/lib/node_modules/opencode-ai/bin/.opencode && chmod +x /usr/local/lib/node_modules/opencode-ai/bin/.opencode"]
-  }'
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- sh -c \
+  'MUSL_BIN=$(find /usr/local/lib/node_modules/opencode-ai/node_modules -name "opencode" -path "*musl*" | head -1) && \
+   cp "$MUSL_BIN" /usr/local/lib/node_modules/opencode-ai/bin/.opencode && \
+   chmod +x /usr/local/lib/node_modules/opencode-ai/bin/.opencode'
 ```
 
 ### Agent CLI not found
