@@ -25,8 +25,8 @@
  * `util-linux` (full-featured `unshare`) and create the required base directories.
  */
 
-import { createServer, type Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { createServer, type Server } from 'node:http';
 import type { Currency } from '@fiber-pay/sdk';
 import { createL402Middleware, FiberRpcClient } from '@fiber-pay/sdk/node';
 import cors from 'cors';
@@ -223,9 +223,7 @@ async function runAcpx(
   // Compute stable session paths.
   // Named sessions: deterministic path so successive requests share the same workspace.
   // Anonymous (no sessionId): random UUID path, cleaned up after the request.
-  const safeId = options.sessionId
-    ? sanitizeSessionId(options.sessionId)
-    : `anon-${randomUUID()}`;
+  const safeId = options.sessionId ? sanitizeSessionId(options.sessionId) : `anon-${randomUUID()}`;
   const sessionDir = `/workspace/sessions/${safeId}`;
   const sessionTmpDir = `/tmp/fiber-sessions/${safeId}`;
 

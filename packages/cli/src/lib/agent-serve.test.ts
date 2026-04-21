@@ -632,7 +632,7 @@ describe('runAgentServeCommand', () => {
         (call) => call[0] === 'sh' && (call[1] as string[])[1]?.includes('rm -rf'),
       );
       expect(rmCall).toBeDefined();
-      const rmScript = (rmCall![1] as string[])[1];
+      const rmScript = (rmCall?.[1] as string[])[1];
       expect(rmScript).toContain('/workspace/sessions/cleanup-test');
       expect(rmScript).toContain('/tmp/fiber-sessions/cleanup-test');
 
@@ -641,4 +641,3 @@ describe('runAgentServeCommand', () => {
     });
   });
 });
-
