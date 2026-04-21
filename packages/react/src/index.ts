@@ -1,6 +1,5 @@
 export type {
   BrowserNodeState,
-  FiberBrowserNode,
   FiberBrowserNodeConfig,
   FiberWasmFactory,
   NodeInfoResult,
@@ -9,8 +8,19 @@ export type {
 export {
   ChannelState,
   ConfigBuilder,
+  ckbHash,
+  ckbToShannons,
+  derivePublicKey,
+  FiberBrowserNode,
+  FiberRpcError,
   formatShannonsAsCkb,
+  fromHex,
   getLockBalanceShannons,
+  PasskeyCredentialProvider,
+  PasswordCredentialProvider,
+  RawKeyCredentialProvider,
+  shannonsToCkb,
+  toHex,
 } from '@fiber-pay/sdk/browser';
 export type { FiberPayQuickCardProps } from './fiber-pay-quick-card.js';
 export { FiberPayQuickCard } from './fiber-pay-quick-card.js';
