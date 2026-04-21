@@ -112,3 +112,5 @@ export type {
 } from '../types/rpc.js';
 export { ChannelState } from '../types/rpc.js';
 export { callJsonRpc, formatShannonsAsCkb, getLockBalanceShannons } from './ckb-balance.js';
+export { ckbHash, derivePublicKey } from '../security/crypto.js';
+export { ckbToShannons, fromHex, shannonsToCkb, toHex } from '../utils.js';
