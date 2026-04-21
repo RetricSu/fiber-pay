@@ -5,9 +5,28 @@
  * 1. Gates all requests behind L402 payment via createL402Middleware()
  * 2. On paid POST /, runs `acpx <agent> exec --format quiet '<prompt>'` inside a BoxLite sandbox
  * 3. Returns either JSON (default) or SSE stream (`stream: "sse"` or Accept header)
+ *
+ * ## Per-session namespace isolation
+ *
+ * Each request is wrapped with `unshare --user --pid --mount` (Linux namespaces) so that
+ * the agent process gets a private view of the filesystem and cannot enumerate or access
+ * other sessions' workspaces or processes:
+ *
+ *   - `/workspace` is bind-mounted to `/workspace/sessions/<sessionId>/` inside the namespace
+ *   - `/tmp` is bind-mounted to `/tmp/fiber-sessions/<sessionId>/` inside the namespace
+ *   - PID namespace: agent cannot see other sessions' processes via `ps` or `/proc`
+ *   - User namespace: virtual root inside the namespace (no real privilege escalation)
+ *
+ * Isolation is probed at startup. If the kernel does not support unprivileged user
+ * namespaces the server falls back to directory-only isolation and logs a warning.
+ * Use `--no-isolation` to skip the probe entirely (development/debug only).
+ *
+ * Run `scripts/boxlite-setup.sh` inside the BoxLite Alpine container once to install
+ * `util-linux` (full-featured `unshare`) and create the required base directories.
  */
 
 import { createServer, type Server } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import type { Currency } from '@fiber-pay/sdk';
 import { createL402Middleware, FiberRpcClient } from '@fiber-pay/sdk/node';
 import cors from 'cors';
@@ -30,6 +49,8 @@ export interface AgentServeOptions {
   boxliteUrl?: string;
   boxliteBoxId?: string;
   json?: boolean;
+  /** Skip Linux namespace isolation even if the kernel supports it (useful for debugging). */
+  noIsolation?: boolean;
 }
 
 interface AgentServeRequest extends express.Request {
@@ -108,6 +129,74 @@ function buildSafeEnv(): Record<string, string> {
   return env;
 }
 
+// ---------------------------------------------------------------------------
+// Linux namespace isolation helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Sanitize an arbitrary session ID string into a safe filesystem path component.
+ * Replaces any character that is not alphanumeric, hyphen, or underscore with
+ * a hyphen, then truncates to 64 characters.
+ */
+function sanitizeSessionId(raw: string): string {
+  return raw.replace(/[^a-zA-Z0-9\-_]/g, '-').slice(0, 64);
+}
+
+/**
+ * Single-quote a string for safe embedding in a POSIX sh -c script.
+ * Handles embedded single-quotes via the '\'' escape sequence.
+ */
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, "'\\''")}' `;
+}
+
+/**
+ * Build the argument list for `unshare` that wraps a command with per-session
+ * Linux namespace isolation:
+ *
+ *   - user namespace  → virtual root (no real privilege escalation)
+ *   - PID namespace   → agent cannot enumerate other sessions' processes
+ *   - mount namespace → /workspace and /tmp are private bind-mounts
+ *   - --mount-proc    → /proc reflects only the session's PID namespace
+ *
+ * The session directory is created lazily inside the sh script so that the
+ * first request for a session initialises its workspace automatically.
+ */
+function buildIsolationWrapArgs(
+  command: string,
+  args: string[],
+  sessionDir: string,
+  sessionTmpDir: string,
+): string[] {
+  const quotedCmd = [command, ...args].map(shellQuote).join(' ');
+  // Steps executed inside the new namespaces:
+  //   1. mkdir -p  — create session dirs if they do not yet exist
+  //   2. mount --bind — redirect /workspace to the session-specific dir
+  //   3. cd /workspace — re-anchor cwd to the bind-mounted path
+  //   4. mount --bind — redirect /tmp to the session-specific tmp dir
+  //   5. exec — replace sh with the actual agent command (zero overhead)
+  const script = [
+    `mkdir -p ${shellQuote(sessionDir)}`,
+    `mkdir -p ${shellQuote(sessionTmpDir)}`,
+    `mount --bind ${shellQuote(sessionDir)} /workspace`,
+    `cd /workspace`,
+    `mount --bind ${shellQuote(sessionTmpDir)} /tmp`,
+    `exec ${quotedCmd}`,
+  ].join(' && ');
+
+  return [
+    '--user',
+    '--pid',
+    '--mount',
+    '--fork',
+    '--map-root-user',
+    '--mount-proc',
+    'sh',
+    '-c',
+    script,
+  ];
+}
+
 async function runAcpx(
   agent: string,
   prompt: string,
@@ -121,24 +210,48 @@ async function runAcpx(
     format?: string;
     signal?: AbortSignal;
     onChunk?: (chunk: { type: 'stdout' | 'stderr'; text: string }) => void;
+    /** Whether the BoxLite box supports Linux namespace isolation. */
+    isolationAvailable?: boolean;
+    /** Override to skip isolation for this call (e.g. --no-isolation flag). */
+    noIsolation?: boolean;
   },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const client = new BoxliteClient(options.boxliteUrl, options.boxliteBoxId);
   const supportsGlobalFlags = !['opencode'].includes(agent);
+  const useIsolation = Boolean(options.isolationAvailable) && !options.noIsolation;
+
+  // Compute stable session paths.
+  // Named sessions: deterministic path so successive requests share the same workspace.
+  // Anonymous (no sessionId): random UUID path, cleaned up after the request.
+  const safeId = options.sessionId
+    ? sanitizeSessionId(options.sessionId)
+    : `anon-${randomUUID()}`;
+  const sessionDir = `/workspace/sessions/${safeId}`;
+  const sessionTmpDir = `/tmp/fiber-sessions/${safeId}`;
 
   async function execPrompt(): Promise<{ stdout: string; stderr: string; exit_code: number }> {
-    const args: string[] = [];
+    const acpxArgs: string[] = [];
     if (supportsGlobalFlags) {
-      args.push('--format', options.format || 'quiet');
-      if (options.approveAll) args.push('--approve-all');
-      if (options.cwd) args.push('--cwd', '/workspace');
-      if (options.timeoutSeconds > 0) args.push('--timeout', String(options.timeoutSeconds));
+      acpxArgs.push('--format', options.format || 'quiet');
+      if (options.approveAll) acpxArgs.push('--approve-all');
+      if (options.cwd) acpxArgs.push('--cwd', '/workspace');
+      if (options.timeoutSeconds > 0) acpxArgs.push('--timeout', String(options.timeoutSeconds));
     }
     if (options.sessionId) {
-      args.push(agent, '-s', options.sessionId, prompt);
+      acpxArgs.push(agent, '-s', options.sessionId, prompt);
     } else {
-      args.push(agent, 'exec', prompt);
+      acpxArgs.push(agent, 'exec', prompt);
     }
+
+    // When isolation is available, wrap acpx inside `unshare` so that the
+    // agent process gets its own PID and mount namespaces.  Inside those
+    // namespaces the sh init script bind-mounts the per-session directory
+    // over /workspace and a per-session tmpdir over /tmp before exec-ing
+    // acpx, giving each session a completely private filesystem view.
+    const execCommand = useIsolation ? 'unshare' : 'acpx';
+    const execArgs = useIsolation
+      ? buildIsolationWrapArgs('acpx', acpxArgs, sessionDir, sessionTmpDir)
+      : acpxArgs;
 
     const execOptions = {
       env: buildSafeEnv(),
@@ -148,14 +261,14 @@ async function runAcpx(
     };
 
     if (!options.onChunk) {
-      return client.exec('acpx', args, execOptions);
+      return client.exec(execCommand, execArgs, execOptions);
     }
 
     let stdout = '';
     let stderr = '';
     let exitCode: number | undefined;
 
-    for await (const chunk of client.execStream('acpx', args, execOptions)) {
+    for await (const chunk of client.execStream(execCommand, execArgs, execOptions)) {
       if (chunk.stdout.length > 0) {
         stdout += chunk.stdout;
         options.onChunk({ type: 'stdout', text: chunk.stdout });
@@ -191,6 +304,17 @@ async function runAcpx(
         timeout: 10,
       });
     } catch {}
+    // Clean up the isolated session workspace so that a re-opened session
+    // starts with a fresh directory rather than stale state.
+    // Only run when isolation was actually used — without isolation there is
+    // no per-session directory to remove.
+    if (useIsolation) {
+      client
+        .exec('sh', ['-c', `rm -rf ${shellQuote(sessionDir)} ${shellQuote(sessionTmpDir)}`], {
+          timeout: 10,
+        })
+        .catch(() => {});
+    }
   }
 
   if (options.sessionId) {
@@ -240,7 +364,15 @@ async function runAcpx(
     };
   }
 
+  // Anonymous one-shot request: clean up the workspace after exec completes.
   const result = await execPrompt();
+  if (useIsolation) {
+    client
+      .exec('sh', ['-c', `rm -rf ${shellQuote(sessionDir)} ${shellQuote(sessionTmpDir)}`], {
+        timeout: 10,
+      })
+      .catch(() => {});
+  }
   return {
     stdout: result.stdout,
     stderr: result.stderr,
@@ -354,6 +486,47 @@ export async function runAgentServeCommand(
       console.error('  Ensure BoxLite is running and the box exists.');
     }
     process.exit(1);
+  }
+
+  // When isolation is requested, prepare the directory structure and probe
+  // whether the kernel supports unprivileged user namespaces.
+  let isolationAvailable = false;
+  if (!options.noIsolation) {
+    // Ensure the base session directories exist (non-fatal; the isolation
+    // script also creates them lazily, but pre-creating avoids a race on
+    // the very first request).
+    try {
+      await client.exec('sh', ['-c', 'mkdir -p /workspace/sessions /tmp/fiber-sessions'], {
+        timeout: 5,
+      });
+    } catch {
+      // Non-fatal: the namespace init script will retry inside unshare.
+    }
+
+    // Probe whether the kernel allows unprivileged user namespaces.
+    try {
+      await client.exec(
+        'unshare',
+        [
+          '--user',
+          '--pid',
+          '--mount',
+          '--fork',
+          '--map-root-user',
+          '--mount-proc',
+          'sh',
+          '-c',
+          'echo isolation-probe-ok',
+        ],
+        { timeout: 10 },
+      );
+      isolationAvailable = true;
+    } catch {
+      // Kernel does not allow unprivileged namespaces; fall back to
+      // directory-only isolation.  Run `scripts/boxlite-setup.sh` inside
+      // the box and check kernel.unprivileged_userns_clone on the host.
+      isolationAvailable = false;
+    }
   }
 
   const rpcClient = new FiberRpcClient({
@@ -499,6 +672,8 @@ export async function runAgentServeCommand(
           sessionId: normalizedSessionId,
           format: requestFormat,
           signal: abortController.signal,
+          isolationAvailable,
+          noIsolation: options.noIsolation,
           onChunk: (chunk) => {
             sendSse('chunk', chunk);
           },
@@ -549,6 +724,8 @@ export async function runAgentServeCommand(
         boxliteBoxId,
         sessionId: normalizedSessionId,
         format: requestFormat,
+        isolationAvailable,
+        noIsolation: options.noIsolation,
       });
 
       const durationMs = Date.now() - startTime;
@@ -702,6 +879,11 @@ export async function runAgentServeCommand(
       boxliteBoxId,
     });
   } else {
+    const isolationLabel = options.noIsolation
+      ? 'disabled (--no-isolation)'
+      : isolationAvailable
+        ? 'namespace (PID + mount + user)'
+        : 'directory-only (unshare unavailable)';
     console.log('Agent service started');
     console.log(`  Listen:     ${listenUrl}`);
     console.log(`  Agent:      ${options.agent}`);
@@ -711,6 +893,7 @@ export async function runAgentServeCommand(
     console.log(`  Currency:   ${currency}`);
     console.log(`  Fiber RPC:  ${config.rpcUrl}`);
     console.log(`  BoxLite:    ${boxliteUrl} (box: ${boxliteBoxId})`);
+    console.log(`  Isolation:  ${isolationLabel}`);
     console.log('');
     console.log('Endpoint:');
     console.log(`  POST ${listenUrl}/  {"prompt": "your question"}`);

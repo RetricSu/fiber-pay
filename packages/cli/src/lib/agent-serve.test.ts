@@ -70,6 +70,10 @@ const baseOptions: AgentServeOptions = {
   rootKey: 'a'.repeat(64),
   boxliteUrl: 'http://localhost:8100',
   boxliteBoxId: 'test-box',
+  // Disable namespace isolation in the base test config so that preflight
+  // adds no extra exec calls and all existing call-index assertions remain
+  // stable.  Isolation-specific behaviour is tested in describe('isolation').
+  noIsolation: true,
 };
 
 function getTestServer() {
@@ -479,4 +483,162 @@ describe('runAgentServeCommand', () => {
       server?.close();
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Isolation-specific behaviour
+  // ---------------------------------------------------------------------------
+  describe('isolation', () => {
+    // Helper: start a server with isolation ENABLED (noIsolation: false).
+    // The caller must set up mockExec for the three preflight calls:
+    //   [0] acpx --version, [1] sh mkdir, [2] unshare probe
+    // Returns { server, url, serverPromise } so the test can stop the server.
+    async function startIsolatedServer(extraOptions: Partial<AgentServeOptions> = {}) {
+      mockCheckBoxExists.mockResolvedValue(true);
+      const serverPromise = runAgentServeCommand(baseConfig, {
+        ...baseOptions,
+        noIsolation: false, // override base default
+        ...extraOptions,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+      const server = getTestServer() as import('node:http').Server;
+      const addr = server.address() as import('node:net').AddressInfo;
+      const url = `http://${addr.address}:${addr.port}`;
+      return { server, url, serverPromise };
+    }
+
+    it('wraps acpx with unshare when namespace probe succeeds', async () => {
+      // Preflight: version OK, mkdir OK, unshare probe OK
+      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'isolation-probe-ok', stderr: '', exit_code: 0 });
+      // Agent exec (will be wrapped with unshare)
+      mockExec.mockResolvedValueOnce({ stdout: 'wrapped result', stderr: '', exit_code: 0 });
+      // Default fallback for any subsequent fire-and-forget cleanup calls
+      mockExec.mockResolvedValue({ stdout: '', stderr: '', exit_code: 0 });
+
+      const { server, url, serverPromise } = await startIsolatedServer();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'say hello' }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { response: string };
+      expect(body.response).toBe('wrapped result');
+
+      // The fourth exec call (index 3) should be the agent exec via 'unshare'
+      const agentExecCall = mockExec.mock.calls[3];
+      expect(agentExecCall[0]).toBe('unshare');
+      const unshareArgs = agentExecCall[1] as string[];
+      expect(unshareArgs).toContain('--user');
+      expect(unshareArgs).toContain('--pid');
+      expect(unshareArgs).toContain('--mount');
+      expect(unshareArgs).toContain('--fork');
+      expect(unshareArgs).toContain('--map-root-user');
+      expect(unshareArgs).toContain('--mount-proc');
+      // The sh -c script contains the acpx command and session dir
+      const shScript = unshareArgs[unshareArgs.length - 1] as string;
+      expect(shScript).toContain('acpx');
+      expect(shScript).toContain('/workspace/sessions/');
+
+      server.close();
+      serverPromise.catch(() => {});
+    });
+
+    it('falls back to direct acpx exec when namespace probe fails', async () => {
+      // Preflight: version OK, mkdir OK, unshare probe FAILS
+      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockRejectedValueOnce(new Error('operation not permitted'));
+      // Agent exec falls back to direct acpx
+      mockExec.mockResolvedValueOnce({ stdout: 'fallback result', stderr: '', exit_code: 0 });
+      // Default fallback for any subsequent fire-and-forget cleanup calls
+      mockExec.mockResolvedValue({ stdout: '', stderr: '', exit_code: 0 });
+
+      const { server, url, serverPromise } = await startIsolatedServer();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'say hello' }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { response: string };
+      expect(body.response).toBe('fallback result');
+
+      // No 'unshare' call should appear in the agent exec position
+      const agentExecCall = mockExec.mock.calls[3];
+      expect(agentExecCall[0]).toBe('acpx');
+
+      server.close();
+      serverPromise.catch(() => {});
+    });
+
+    it('skips mkdir and probe entirely when noIsolation is set', async () => {
+      // Only the version check should fire during preflight
+      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'direct result', stderr: '', exit_code: 0 });
+
+      // startTestServer uses baseOptions which has noIsolation: true
+      const { server, url } = await startTestServer();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'say hello' }),
+      });
+
+      expect(response.status).toBe(200);
+
+      // Exactly 2 exec calls total: version check + agent exec
+      expect(mockExec).toHaveBeenCalledTimes(2);
+
+      // No unshare calls at all
+      const commands = mockExec.mock.calls.map((c) => c[0] as string);
+      expect(commands).not.toContain('unshare');
+      expect(commands[1]).toBe('acpx');
+
+      server?.close();
+    });
+
+    it('session dir is cleaned up when a named session is closed', async () => {
+      // Preflight: version, mkdir, probe OK
+      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'isolation-probe-ok', stderr: '', exit_code: 0 });
+      // ensure, exec (fails so session gets closed), close
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // ensure
+      mockExec.mockRejectedValueOnce(new BoxliteError('EXEC_FAILED', 'timed out')); // exec throws
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // close
+      // Default fallback so the fire-and-forget rm -rf cleanup call succeeds
+      mockExec.mockResolvedValue({ stdout: '', stderr: '', exit_code: 0 });
+
+      const { server, url, serverPromise } = await startIsolatedServer();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'work', sessionId: 'cleanup-test' }),
+      });
+
+      expect(response.status).toBe(502);
+
+      // A fire-and-forget rm -rf should have been issued for the session dirs
+      await new Promise((r) => setTimeout(r, 20)); // let fire-and-forget settle
+      const rmCall = mockExec.mock.calls.find(
+        (call) => call[0] === 'sh' && (call[1] as string[])[1]?.includes('rm -rf'),
+      );
+      expect(rmCall).toBeDefined();
+      const rmScript = (rmCall![1] as string[])[1];
+      expect(rmScript).toContain('/workspace/sessions/cleanup-test');
+      expect(rmScript).toContain('/tmp/fiber-sessions/cleanup-test');
+
+      server.close();
+      serverPromise.catch(() => {});
+    });
+  });
 });
+
