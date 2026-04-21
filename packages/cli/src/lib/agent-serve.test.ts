@@ -279,8 +279,11 @@ describe('runAgentServeCommand', () => {
       expect(body.response).toBe('hello session');
 
       const ensureCall = mockExec.mock.calls[1];
-      const ensureArgs = ensureCall[1] as string[];
-      expect(ensureArgs).toEqual(['codex', 'sessions', 'ensure', '--name', 'my-session-123']);
+      expect(ensureCall[0]).toBe('sh');
+      const ensureScript = (ensureCall[1] as string[])[1];
+      expect(ensureScript).toContain('acpx');
+      expect(ensureScript).toContain('sessions ensure');
+      expect(ensureScript).toContain('my-session-123');
 
       const agentExecCall = mockExec.mock.calls[2];
       const execArgs = agentExecCall[1] as string[];
@@ -312,16 +315,14 @@ describe('runAgentServeCommand', () => {
       expect(body.response).toBe('hello retry');
 
       const closeCall = mockExec.mock.calls[3];
-      expect(closeCall[1] as string[]).toEqual(['codex', 'sessions', 'close', 'my-session-123']);
+      expect(closeCall[0]).toBe('sh');
+      expect((closeCall[1] as string[])[1]).toContain('sessions close');
+      expect((closeCall[1] as string[])[1]).toContain('my-session-123');
 
       const retryEnsureCall = mockExec.mock.calls[4];
-      expect(retryEnsureCall[1] as string[]).toEqual([
-        'codex',
-        'sessions',
-        'ensure',
-        '--name',
-        'my-session-123',
-      ]);
+      expect(retryEnsureCall[0]).toBe('sh');
+      expect((retryEnsureCall[1] as string[])[1]).toContain('sessions ensure');
+      expect((retryEnsureCall[1] as string[])[1]).toContain('my-session-123');
 
       const retryExecCall = mockExec.mock.calls[5];
       expect(retryExecCall[1] as string[]).toContain('-s');
@@ -347,8 +348,9 @@ describe('runAgentServeCommand', () => {
 
       const closeCall = mockExec.mock.calls.find(
         (call) =>
-          (call[1] as string[]).includes('close') &&
-          (call[1] as string[]).includes('my-session-123'),
+          call[0] === 'sh' &&
+          (call[1] as string[])[1]?.includes('sessions close') &&
+          (call[1] as string[])[1]?.includes('my-session-123'),
       );
       expect(closeCall).toBeDefined();
 
@@ -372,8 +374,9 @@ describe('runAgentServeCommand', () => {
 
       const closeCalls = mockExec.mock.calls.filter(
         (call) =>
-          (call[1] as string[]).includes('close') &&
-          (call[1] as string[]).includes('my-session-123'),
+          call[0] === 'sh' &&
+          (call[1] as string[])[1]?.includes('sessions close') &&
+          (call[1] as string[])[1]?.includes('my-session-123'),
       );
       expect(closeCalls.length).toBeGreaterThanOrEqual(1);
 

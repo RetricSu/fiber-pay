@@ -75,24 +75,66 @@ Isolation:  directory-only (unshare unavailable)  ← fallback
 Isolation:  disabled (--no-isolation)         ← debug flag used
 ```
 
-#### BoxLite container setup (Alpine Linux)
+#### Smooth upgrade checklist (for live deployments)
 
-Run `scripts/boxlite-setup.sh` once inside the BoxLite box to install `util-linux`
-(provides the full-featured `unshare`) and pre-create the session directories:
+When upgrading a running `agent serve` from a pre-namespace version to the
+namespace-isolated version, follow this order to avoid downtime or session loss:
+
+1. **Host sysctl pre-check**
+   ```bash
+   sysctl kernel.unprivileged_userns_clone   # must be 1
+   # Persist across reboots:
+   sudo sh -c "echo 'kernel.unprivileged_userns_clone = 1' >> /etc/sysctl.conf && sysctl -p"
+   ```
+
+2. **BoxLite container prep (non-destructive)**
+   Run the setup script **inside the running box** (do not recreate the container):
+   ```bash
+   # Via BoxLite exec API
+   boxlite --url http://localhost:8100 exec <box-id> -- sh -c "
+     apk add --no-cache util-linux
+     mkdir -p /workspace/sessions /tmp/fiber-sessions
+     chmod 755 /workspace/sessions
+     chmod 1777 /tmp/fiber-sessions
+   "
+   ```
+   Confirm the container outputs:
+   ```
+   === Setup complete — full namespace isolation AVAILABLE ===
+   ```
+
+3. **Build and restart the Node service**
+   ```bash
+   pnpm install && pnpm build
+   # Gracefully stop the old process
+   kill -TERM <old-pid>
+   # Start the new binary with the same flags
+   nohup node ./packages/cli/dist/cli.js agent serve ... > /tmp/agent-serve.log 2>&1 &
+   ```
+   Watch the startup log for:
+   ```
+   Isolation:  namespace (PID + mount + user)
+   ```
+
+4. **Rollback (if agent execution breaks)**
+   Append `--no-isolation` to the startup command and restart immediately:
+   ```bash
+   fiber-pay agent serve ... --no-isolation
+   ```
+   This falls back to the shared-run mode without destroying existing sessions.
+
+#### Known BoxLite exec API caveat
+
+BoxLite's `/exec` endpoint **silently ignores the `cwd` field** in the request
+body.  Because of this, the server cannot rely on `cwd: '/workspace'` and
+instead wraps every `acpx sessions ensure/close` call as:
 
 ```bash
-# Execute via BoxLite exec API or directly inside the container
-sh scripts/boxlite-setup.sh
+sh -c "cd /workspace && acpx <agent> sessions ensure --name <sessionId>"
 ```
 
-The script also probes whether the host kernel allows unprivileged user namespaces.
-If the probe fails, check on the host:
-
-```bash
-sysctl kernel.unprivileged_userns_clone   # must be 1
-# Set permanently:
-echo 'kernel.unprivileged_userns_clone = 1' >> /etc/sysctl.conf && sysctl -p
-```
+If you write custom automation around the BoxLite API, apply the same
+`cd /workspace && ...` pattern instead of passing `cwd`.
 
 #### Disabling isolation (debug only)
 
