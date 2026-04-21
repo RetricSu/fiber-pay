@@ -176,10 +176,18 @@ function buildIsolationWrapArgs(
   //   4. mount --bind — redirect /tmp to the session-specific tmp dir
   //   5. exec — replace sh with the actual agent command (zero overhead)
   const script = [
+    // In a user namespace the shell may reset HOME to /root (via getpwuid).
+    // Force it back to /home/boxlite so acpx finds sessions in the same
+    // directory that "sessions ensure" used outside the namespace.
+    `export HOME=${shellQuote('/home/boxlite')}`,
     `mkdir -p ${shellQuote(sessionDir)}`,
     `mkdir -p ${shellQuote(sessionTmpDir)}`,
+    // acpx searches for sessions from cwd upward (looking for .acpx/).
+    // Bind-mount the shared acpx state directly onto /workspace/.acpx so
+    // the agent can find its session after /workspace is rebound.
     `mount --bind ${shellQuote(sessionDir)} /workspace`,
     `cd /workspace`,
+    `mount --bind /home/boxlite/.acpx /workspace/.acpx 2>/dev/null || true`,
     `mount --bind ${shellQuote(sessionTmpDir)} /tmp`,
     `exec ${quotedCmd}`,
   ].join(' && ');
@@ -253,7 +261,6 @@ async function runAcpx(
 
     const execOptions = {
       env: buildSafeEnv(),
-      cwd: '/workspace',
       timeout: options.timeoutSeconds,
       signal: options.signal,
     };
@@ -296,11 +303,17 @@ async function runAcpx(
   async function closeSession(): Promise<void> {
     if (!options.sessionId || options.sessionId.startsWith('__')) return;
     try {
-      await client.exec('acpx', [agent, 'sessions', 'close', options.sessionId], {
-        env: buildSafeEnv(),
-        cwd: '/workspace',
-        timeout: 10,
-      });
+      await client.exec(
+        'sh',
+        [
+          '-c',
+          `cd /workspace && acpx ${shellQuote(agent)} sessions close ${shellQuote(options.sessionId)}`,
+        ],
+        {
+          env: buildSafeEnv(),
+          timeout: 10,
+        },
+      );
     } catch {}
     // Clean up the isolated session workspace so that a re-opened session
     // starts with a fresh directory rather than stale state.
@@ -317,11 +330,17 @@ async function runAcpx(
 
   if (options.sessionId) {
     try {
-      await client.exec('acpx', [agent, 'sessions', 'ensure', '--name', options.sessionId], {
-        env: buildSafeEnv(),
-        cwd: '/workspace',
-        timeout: 10,
-      });
+      await client.exec(
+        'sh',
+        [
+          '-c',
+          `cd /workspace && acpx ${shellQuote(agent)} sessions ensure --name ${shellQuote(options.sessionId)}`,
+        ],
+        {
+          env: buildSafeEnv(),
+          timeout: 10,
+        },
+      );
     } catch (err) {
       await closeSession();
       throw err;
@@ -338,11 +357,17 @@ async function runAcpx(
     if (result.exit_code !== 0 && !options.sessionId.startsWith('__')) {
       await closeSession();
       try {
-        await client.exec('acpx', [agent, 'sessions', 'ensure', '--name', options.sessionId], {
-          env: buildSafeEnv(),
-          cwd: '/workspace',
-          timeout: 10,
-        });
+        await client.exec(
+          'sh',
+          [
+            '-c',
+            `cd /workspace && acpx ${shellQuote(agent)} sessions ensure --name ${shellQuote(options.sessionId)}`,
+          ],
+          {
+            env: buildSafeEnv(),
+            timeout: 10,
+          },
+        );
       } catch (ensureErr) {
         await closeSession();
         throw ensureErr;
@@ -767,11 +792,13 @@ export async function runAgentServeCommand(
         try {
           const cleanupClient = new BoxliteClient(boxliteUrl, boxliteBoxId);
           await cleanupClient.exec(
-            'acpx',
-            [options.agent, 'sessions', 'close', normalizedSessionId],
+            'sh',
+            [
+              '-c',
+              `cd /workspace && acpx ${shellQuote(options.agent)} sessions close ${shellQuote(normalizedSessionId)}`,
+            ],
             {
               env: buildSafeEnv(),
-              cwd: '/workspace',
               timeout: 10,
             },
           );
