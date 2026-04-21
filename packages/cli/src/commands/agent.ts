@@ -20,7 +20,32 @@ export function createAgentCommand(config: CliConfig): Command {
     .option('--expiry <seconds>', 'Token expiry in seconds', '3600')
     .option('--cwd <path>', 'Working directory for agent execution')
     .option('--approve-all', 'Auto-approve all agent tool calls')
-    .option('--timeout <seconds>', 'Max agent execution time per request', '300')
+    .option('--timeout <seconds>', 'Max agent execution time per request', '3600')
+    .option(
+      '--no-isolation',
+      'Disable Linux namespace isolation (use only for debugging; isolation is on by default)',
+    )
+    .option('--format <fmt>', 'Agent output format passed to acpx (text, json, quiet)', 'quiet')
+    .option(
+      '--workspace-ttl <hours>',
+      'Hours to keep a named session workspace before auto-cleanup',
+      '24',
+    )
+    .option(
+      '--workspace-min-free-mb <mb>',
+      'Minimum free MB on /workspace required to accept a new session',
+      '100',
+    )
+    .option(
+      '--boxlite-url <url>',
+      'BoxLite API URL',
+      process.env.BOXLITE_URL || 'http://localhost:8100',
+    )
+    .option(
+      '--boxlite-box-id <id>',
+      'BoxLite box ID',
+      process.env.BOXLITE_BOX_ID || 'fiber-pay-agent',
+    )
     .option('--json')
     .addHelpText(
       'after',
@@ -41,7 +66,7 @@ export function createAgentCommand(config: CliConfig): Command {
     .argument('<url>', 'Agent service URL (e.g. http://host:8402)')
     .option('--prompt <text>', 'Prompt text to send')
     .option('--file <path>', 'Read prompt from file')
-    .option('--timeout <seconds>', 'Request timeout in seconds', '300')
+    .option('--timeout <seconds>', 'Request timeout in seconds', '3600')
     .option('--json')
     .action(async (url, options) => {
       await runAgentCallCommand(config, url, options);

@@ -37,12 +37,14 @@
     "@fiber-pay/runtime": "workspace:*",
     "@fiber-pay/sdk": "workspace:*",
     "commander": "^13.1.0",
+    "cors": "^2.8.6",
     "express": "^5.2.1",
     "http-proxy-middleware": "^3.0.5",
     "qrcode": "^1.5.4",
     "yaml": "^2.8.2"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/qrcode": "^1.5.6"
   }
