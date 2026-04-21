@@ -67,6 +67,7 @@ export {
   FiberRpcClient as BrowserRpcClient,
   FiberRpcError,
 } from '../rpc/client.js';
+export { ckbHash, derivePublicKey } from '../security/crypto.js';
 export type {
   AbandonChannelParams,
   AcceptChannelParams,
@@ -111,6 +112,5 @@ export type {
   UpdateChannelParams,
 } from '../types/rpc.js';
 export { ChannelState } from '../types/rpc.js';
-export { callJsonRpc, formatShannonsAsCkb, getLockBalanceShannons } from './ckb-balance.js';
-export { ckbHash, derivePublicKey } from '../security/crypto.js';
 export { ckbToShannons, fromHex, shannonsToCkb, toHex } from '../utils.js';
+export { callJsonRpc, formatShannonsAsCkb, getLockBalanceShannons } from './ckb-balance.js';
