@@ -510,11 +510,10 @@ describe('runAgentServeCommand', () => {
     }
 
     it('wraps acpx with unshare when namespace probe succeeds', async () => {
-      // Preflight: version OK, mkdir OK, unshare probe OK
       mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'isolation-probe-ok', stderr: '', exit_code: 0 });
-      // Agent exec (will be wrapped with unshare)
+      mockExec.mockResolvedValueOnce({ stdout: '1000000 50%', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'wrapped result', stderr: '', exit_code: 0 });
       // Default fallback for any subsequent fire-and-forget cleanup calls
       mockExec.mockResolvedValue({ stdout: '', stderr: '', exit_code: 0 });
@@ -531,8 +530,7 @@ describe('runAgentServeCommand', () => {
       const body = (await response.json()) as { response: string };
       expect(body.response).toBe('wrapped result');
 
-      // The fourth exec call (index 3) should be the agent exec via 'unshare'
-      const agentExecCall = mockExec.mock.calls[3];
+      const agentExecCall = mockExec.mock.calls[4];
       expect(agentExecCall[0]).toBe('unshare');
       const unshareArgs = agentExecCall[1] as string[];
       expect(unshareArgs).toContain('--user');
@@ -551,11 +549,10 @@ describe('runAgentServeCommand', () => {
     });
 
     it('falls back to direct acpx exec when namespace probe fails', async () => {
-      // Preflight: version OK, mkdir OK, unshare probe FAILS
       mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockRejectedValueOnce(new Error('operation not permitted'));
-      // Agent exec falls back to direct acpx
+      mockExec.mockResolvedValueOnce({ stdout: '1000000 50%', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'fallback result', stderr: '', exit_code: 0 });
       // Default fallback for any subsequent fire-and-forget cleanup calls
       mockExec.mockResolvedValue({ stdout: '', stderr: '', exit_code: 0 });
@@ -572,8 +569,7 @@ describe('runAgentServeCommand', () => {
       const body = (await response.json()) as { response: string };
       expect(body.response).toBe('fallback result');
 
-      // No 'unshare' call should appear in the agent exec position
-      const agentExecCall = mockExec.mock.calls[3];
+      const agentExecCall = mockExec.mock.calls[4];
       expect(agentExecCall[0]).toBe('acpx');
 
       server.close();
@@ -608,15 +604,13 @@ describe('runAgentServeCommand', () => {
     });
 
     it('session dir is cleaned up when a named session is closed', async () => {
-      // Preflight: version, mkdir, probe OK
       mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'isolation-probe-ok', stderr: '', exit_code: 0 });
-      // ensure, exec (fails so session gets closed), close
-      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // ensure
-      mockExec.mockRejectedValueOnce(new BoxliteError('EXEC_FAILED', 'timed out')); // exec throws
-      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // close
-      // Default fallback so the fire-and-forget rm -rf cleanup call succeeds
+      mockExec.mockResolvedValueOnce({ stdout: '1000000 50%', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockRejectedValueOnce(new BoxliteError('EXEC_FAILED', 'timed out'));
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValue({ stdout: '', stderr: '', exit_code: 0 });
 
       const { server, url, serverPromise } = await startIsolatedServer();

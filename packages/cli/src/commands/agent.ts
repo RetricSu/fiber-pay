@@ -27,6 +27,16 @@ export function createAgentCommand(config: CliConfig): Command {
     )
     .option('--format <fmt>', 'Agent output format passed to acpx (text, json, quiet)', 'quiet')
     .option(
+      '--workspace-ttl <hours>',
+      'Hours to keep a named session workspace before auto-cleanup',
+      '24',
+    )
+    .option(
+      '--workspace-min-free-mb <mb>',
+      'Minimum free MB on /workspace required to accept a new session',
+      '100',
+    )
+    .option(
       '--boxlite-url <url>',
       'BoxLite API URL',
       process.env.BOXLITE_URL || 'http://localhost:8100',

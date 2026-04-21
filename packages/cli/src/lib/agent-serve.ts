@@ -51,6 +51,10 @@ export interface AgentServeOptions {
   json?: boolean;
   /** Skip Linux namespace isolation even if the kernel supports it (useful for debugging). */
   noIsolation?: boolean;
+  /** How long (in hours) to keep a named session workspace before auto-cleanup. */
+  workspaceTtlHours?: string;
+  /** Minimum free space (in MB) required on /workspace before accepting a new session. */
+  workspaceMinFreeMb?: string;
 }
 
 interface AgentServeRequest extends express.Request {
@@ -148,6 +152,49 @@ function sanitizeSessionId(raw: string): string {
  */
 function shellQuote(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}' `;
+}
+
+/**
+ * Check available disk space on /workspace inside the BoxLite container.
+ * Returns available bytes and usage percentage, or null if the check fails.
+ */
+async function checkDiskSpace(
+  client: BoxliteClient,
+): Promise<{ availableBytes: number; usedPercent: number } | null> {
+  try {
+    const result = await client.exec(
+      'sh',
+      ['-c', "df -P /workspace | awk 'NR==2 {print $4, $5}'"],
+      { timeout: 5 },
+    );
+    if (result.exit_code !== 0) return null;
+    const [availStr, usedStr] = result.stdout.trim().split(/\s+/);
+    const availableBytes = parseInt(availStr, 10) * 1024; // df outputs 1K blocks
+    const usedPercent = parseInt(usedStr.replace('%', ''), 10);
+    if (Number.isNaN(availableBytes) || Number.isNaN(usedPercent)) return null;
+    return { availableBytes, usedPercent };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Clean up stale session workspaces based on mtime.
+ * Runs inside the BoxLite container so it has access to the actual paths.
+ */
+async function cleanupStaleWorkspaces(client: BoxliteClient, ttlHours: number): Promise<void> {
+  try {
+    await client.exec(
+      'sh',
+      [
+        '-c',
+        `find /workspace/sessions /tmp/fiber-sessions -mindepth 1 -maxdepth 1 -type d -mtime +${Math.floor(ttlHours)} -exec rm -rf {} + 2>/dev/null || true`,
+      ],
+      { timeout: 60 },
+    );
+  } catch {
+    // Best-effort cleanup; do not crash the server.
+  }
 }
 
 /**
@@ -514,6 +561,8 @@ export async function runAgentServeCommand(
   // When isolation is requested, prepare the directory structure and probe
   // whether the kernel supports unprivileged user namespaces.
   let isolationAvailable = false;
+  const workspaceMinFreeMb = parseInt(options.workspaceMinFreeMb || '100', 10);
+  const workspaceTtlHours = parseInt(options.workspaceTtlHours || '24', 10);
   if (!options.noIsolation) {
     // Ensure the base session directories exist (non-fatal; the isolation
     // script also creates them lazily, but pre-creating avoids a race on
@@ -549,6 +598,36 @@ export async function runAgentServeCommand(
       // directory-only isolation.  Run `scripts/boxlite-setup.sh` inside
       // the box and check kernel.unprivileged_userns_clone on the host.
       isolationAvailable = false;
+    }
+
+    // Disk-space guard: probe /workspace availability at startup.
+    const disk = await checkDiskSpace(client);
+    if (disk) {
+      const availableMb = Math.floor(disk.availableBytes / (1024 * 1024));
+      if (disk.usedPercent >= 95) {
+        const message = `Workspace disk is critically full (${disk.usedPercent}% used, ${availableMb} MB free).`;
+        if (asJson) {
+          printJsonError({
+            code: 'AGENT_SERVE_DISK_FULL',
+            message,
+            recoverable: true,
+            suggestion: 'Free up disk space on the BoxLite host or increase container storage.',
+          });
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
+      if (disk.usedPercent >= 90) {
+        console.warn(
+          `Warning: Workspace disk is nearly full (${disk.usedPercent}% used, ${availableMb} MB free).`,
+        );
+      }
+      if (availableMb < workspaceMinFreeMb) {
+        console.warn(
+          `Warning: Workspace free space (${availableMb} MB) is below --workspace-min-free-mb (${workspaceMinFreeMb} MB). New sessions may be rejected.`,
+        );
+      }
     }
   }
 
@@ -611,6 +690,22 @@ export async function runAgentServeCommand(
       currency,
     }),
   );
+
+  // Scheduled workspace cleanup with adaptive TTL.
+  let cleanupIntervalMs = 60 * 60 * 1000; // 1 hour
+  const cleanupTimer = setInterval(async () => {
+    const d = await checkDiskSpace(client);
+    const pressure = d
+      ? d.usedPercent >= 90 || d.availableBytes < workspaceMinFreeMb * 1024 * 1024
+      : false;
+    const ttl = pressure ? Math.min(1, workspaceTtlHours) : workspaceTtlHours;
+    if (pressure && cleanupIntervalMs > 10 * 60 * 1000) {
+      cleanupIntervalMs = 10 * 60 * 1000; // speed up to 10 min under pressure
+      clearInterval(cleanupTimer);
+      // restart with shorter interval (handled by outer scope, just clear here)
+    }
+    await cleanupStaleWorkspaces(client, ttl);
+  }, cleanupIntervalMs);
 
   // Agent endpoint
   app.post('/', async (req: AgentServeRequest, res) => {
@@ -928,6 +1023,7 @@ export async function runAgentServeCommand(
 
   // Graceful shutdown
   const shutdown = () => {
+    clearInterval(cleanupTimer);
     if (!asJson) {
       console.log('\nStopping agent service...');
     }
