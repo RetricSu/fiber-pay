@@ -239,6 +239,7 @@ describe('AgentProxy', () => {
         apiKeys: {
           anthropic: 'real-anthropic-key',
           openai: 'real-openai-key',
+          kimi: 'real-kimi-key',
         },
       });
 
@@ -246,8 +247,10 @@ describe('AgentProxy', () => {
 
       expect(env.ANTHROPIC_API_KEY).toBe(SHIM_PLACEHOLDER);
       expect(env.OPENAI_API_KEY).toBe(SHIM_PLACEHOLDER);
+      expect(env.KIMI_API_KEY).toBe(SHIM_PLACEHOLDER);
       expect(env.ANTHROPIC_BASE_URL).toBe('http://192.168.1.100:8111/anthropic');
       expect(env.OPENAI_BASE_URL).toBe('http://192.168.1.100:8111/openai');
+      expect(env.KIMI_BASE_URL).toBe('http://192.168.1.100:8111/kimi');
       expect(env.HTTP_PROXY).toBe('http://192.168.1.100:8111');
       expect(env.HTTPS_PROXY).toBe('http://192.168.1.100:8111');
       expect(env.HOME).toBe('/home/boxlite');
@@ -277,6 +280,7 @@ describe('AgentProxy', () => {
         apiKeys: {
           anthropic: 'real-key',
           openai: 'real-key',
+          kimi: 'real-key',
         },
       });
 
@@ -286,6 +290,7 @@ describe('AgentProxy', () => {
 
       expect(config.provider.anthropic.options.baseURL).toBe('http://10.0.0.1:8111/anthropic');
       expect(config.provider.openai.options.baseURL).toBe('http://10.0.0.1:8111/openai');
+      expect(config.provider['kimi-for-coding'].options.baseURL).toBe('http://10.0.0.1:8111/kimi');
     });
   });
 

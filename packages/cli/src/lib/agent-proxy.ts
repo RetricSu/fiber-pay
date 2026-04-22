@@ -42,6 +42,7 @@ export interface AgentProxyOptions {
   apiKeys: {
     anthropic?: string;
     openai?: string;
+    kimi?: string;
   };
 }
 
@@ -363,6 +364,11 @@ export class AgentProxy {
       env.OPENAI_BASE_URL = `${base}/openai`;
     }
 
+    if (this.options.apiKeys.kimi) {
+      env.KIMI_API_KEY = SHIM_PLACEHOLDER;
+      env.KIMI_BASE_URL = `${base}/kimi`;
+    }
+
     return env;
   }
 
@@ -383,6 +389,9 @@ export class AgentProxy {
     }
     if (this.options.apiKeys.openai) {
       providers.openai = { options: { baseURL: `${base}/openai` } };
+    }
+    if (this.options.apiKeys.kimi) {
+      providers['kimi-for-coding'] = { options: { baseURL: `${base}/kimi` } };
     }
 
     return JSON.stringify({ provider: providers }, null, 2);
@@ -462,6 +471,18 @@ export class AgentProxy {
         pathPrefix: '/openai',
         authHeader: this.options.apiKeys.openai
           ? { Authorization: `Bearer ${this.options.apiKeys.openai}` }
+          : {},
+      });
+      return;
+    }
+
+    // Kimi reverse proxy
+    if (url.startsWith('/kimi/') || url === '/kimi') {
+      await this.reverseProxy(req, res, {
+        upstream: 'https://api.kimi.com/coding/v1',
+        pathPrefix: '/kimi',
+        authHeader: this.options.apiKeys.kimi
+          ? { Authorization: `Bearer ${this.options.apiKeys.kimi}` }
           : {},
       });
       return;

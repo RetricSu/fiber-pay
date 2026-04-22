@@ -9,7 +9,7 @@ When you run `fiber-pay agent serve`, the process involves several layers of iso
 1. **Host Process (`fiber-pay agent serve`)**:
    - Manages the L402 payment gate via Fiber node RPC.
    - Starts a local Host-side Proxy (by default on port 8111) to intercept and filter outbound traffic from the container.
-   - Holds the real API keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`).
+   - Holds the real API keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `KIMI_API_KEY`).
 
 2. **BoxLite VM / Sandbox**:
    - Executes the actual AI agent via `acpx`.
@@ -45,7 +45,7 @@ This script will:
 By default, `agent serve` enables a host-side proxy (`--proxy`) that provides two critical security layers:
 
 ### API-Key Shim (Reverse Proxy)
-The container is injected with fake placeholder keys (`fp-shim-placeholder`). The agent directs its API requests to the proxy via injected `*_BASE_URL` variables. The proxy intercepts these requests, strips the fake headers, injects the real API keys from the host's environment, and securely forwards the requests to the upstream providers (e.g., Anthropic, OpenAI) over HTTPS.
+The container is injected with fake placeholder keys (`fp-shim-placeholder`). The agent directs its API requests to the proxy via injected `*_BASE_URL` variables. The proxy intercepts these requests, strips the fake headers, injects the real API keys from the host's environment, and securely forwards the requests to the upstream providers (e.g., Anthropic, OpenAI, Kimi) over HTTPS.
 
 ### Network Deny-List (Forward Proxy)
 The proxy acts as an explicit HTTP/HTTPS tunnel (`HTTP_PROXY`, `HTTPS_PROXY`). Any `CONNECT` requests from the container are resolved on the host. The proxy enforces a strict CIDR deny-list to block requests to:
@@ -62,33 +62,37 @@ Depending on the agent you are serving, the environment injection behaves slight
 ### OpenCode (`opencode`)
 OpenCode requires configuration via a `opencode.json` file rather than standard environment variables for its `baseURL`.
 
-When the proxy is enabled, `agent serve` automatically generates and injects the required proxy configuration directly into the container at `/home/boxlite/.config/opencode/opencode.json`. It configures the `baseURL` for supported providers (Anthropic, OpenAI) to point back to the host proxy.
+When the proxy is enabled, `agent serve` automatically generates and injects the required proxy configuration directly into the container at `/home/boxlite/.config/opencode/opencode.json`. It configures the `baseURL` for supported providers (Anthropic, OpenAI, Kimi Code) to point back to the host proxy.
 
 **To run OpenCode:**
 ```bash
 export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
+export KIMI_API_KEY="sk-kimi-..."
 fiber-pay agent serve --agent opencode ...
 ```
 No manual config mapping is required as long as the proxy is enabled.
 
-### Claude (`claude`) & Codex (`codex`)
+### Claude (`claude`), Codex (`codex`), and Kimi
 These agents respect standard base URL environment variables. The proxy automatically sets the following variables inside the container:
 - `OPENAI_API_KEY="fp-shim-placeholder"`
 - `OPENAI_BASE_URL="http://<HOST_IP>:<PROXY_PORT>/openai"`
 - `ANTHROPIC_API_KEY="fp-shim-placeholder"`
 - `ANTHROPIC_BASE_URL="http://<HOST_IP>:<PROXY_PORT>/anthropic"`
+- `KIMI_API_KEY="fp-shim-placeholder"`
+- `KIMI_BASE_URL="http://<HOST_IP>:<PROXY_PORT>/kimi"`
 - `HTTP_PROXY` and `HTTPS_PROXY`
 
-**To run Codex or Claude:**
+**To run with these providers:**
 ```bash
 export OPENAI_API_KEY="sk-..."       # For Codex
 export ANTHROPIC_API_KEY="sk-ant-..." # For Claude
+export KIMI_API_KEY="sk-kimi-..."    # For Kimi
 fiber-pay agent serve --agent codex ...
 ```
 
 ### Other Agents (Gemini, Pi, etc.)
-Currently, the proxy's API-key shim only supports reverse proxying for OpenAI and Anthropic. For agents utilizing Gemini or other providers, the proxy cannot inject the keys dynamically. 
+Currently, the proxy's API-key shim only supports reverse proxying for OpenAI, Anthropic, and Kimi Code. For agents utilizing Gemini or other providers, the proxy cannot inject the keys dynamically. 
 
 If you are using an agent that requires other API keys, you have two options:
 

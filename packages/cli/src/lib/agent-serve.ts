@@ -939,9 +939,10 @@ export async function runAgentServeCommand(
       }
       process.exit(1);
     }
-    const apiKeys: { anthropic?: string; openai?: string } = {};
+    const apiKeys: { anthropic?: string; openai?: string; kimi?: string } = {};
     if (process.env.ANTHROPIC_API_KEY) apiKeys.anthropic = process.env.ANTHROPIC_API_KEY;
     if (process.env.OPENAI_API_KEY) apiKeys.openai = process.env.OPENAI_API_KEY;
+    if (process.env.KIMI_API_KEY) apiKeys.kimi = process.env.KIMI_API_KEY;
 
     agentProxy = new AgentProxy({
       port: proxyPort,
