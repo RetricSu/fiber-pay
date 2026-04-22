@@ -111,6 +111,7 @@ export type {
   SendPaymentWithRouterParams,
   SettleInvoiceParams,
   ShutdownChannelParams,
+  TransportType,
   UpdateChannelParams,
 } from '../types/rpc.js';
 export { ChannelState } from '../types/rpc.js';

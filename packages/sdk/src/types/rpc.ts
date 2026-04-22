@@ -1,8 +1,8 @@
 /**
- * Fiber Network Node RPC Types (Fiber v0.8.0)
+ * Fiber Network Node RPC Types (Fiber v0.8.1)
  *
  * The types in this file are intended to align with the upstream RPC spec:
- * https://github.com/nervosnetwork/fiber/blob/v0.8.0/crates/fiber-lib/src/rpc/README.md
+ * https://github.com/nervosnetwork/fiber/blob/v0.8.1/crates/fiber-lib/src/rpc/README.md
  */
 
 // =============================================================================
@@ -26,6 +26,13 @@ export type PeerId = string;
 
 /** Multiaddr format for network addresses. */
 export type Multiaddr = string;
+
+/**
+ * Transport type for multiaddr filtering.
+ * Used by `connect_peer` to select addresses by transport protocol.
+ * @since Fiber v0.8.1
+ */
+export type TransportType = 'tcp' | 'ws' | 'wss';
 
 /** Channel ID (Hash256). */
 export type ChannelId = Hash256;
@@ -299,6 +306,13 @@ export interface ConnectPeerParams {
   address?: string;
   pubkey?: Pubkey;
   save?: boolean;
+  /**
+   * Filter peer addresses by transport type before random selection.
+   * Only applies when connecting via pubkey (no explicit address).
+   * Useful in WASM environments that only support WSS.
+   * @since Fiber v0.8.1
+   */
+  addr_type?: TransportType;
 }
 
 /** connect_peer returns null. */
