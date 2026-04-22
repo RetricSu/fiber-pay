@@ -17,6 +17,8 @@ export interface UseFiberNodeOptions {
   walletId?: string;
   nodeConfig?: FiberBrowserNodeConfig['nodeConfig'];
   wasmFactory?: FiberWasmFactory;
+  /** If false, suppresses initialization effects (like passkey detection). Default true. */
+  enabled?: boolean;
 }
 
 export interface UseFiberNodeResult {
@@ -115,6 +117,7 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
   );
 
   useEffect(() => {
+    if (options.enabled === false) return;
     let cancelled = false;
 
     PasskeyCredentialProvider.getSupportStatus()
@@ -144,7 +147,7 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
     return () => {
       cancelled = true;
     };
-  }, [walletId]);
+  }, [walletId, options.enabled]);
 
   const initNode = useCallback(
     (

@@ -13,9 +13,13 @@
  * ```
  */
 
-import { scriptToAddress } from '@fiber-pay/sdk';
 import type { FiberBrowserNode } from '@fiber-pay/sdk/browser';
-import { ConfigBuilder, formatShannonsAsCkb, getLockBalanceShannons } from '@fiber-pay/sdk/browser';
+import {
+  ConfigBuilder,
+  formatShannonsAsCkb,
+  getLockBalanceShannons,
+  scriptToAddress,
+} from '@fiber-pay/sdk/browser';
 import {
   type ComponentType,
   type CSSProperties,
@@ -302,6 +306,7 @@ function InfoRow({ label, value, copyable }: { label: string; value: string; cop
             onClick={() => copyToClipboard(value)}
             style={styles.copyButton}
             title="Copy to clipboard"
+            aria-label={`Copy ${label}`}
           >
             <CopyIcon />
           </button>
@@ -341,9 +346,11 @@ export function NodeInfoPanel(props: NodeInfoPanelProps) {
 
   // Attempt to dynamically import qrcode.react if needed
   useEffect(() => {
+    let cancelled = false;
     if (!showQrCode || renderQrCode) return;
     import('qrcode.react')
       .then((mod: Record<string, unknown>) => {
+        if (cancelled) return;
         const Comp = (mod.QRCodeSVG ?? mod.default) as
           | ComponentType<{
               value: string;
@@ -357,10 +364,16 @@ export function NodeInfoPanel(props: NodeInfoPanelProps) {
       .catch(() => {
         // qrcode.react not installed — silently skip
       });
+    return () => {
+      cancelled = true;
+    };
   }, [showQrCode, renderQrCode]);
 
+  const loadingRef = useRef(false);
+
   const loadStats = useCallback(async () => {
-    if (!node || node.state !== 'running') return;
+    if (!node || node.state !== 'running' || loadingRef.current) return;
+    loadingRef.current = true;
     setStatsLoading(true);
     setStatsError(null);
     try {
@@ -371,6 +384,7 @@ export function NodeInfoPanel(props: NodeInfoPanelProps) {
         setStatsError(e instanceof Error ? e.message : String(e));
       }
     } finally {
+      loadingRef.current = false;
       if (!cancelledRef.current) setStatsLoading(false);
     }
   }, [node, network]);
@@ -439,11 +453,18 @@ export function NodeInfoPanel(props: NodeInfoPanelProps) {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            style={{ animation: 'fpay-spin 1s linear infinite' }}
             role="img"
             aria-label="Loading"
           >
             <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            <animateTransform
+              attributeName="transform"
+              type="rotate"
+              from="0 12 12"
+              to="360 12 12"
+              dur="1s"
+              repeatCount="indefinite"
+            />
           </svg>
           Loading…
         </div>

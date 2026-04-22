@@ -20,7 +20,14 @@
  */
 
 import type { FiberBrowserNode, FiberWasmFactory, NodeInfoResult } from '@fiber-pay/sdk/browser';
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import type { UseFiberNodeOptions, UseFiberNodeResult } from './use-fiber-node.js';
 import { useFiberNode } from './use-fiber-node.js';
 
@@ -294,6 +301,7 @@ export function ConnectButton(props: ConnectButtonProps) {
     walletId,
     wasmFactory,
     nodeConfig,
+    enabled: !externalFiber,
   });
 
   const fiber = externalFiber ?? internalFiber;
@@ -318,6 +326,7 @@ export function ConnectButton(props: ConnectButtonProps) {
   // --- Local UI state -------------------------------------------------------
   const [isConnecting, setIsConnecting] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const effectiveIsStarting = isConnecting || isStarting;
@@ -357,10 +366,19 @@ export function ConnectButton(props: ConnectButtonProps) {
   // --- Actions --------------------------------------------------------------
 
   const resolvedStrategy =
-    strategy === 'auto' ? (rawKey ? 'rawKey' : password ? 'password' : 'passkey') : strategy;
+    strategy === 'auto'
+      ? hasPasskeyConfigured && isPasskeySupported
+        ? 'passkey'
+        : password
+          ? 'password'
+          : rawKey
+            ? 'rawKey'
+            : 'passkey'
+      : strategy;
 
   const handleConnect = useCallback(async () => {
     setIsConnecting(true);
+    setLocalError(null);
     try {
       switch (resolvedStrategy) {
         case 'password':
@@ -379,6 +397,10 @@ export function ConnectButton(props: ConnectButtonProps) {
           }
           break;
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setLocalError(msg);
+      onError?.(msg);
     } finally {
       setIsConnecting(false);
     }
@@ -393,19 +415,27 @@ export function ConnectButton(props: ConnectButtonProps) {
     startWithPasskey,
     startWithRawKey,
     createPasskeyAndStart,
+    onError,
   ]);
 
   const handleDisconnect = useCallback(async () => {
-    await stop();
-    setShowDropdown(false);
-  }, [stop]);
+    try {
+      await stop();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setLocalError(msg);
+      onError?.(msg);
+    } finally {
+      setShowDropdown(false);
+    }
+  }, [stop, onError]);
 
   // --- Render ---------------------------------------------------------------
 
-  const hasError = !!error;
+  const hasError = !!(error || localError);
 
   // Determine button content and behaviour
-  let buttonLabel: React.ReactNode;
+  let buttonLabel: ReactNode;
   let buttonOnClick: (() => void) | undefined;
   let buttonDisabled = false;
   let buttonStyle: CSSProperties;
@@ -461,7 +491,7 @@ export function ConnectButton(props: ConnectButtonProps) {
       {/* Error / passkey unavailability message */}
       {(hasError ||
         (!isPasskeySupported && passkeyUnavailableReason && resolvedStrategy === 'passkey')) && (
-        <span style={styles.errorText}>{error || passkeyUnavailableReason}</span>
+        <span style={styles.errorText}>{error || localError || passkeyUnavailableReason}</span>
       )}
 
       {isRunning ? (
