@@ -21,10 +21,6 @@ export function createAgentCommand(config: CliConfig): Command {
     .option('--cwd <path>', 'Working directory for agent execution')
     .option('--approve-all', 'Auto-approve all agent tool calls')
     .option('--timeout <seconds>', 'Max agent execution time per request', '3600')
-    .option(
-      '--no-isolation',
-      'Disable Linux namespace isolation (use only for debugging; isolation is on by default)',
-    )
     .option('--format <fmt>', 'Agent output format passed to acpx (text, json, quiet)', 'quiet')
     .option(
       '--workspace-ttl <hours>',

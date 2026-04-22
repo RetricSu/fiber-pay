@@ -17,9 +17,8 @@
  *   - PID namespace: agent cannot see other sessions' processes via `ps` or `/proc`
  *   - User namespace: virtual root inside the namespace (no real privilege escalation)
  *
- * Isolation is probed at startup. If the kernel does not support unprivileged user
- * namespaces the server falls back to directory-only isolation and logs a warning.
- * Use `--no-isolation` to skip the probe entirely (development/debug only).
+ * Isolation is mandatory and probed at startup. If the kernel does not support
+ * unprivileged namespaces, startup aborts immediately.
  *
  * Run `scripts/boxlite-setup.sh` inside the BoxLite Alpine container once to install
  * `util-linux` (full-featured `unshare`) and create the required base directories.
@@ -49,8 +48,6 @@ export interface AgentServeOptions {
   boxliteUrl?: string;
   boxliteBoxId?: string;
   json?: boolean;
-  /** Skip Linux namespace isolation even if the kernel supports it (useful for debugging). */
-  noIsolation?: boolean;
   /** How long (in hours) to keep a named session workspace before auto-cleanup. */
   workspaceTtlHours?: string;
   /** Minimum free space (in MB) required on /workspace before accepting a new session. */
@@ -265,15 +262,10 @@ async function runAcpx(
     format?: string;
     signal?: AbortSignal;
     onChunk?: (chunk: { type: 'stdout' | 'stderr'; text: string }) => void;
-    /** Whether the BoxLite box supports Linux namespace isolation. */
-    isolationAvailable?: boolean;
-    /** Override to skip isolation for this call (e.g. --no-isolation flag). */
-    noIsolation?: boolean;
   },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const client = new BoxliteClient(options.boxliteUrl, options.boxliteBoxId);
   const supportsGlobalFlags = !['opencode'].includes(agent);
-  const useIsolation = Boolean(options.isolationAvailable) && !options.noIsolation;
 
   // Compute stable session paths.
   // Named sessions: deterministic path so successive requests share the same workspace.
@@ -296,15 +288,13 @@ async function runAcpx(
       acpxArgs.push(agent, 'exec', prompt);
     }
 
-    // When isolation is available, wrap acpx inside `unshare` so that the
+    // Wrap acpx inside `unshare` so that the
     // agent process gets its own PID and mount namespaces.  Inside those
     // namespaces the sh init script bind-mounts the per-session directory
     // over /workspace and a per-session tmpdir over /tmp before exec-ing
     // acpx, giving each session a completely private filesystem view.
-    const execCommand = useIsolation ? 'unshare' : 'acpx';
-    const execArgs = useIsolation
-      ? buildIsolationWrapArgs('acpx', acpxArgs, sessionDir, sessionTmpDir)
-      : acpxArgs;
+    const execCommand = 'unshare';
+    const execArgs = buildIsolationWrapArgs('acpx', acpxArgs, sessionDir, sessionTmpDir);
 
     const execOptions = {
       env: buildSafeEnv(),
@@ -364,15 +354,11 @@ async function runAcpx(
     } catch {}
     // Clean up the isolated session workspace so that a re-opened session
     // starts with a fresh directory rather than stale state.
-    // Only run when isolation was actually used — without isolation there is
-    // no per-session directory to remove.
-    if (useIsolation) {
-      client
-        .exec('sh', ['-c', `rm -rf ${shellQuote(sessionDir)} ${shellQuote(sessionTmpDir)}`], {
-          timeout: 10,
-        })
-        .catch(() => {});
-    }
+    client
+      .exec('sh', ['-c', `rm -rf ${shellQuote(sessionDir)} ${shellQuote(sessionTmpDir)}`], {
+        timeout: 10,
+      })
+      .catch(() => {});
   }
 
   if (options.sessionId) {
@@ -436,13 +422,11 @@ async function runAcpx(
 
   // Anonymous one-shot request: clean up the workspace after exec completes.
   const result = await execPrompt();
-  if (useIsolation) {
-    client
-      .exec('sh', ['-c', `rm -rf ${shellQuote(sessionDir)} ${shellQuote(sessionTmpDir)}`], {
-        timeout: 10,
-      })
-      .catch(() => {});
-  }
+  client
+    .exec('sh', ['-c', `rm -rf ${shellQuote(sessionDir)} ${shellQuote(sessionTmpDir)}`], {
+      timeout: 10,
+    })
+    .catch(() => {});
   return {
     stdout: result.stdout,
     stderr: result.stderr,
@@ -558,76 +542,85 @@ export async function runAgentServeCommand(
     process.exit(1);
   }
 
-  // When isolation is requested, prepare the directory structure and probe
-  // whether the kernel supports unprivileged user namespaces.
-  let isolationAvailable = false;
+  // Isolation is mandatory: prepare directory structure and verify that
+  // unprivileged user namespaces work before serving traffic.
   const workspaceMinFreeMb = parseInt(options.workspaceMinFreeMb || '100', 10);
   const workspaceTtlHours = parseInt(options.workspaceTtlHours || '24', 10);
-  if (!options.noIsolation) {
-    // Ensure the base session directories exist (non-fatal; the isolation
-    // script also creates them lazily, but pre-creating avoids a race on
-    // the very first request).
-    try {
-      await client.exec('sh', ['-c', 'mkdir -p /workspace/sessions /tmp/fiber-sessions'], {
-        timeout: 5,
+  // Ensure the base session directories exist (non-fatal; the isolation
+  // script also creates them lazily, but pre-creating avoids a race on
+  // the very first request).
+  try {
+    await client.exec('sh', ['-c', 'mkdir -p /workspace/sessions /tmp/fiber-sessions'], {
+      timeout: 5,
+    });
+  } catch {
+    // Non-fatal: the namespace init script will retry inside unshare.
+  }
+
+  // Probe whether the kernel allows unprivileged user namespaces.
+  try {
+    await client.exec(
+      'unshare',
+      [
+        '--user',
+        '--pid',
+        '--mount',
+        '--fork',
+        '--map-root-user',
+        '--mount-proc',
+        'sh',
+        '-c',
+        'echo isolation-probe-ok',
+      ],
+      { timeout: 10 },
+    );
+  } catch {
+    const message =
+      'Linux namespace isolation probe failed. This deployment requires unshare-based isolation.';
+    if (asJson) {
+      printJsonError({
+        code: 'AGENT_SERVE_ISOLATION_REQUIRED',
+        message,
+        recoverable: true,
+        suggestion:
+          'Run scripts/boxlite-setup.sh in the Box and ensure kernel.unprivileged_userns_clone=1 on the host.',
       });
-    } catch {
-      // Non-fatal: the namespace init script will retry inside unshare.
-    }
-
-    // Probe whether the kernel allows unprivileged user namespaces.
-    try {
-      await client.exec(
-        'unshare',
-        [
-          '--user',
-          '--pid',
-          '--mount',
-          '--fork',
-          '--map-root-user',
-          '--mount-proc',
-          'sh',
-          '-c',
-          'echo isolation-probe-ok',
-        ],
-        { timeout: 10 },
+    } else {
+      console.error(`Error: ${message}`);
+      console.error(
+        '  Run scripts/boxlite-setup.sh in the Box and ensure kernel.unprivileged_userns_clone=1 on the host.',
       );
-      isolationAvailable = true;
-    } catch {
-      // Kernel does not allow unprivileged namespaces; fall back to
-      // directory-only isolation.  Run `scripts/boxlite-setup.sh` inside
-      // the box and check kernel.unprivileged_userns_clone on the host.
-      isolationAvailable = false;
     }
+    process.exit(1);
+  }
 
-    // Disk-space guard: probe /workspace availability at startup.
-    const disk = await checkDiskSpace(client);
-    if (disk) {
-      const availableMb = Math.floor(disk.availableBytes / (1024 * 1024));
-      if (disk.usedPercent >= 95) {
-        const message = `Workspace disk is critically full (${disk.usedPercent}% used, ${availableMb} MB free).`;
-        if (asJson) {
-          printJsonError({
-            code: 'AGENT_SERVE_DISK_FULL',
-            message,
-            recoverable: true,
-            suggestion: 'Free up disk space on the BoxLite host or increase container storage.',
-          });
-        } else {
-          console.error(`Error: ${message}`);
-        }
-        process.exit(1);
+  // Disk-space guard: probe /workspace availability at startup.
+  const disk = await checkDiskSpace(client);
+  if (disk) {
+    const availableMb = Math.floor(disk.availableBytes / (1024 * 1024));
+    if (disk.usedPercent >= 95) {
+      const message = `Workspace disk is critically full (${disk.usedPercent}% used, ${availableMb} MB free).`;
+      if (asJson) {
+        printJsonError({
+          code: 'AGENT_SERVE_DISK_FULL',
+          message,
+          recoverable: true,
+          suggestion: 'Free up disk space on the BoxLite host or increase container storage.',
+        });
+      } else {
+        console.error(`Error: ${message}`);
       }
-      if (disk.usedPercent >= 90) {
-        console.warn(
-          `Warning: Workspace disk is nearly full (${disk.usedPercent}% used, ${availableMb} MB free).`,
-        );
-      }
-      if (availableMb < workspaceMinFreeMb) {
-        console.warn(
-          `Warning: Workspace free space (${availableMb} MB) is below --workspace-min-free-mb (${workspaceMinFreeMb} MB). New sessions may be rejected.`,
-        );
-      }
+      process.exit(1);
+    }
+    if (disk.usedPercent >= 90) {
+      console.warn(
+        `Warning: Workspace disk is nearly full (${disk.usedPercent}% used, ${availableMb} MB free).`,
+      );
+    }
+    if (availableMb < workspaceMinFreeMb) {
+      console.warn(
+        `Warning: Workspace free space (${availableMb} MB) is below --workspace-min-free-mb (${workspaceMinFreeMb} MB). New sessions may be rejected.`,
+      );
     }
   }
 
@@ -790,8 +783,6 @@ export async function runAgentServeCommand(
           sessionId: normalizedSessionId,
           format: requestFormat,
           signal: abortController.signal,
-          isolationAvailable,
-          noIsolation: options.noIsolation,
           onChunk: (chunk) => {
             sendSse('chunk', chunk);
           },
@@ -842,8 +833,6 @@ export async function runAgentServeCommand(
         boxliteBoxId,
         sessionId: normalizedSessionId,
         format: requestFormat,
-        isolationAvailable,
-        noIsolation: options.noIsolation,
       });
 
       const durationMs = Date.now() - startTime;
@@ -999,11 +988,7 @@ export async function runAgentServeCommand(
       boxliteBoxId,
     });
   } else {
-    const isolationLabel = options.noIsolation
-      ? 'disabled (--no-isolation)'
-      : isolationAvailable
-        ? 'namespace (PID + mount + user)'
-        : 'directory-only (unshare unavailable)';
+    const isolationLabel = 'namespace (PID + mount + user)';
     console.log('Agent service started');
     console.log(`  Listen:     ${listenUrl}`);
     console.log(`  Agent:      ${options.agent}`);
