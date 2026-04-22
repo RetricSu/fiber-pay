@@ -5,6 +5,7 @@
 import { BinaryManager, type DownloadProgress, MigrationManager } from '@fiber-pay/node';
 import { getBinaryManagerInstallDirOrThrow, resolveBinaryPath } from './binary-path.js';
 import type { CliConfig } from './config.js';
+import { loadProfileConfig, saveProfileConfig } from './config.js';
 import { printJsonError, printJsonSuccess } from './format.js';
 import { normalizeMigrationCheck, replaceRawMigrateHint } from './migration-utils.js';
 import { isProcessRunning, readPidFile } from './pid.js';
@@ -166,6 +167,13 @@ export async function runNodeUpgradeCommand(
 
   // Step 7: Final status
   const newInfo = await binaryManager.getBinaryInfo();
+
+  if (resolvedBinary.source === 'profile-managed') {
+    const profile = loadProfileConfig(config.dataDir) || {};
+    profile.fiberVersion = newInfo.version;
+    saveProfileConfig(config.dataDir, profile);
+  }
+
   if (json) {
     printJsonSuccess({
       action: 'upgraded',

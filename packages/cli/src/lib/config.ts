@@ -19,6 +19,7 @@ export interface ProfileConfig {
   binaryPath?: string;
   keyPassword?: string;
   runtimeProxyListen?: string;
+  fiberVersion?: string;
 }
 
 export interface EffectiveConfigSources {
