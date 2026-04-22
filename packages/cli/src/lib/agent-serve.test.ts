@@ -70,6 +70,8 @@ const baseOptions: AgentServeOptions = {
   rootKey: 'a'.repeat(64),
   boxliteUrl: 'http://localhost:8100',
   boxliteBoxId: 'test-box',
+  proxyPort: '0',
+  proxyHostAddr: '127.0.0.1',
 };
 
 interface SessionEnvelope {
@@ -87,6 +89,7 @@ function queueSuccessfulIsolationPreflight() {
   mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
   mockExec.mockResolvedValueOnce({ stdout: 'isolation-probe-ok', stderr: '', exit_code: 0 });
   mockExec.mockResolvedValueOnce({ stdout: '1000000 50%', stderr: '', exit_code: 0 });
+  mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // opencode config
 }
 
 async function startTestServer(options: Partial<AgentServeOptions> = {}) {
@@ -618,7 +621,7 @@ describe('runAgentServeCommand', () => {
       expect(execOptions.env).toBeDefined();
       const env = execOptions.env as Record<string, string>;
       expect(env.FIBER_RPC_BISCUIT_TOKEN).toBeUndefined();
-      expect(env.OPENAI_API_KEY).toBe('openai-key');
+      expect(env.OPENAI_API_KEY).toBe('fp-shim-placeholder');
       expect(env.PATH).toBe('/usr/bin');
       expect(env.HOME).toBe('/home/boxlite');
 
@@ -705,6 +708,7 @@ describe('runAgentServeCommand', () => {
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'isolation-probe-ok', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: '1000000 50%', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // opencode config
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'wrapped result', stderr: '', exit_code: 0 });
       // Default fallback for any subsequent fire-and-forget cleanup calls
@@ -722,9 +726,9 @@ describe('runAgentServeCommand', () => {
       const body = (await response.json()) as { response: string };
       expect(body.response).toBe('wrapped result');
 
-      const agentExecCall = mockExec.mock.calls[4];
+      const agentExecCall = mockExec.mock.calls[5];
       expect(agentExecCall[0]).toBe('sh');
-      const unshareCall = mockExec.mock.calls[5];
+      const unshareCall = mockExec.mock.calls[6];
       expect(unshareCall[0]).toBe('unshare');
       const unshareArgs = unshareCall[1] as string[];
       expect(unshareArgs).toContain('--user');
@@ -757,6 +761,7 @@ describe('runAgentServeCommand', () => {
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'isolation-probe-ok', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: '1000000 50%', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // opencode config
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValue({ stdout: '', stderr: '', exit_code: 0 });

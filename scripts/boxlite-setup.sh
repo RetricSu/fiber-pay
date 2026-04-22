@@ -56,6 +56,10 @@ mkdir -p /tmp/fiber-sessions
 chmod 1777 /tmp/fiber-sessions
 echo "      /tmp/fiber-sessions       OK"
 
+mkdir -p /home/boxlite/.config/opencode
+chown -R boxlite:boxlite /home/boxlite/.config || true
+echo "      OpenCode proxy config dir OK"
+
 echo ""
 
 # ---------------------------------------------------------------------------

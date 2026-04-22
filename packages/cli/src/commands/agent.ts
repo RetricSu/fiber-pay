@@ -42,6 +42,16 @@ export function createAgentCommand(config: CliConfig): Command {
       'BoxLite box ID',
       process.env.BOXLITE_BOX_ID || 'fiber-pay-agent',
     )
+    .option(
+      '--proxy-port <port>',
+      'Host-side proxy port for API key shim and network filtering',
+      '8111',
+    )
+    .option(
+      '--proxy-host-addr <addr>',
+      'Address the container uses to reach the host (auto-detected if omitted)',
+    )
+    .option('--no-proxy', 'Disable host-side proxy (passes real API keys to container — INSECURE)')
     .option('--json')
     .addHelpText(
       'after',
