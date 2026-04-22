@@ -40,12 +40,13 @@ HTTP service that invokes a local AI agent via [acpx](https://github.com/opencla
 fiber-pay agent serve --agent opencode --price 0.1 --root-key <hex> --approve-all
 ```
 
-- Endpoint: `POST /` with `{"prompt": "...", "sessionId": "<optional>"}`
+- Endpoint: `POST /` with `{"prompt": "..."}` for a new session, or
+   `{"prompt": "...", "sessionId": "...", "sessionToken": "..."}` to resume.
 - Requires: `npm install -g acpx` and the target agent installed
 - Agents: any acpx-compatible — `codex`, `claude`, `opencode`, `gemini`, `pi`, etc.
-- Session mode: pass `sessionId` to maintain multi-turn context across requests
+- Session mode: server issues `sessionId` + `sessionToken`; clients must send both to resume.
 
-Key flags: `--port`, `--cwd`, `--timeout`, `--approve-all`, `--format`, `--no-isolation`.
+Key flags: `--port`, `--cwd`, `--timeout`, `--approve-all`, `--format`.
 
 ### Per-session Linux namespace isolation
 
@@ -53,7 +54,7 @@ Each paid session runs in an isolated Linux namespace so that opencode/codex/cla
 **cannot access other users' files or processes**:
 
 | Isolation layer | Mechanism | Effect |
-|----------------|-----------|--------|
+| --------------- | --------- | ------ |
 | File system | `mount --bind` per session | Agent sees `/workspace` = its own private dir only |
 | Process visibility | PID namespace | `ps`, `/proc` shows only the session's own processes |
 | Temp directory | `mount --bind /tmp` | `/tmp` is private to the session |
@@ -61,18 +62,16 @@ Each paid session runs in an isolated Linux namespace so that opencode/codex/cla
 
 Session workspace layout inside the BoxLite box:
 
-```
+```text
 /workspace/sessions/<sanitized-sessionId>/   ← bind-mounted as /workspace
 /tmp/fiber-sessions/<sanitized-sessionId>/   ← bind-mounted as /tmp
 ```
 
-Isolation is **automatic** — the server probes `unshare` capability at startup and
-prints the active mode:
+Isolation is **mandatory** — the server probes `unshare` capability at startup and
+only starts when namespace isolation is available:
 
-```
+```text
 Isolation:  namespace (PID + mount + user)   ← full isolation
-Isolation:  directory-only (unshare unavailable)  ← fallback
-Isolation:  disabled (--no-isolation)         ← debug flag used
 ```
 
 #### Smooth upgrade checklist (for live deployments)
@@ -81,6 +80,7 @@ When upgrading a running `agent serve` from a pre-namespace version to the
 namespace-isolated version, follow this order to avoid downtime or session loss:
 
 1. **Host sysctl pre-check**
+
    ```bash
    sysctl kernel.unprivileged_userns_clone   # must be 1
    # Persist across reboots:
@@ -89,6 +89,7 @@ namespace-isolated version, follow this order to avoid downtime or session loss:
 
 2. **BoxLite container prep (non-destructive)**
    Run the setup script **inside the running box** (do not recreate the container):
+
    ```bash
    # Via BoxLite exec API
    boxlite --url http://localhost:8100 exec <box-id> -- sh -c "
@@ -98,12 +99,15 @@ namespace-isolated version, follow this order to avoid downtime or session loss:
      chmod 1777 /tmp/fiber-sessions
    "
    ```
+
    Confirm the container outputs:
-   ```
+
+   ```text
    === Setup complete — full namespace isolation AVAILABLE ===
    ```
 
 3. **Build and restart the Node service**
+
    ```bash
    pnpm install && pnpm build
    # Gracefully stop the old process
@@ -111,17 +115,22 @@ namespace-isolated version, follow this order to avoid downtime or session loss:
    # Start the new binary with the same flags
    nohup node ./packages/cli/dist/cli.js agent serve ... > /tmp/agent-serve.log 2>&1 &
    ```
+
    Watch the startup log for:
-   ```
+
+   ```text
    Isolation:  namespace (PID + mount + user)
    ```
 
-4. **Rollback (if agent execution breaks)**
-   Append `--no-isolation` to the startup command and restart immediately:
+4. **If startup fails at isolation probe**
+   Treat this as a hard failure and fix the environment rather than relaxing security:
+
    ```bash
-   fiber-pay agent serve ... --no-isolation
+   # inside box
+   sh scripts/boxlite-setup.sh
+   # on host
+   sysctl kernel.unprivileged_userns_clone
    ```
-   This falls back to the shared-run mode without destroying existing sessions.
 
 #### Known BoxLite exec API caveat
 
@@ -135,15 +144,6 @@ sh -c "cd /workspace && acpx <agent> sessions ensure --name <sessionId>"
 
 If you write custom automation around the BoxLite API, apply the same
 `cd /workspace && ...` pattern instead of passing `cwd`.
-
-#### Disabling isolation (debug only)
-
-```bash
-fiber-pay agent serve --agent opencode --price 0.1 --root-key <hex> --no-isolation
-```
-
-`--no-isolation` skips both the `unshare` probe and the namespace wrapping. All
-sessions share the same `/workspace` — suitable only for local development.
 
 ## CLI: agent call
 
@@ -169,12 +169,13 @@ fiber-pay --profile user agent call http://127.0.0.1:8402 --prompt "say hello"
 
 ## Security model summary
 
-| Threat | `noIsolation` (off) | With namespace isolation |
-|--------|---------------------|--------------------------|
-| Agent reads another session's `/workspace` | ✅ possible | ❌ path not visible in mount namespace |
-| Agent sees other sessions' processes | ✅ via `ps` | ❌ PID namespace hides them |
-| Agent pollutes shared `/tmp` | ✅ possible | ❌ private `/tmp` per session |
-| Deliberate path traversal by known abs path | ✅ possible | ⚠️ same UID; use UUID session IDs |
+| Threat | With mandatory namespace isolation |
+| ------ | ---------------------------------- |
+| Agent reads another session's `/workspace` | ❌ path not visible in mount namespace |
+| Agent sees other sessions' processes | ❌ PID namespace hides them |
+| Agent pollutes shared `/tmp` | ❌ private `/tmp` per session |
+| Deliberate path traversal by known abs path | ⚠️ same UID; use UUID session IDs |
 
-Session IDs are sanitized and session dirs are named with the sanitized ID.
-For additional hardening, use random UUID values as session IDs from the client side.
+Session IDs are generated server-side and signed into a `sessionToken`.
+Resuming a session requires both fields (`sessionId` + `sessionToken`), and
+token validation rejects guessed or cross-user session reuse.

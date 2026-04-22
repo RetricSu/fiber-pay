@@ -5,6 +5,10 @@ This guide covers two features:
 1. **L402 SDK module** — build L402-gated APIs using `@fiber-pay/sdk/node`
 2. **CLI agent commands** — one-command paid AI agent services
 
+If you are integrating `agent serve` from an external frontend or app project,
+see [agent-serve-frontend-integration.md](./agent-serve-frontend-integration.md)
+for migration and security guidance.
+
 ## Prerequisites
 
 - A running Fiber node (`fiber-pay node start`)
@@ -93,8 +97,15 @@ fiber-pay agent serve \
 
 This starts an HTTP server on the default port `:8402` (configurable via `--port`) with:
 
-- `POST /` — accepts `{"prompt": "..."}`, invokes `acpx <agent> exec` and returns the response
+- `POST /` — accepts `{"prompt": "..."}` for a new server-issued session, or
+  `{"prompt": "...", "sessionId": "...", "sessionToken": "..."}` to resume
 - L402 payment gate — every request requires payment before the agent runs
+
+Session contract:
+
+- Server always returns `session: { id, token, created }` in JSON responses.
+- Reusing a session requires both `sessionId` and `sessionToken`.
+- Requests that send only one of the two fields are rejected.
 
 Supported agents: any [acpx-compatible agent](https://github.com/openclaw/acpx) — `codex`, `claude`, `opencode`, `gemini`, `pi`, etc.
 

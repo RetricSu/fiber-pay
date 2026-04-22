@@ -97,7 +97,7 @@ elif [ "$ns_user" = "1" ]; then
   echo "    Check kernel seccomp/AppArmor restrictions."
 else
   echo "=== Setup complete — namespace isolation NOT AVAILABLE ==="
-  echo "    Falling back to directory-only isolation."
+  echo "    fiber-pay agent serve will fail startup until this is fixed."
   echo ""
   echo "    To enable unprivileged user namespaces on the host:"
   echo "      sysctl -w kernel.unprivileged_userns_clone=1"

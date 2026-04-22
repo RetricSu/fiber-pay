@@ -17,15 +17,14 @@
  *   - PID namespace: agent cannot see other sessions' processes via `ps` or `/proc`
  *   - User namespace: virtual root inside the namespace (no real privilege escalation)
  *
- * Isolation is probed at startup. If the kernel does not support unprivileged user
- * namespaces the server falls back to directory-only isolation and logs a warning.
- * Use `--no-isolation` to skip the probe entirely (development/debug only).
+ * Isolation is mandatory and probed at startup. If the kernel does not support
+ * unprivileged namespaces, startup aborts immediately.
  *
  * Run `scripts/boxlite-setup.sh` inside the BoxLite Alpine container once to install
  * `util-linux` (full-featured `unshare`) and create the required base directories.
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { Currency } from '@fiber-pay/sdk';
 import { createL402Middleware, FiberRpcClient } from '@fiber-pay/sdk/node';
@@ -49,10 +48,10 @@ export interface AgentServeOptions {
   boxliteUrl?: string;
   boxliteBoxId?: string;
   json?: boolean;
-  /** Skip Linux namespace isolation even if the kernel supports it (useful for debugging). */
-  noIsolation?: boolean;
   /** How long (in hours) to keep a named session workspace before auto-cleanup. */
   workspaceTtlHours?: string;
+  /** Commander maps --workspace-ttl to workspaceTtl at runtime. */
+  workspaceTtl?: string;
   /** Minimum free space (in MB) required on /workspace before accepting a new session. */
   workspaceMinFreeMb?: string;
 }
@@ -61,6 +60,22 @@ interface AgentServeRequest extends express.Request {
   l402?: { valid?: boolean; paymentHash?: string; preimage?: string };
   _fiberPayRequestId?: number;
 }
+
+interface SessionCredentials {
+  sessionId: string;
+  sessionToken: string;
+  created: boolean;
+}
+
+interface SessionTokenPayload {
+  v: 1;
+  sid: string;
+  iat: number;
+  exp: number;
+}
+
+const SESSION_TOKEN_PREFIX = 'fpst';
+const MIN_SESSION_TOKEN_TTL_SECONDS = 300;
 
 function getClientIp(req: AgentServeRequest): string {
   const forwarded = req.headers['x-forwarded-for'];
@@ -152,6 +167,210 @@ function sanitizeSessionId(raw: string): string {
  */
 function shellQuote(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}' `;
+}
+
+function encodeBase64Url(data: Buffer | string): string {
+  return Buffer.from(data)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function decodeBase64Url(value: string): Buffer | undefined {
+  if (!/^[A-Za-z0-9\-_]+$/.test(value)) {
+    return undefined;
+  }
+
+  const padding = (4 - (value.length % 4)) % 4;
+  const base64 = `${value}${'='.repeat(padding)}`.replace(/-/g, '+').replace(/_/g, '/');
+
+  try {
+    return Buffer.from(base64, 'base64');
+  } catch {
+    return undefined;
+  }
+}
+
+function sessionTokenSignature(payloadPart: string, secret: Buffer): string {
+  return encodeBase64Url(createHmac('sha256', secret).update(payloadPart).digest());
+}
+
+function mintSessionToken(sessionId: string, secret: Buffer, ttlSeconds: number): string {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const payload: SessionTokenPayload = {
+    v: 1,
+    sid: sessionId,
+    iat: nowSeconds,
+    exp: nowSeconds + ttlSeconds,
+  };
+  const payloadPart = encodeBase64Url(JSON.stringify(payload));
+  const signaturePart = sessionTokenSignature(payloadPart, secret);
+  return `${SESSION_TOKEN_PREFIX}.${payloadPart}.${signaturePart}`;
+}
+
+function timingSafeStringEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function isValidSessionId(sessionId: string): boolean {
+  if (sessionId.length === 0 || sessionId.length > 64) {
+    return false;
+  }
+
+  return sanitizeSessionId(sessionId) === sessionId;
+}
+
+function verifySessionToken(
+  sessionId: string,
+  token: string,
+  secret: Buffer,
+): { valid: true } | { valid: false; reason: string } {
+  const parts = token.split('.');
+  if (parts.length !== 3 || parts[0] !== SESSION_TOKEN_PREFIX) {
+    return { valid: false, reason: 'Invalid session token format.' };
+  }
+
+  const payloadPart = parts[1] || '';
+  const signaturePart = parts[2] || '';
+  if (payloadPart.length === 0 || signaturePart.length === 0) {
+    return { valid: false, reason: 'Invalid session token format.' };
+  }
+
+  const expectedSignature = sessionTokenSignature(payloadPart, secret);
+  if (!timingSafeStringEqual(signaturePart, expectedSignature)) {
+    return { valid: false, reason: 'Session token signature mismatch.' };
+  }
+
+  const payloadBuffer = decodeBase64Url(payloadPart);
+  if (!payloadBuffer) {
+    return { valid: false, reason: 'Invalid session token payload encoding.' };
+  }
+
+  let payload: SessionTokenPayload;
+  try {
+    payload = JSON.parse(payloadBuffer.toString('utf-8')) as SessionTokenPayload;
+  } catch {
+    return { valid: false, reason: 'Invalid session token payload.' };
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (payload.v !== 1) {
+    return { valid: false, reason: 'Unsupported session token version.' };
+  }
+
+  if (typeof payload.sid !== 'string' || !isValidSessionId(payload.sid)) {
+    return { valid: false, reason: 'Invalid session token session id.' };
+  }
+
+  if (!Number.isInteger(payload.exp) || payload.exp <= nowSeconds) {
+    return { valid: false, reason: 'Session token expired.' };
+  }
+
+  if (!Number.isInteger(payload.iat) || payload.iat <= 0 || payload.iat > payload.exp) {
+    return { valid: false, reason: 'Invalid session token timestamps.' };
+  }
+
+  if (payload.sid !== sessionId) {
+    return { valid: false, reason: 'Session token does not match session id.' };
+  }
+
+  return { valid: true };
+}
+
+function parseRootKey(rootKey: string): Buffer | undefined {
+  const trimmed = rootKey.trim();
+  const normalized = trimmed.startsWith('0x') ? trimmed.slice(2) : trimmed;
+  if (!/^[a-fA-F0-9]{64}$/.test(normalized)) {
+    return undefined;
+  }
+  return Buffer.from(normalized, 'hex');
+}
+
+function deriveSessionSigningKey(rootKey: Buffer): Buffer {
+  // Use a dedicated context so session-token signing is separated from L402 macaroon key usage.
+  return createHmac('sha256', rootKey).update('fiber-pay:agent-serve:session-token:v1').digest();
+}
+
+function resolveSessionCredentials(
+  body: Record<string, unknown> | undefined,
+  secret: Buffer,
+  ttlSeconds: number,
+):
+  | { ok: true; credentials: SessionCredentials }
+  | { ok: false; status: number; code: string; message: string } {
+  const rawSessionId = body?.sessionId;
+  const rawSessionToken = body?.sessionToken;
+  const hasSessionId = rawSessionId !== undefined;
+  const hasSessionToken = rawSessionToken !== undefined;
+
+  if (!hasSessionId && !hasSessionToken) {
+    const sessionId = `sess-${randomUUID()}`;
+    return {
+      ok: true,
+      credentials: {
+        sessionId,
+        sessionToken: mintSessionToken(sessionId, secret, ttlSeconds),
+        created: true,
+      },
+    };
+  }
+
+  if (!hasSessionId || !hasSessionToken) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'SESSION_MISSING_TOKEN',
+      message: 'Both "sessionId" and "sessionToken" are required when resuming a session.',
+    };
+  }
+
+  if (typeof rawSessionId !== 'string' || typeof rawSessionToken !== 'string') {
+    return {
+      ok: false,
+      status: 400,
+      code: 'SESSION_INVALID_INPUT',
+      message: '"sessionId" and "sessionToken" must be strings.',
+    };
+  }
+
+  const sessionId = rawSessionId.trim();
+  const sessionToken = rawSessionToken.trim();
+
+  if (!isValidSessionId(sessionId)) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'SESSION_INVALID_ID',
+      message: 'Invalid "sessionId" format.',
+    };
+  }
+
+  const verifyResult = verifySessionToken(sessionId, sessionToken, secret);
+  if (!verifyResult.valid) {
+    return {
+      ok: false,
+      status: 403,
+      code: 'SESSION_INVALID_TOKEN',
+      message: verifyResult.reason,
+    };
+  }
+
+  return {
+    ok: true,
+    credentials: {
+      sessionId,
+      sessionToken,
+      created: false,
+    },
+  };
 }
 
 /**
@@ -265,15 +484,10 @@ async function runAcpx(
     format?: string;
     signal?: AbortSignal;
     onChunk?: (chunk: { type: 'stdout' | 'stderr'; text: string }) => void;
-    /** Whether the BoxLite box supports Linux namespace isolation. */
-    isolationAvailable?: boolean;
-    /** Override to skip isolation for this call (e.g. --no-isolation flag). */
-    noIsolation?: boolean;
   },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const client = new BoxliteClient(options.boxliteUrl, options.boxliteBoxId);
   const supportsGlobalFlags = !['opencode'].includes(agent);
-  const useIsolation = Boolean(options.isolationAvailable) && !options.noIsolation;
 
   // Compute stable session paths.
   // Named sessions: deterministic path so successive requests share the same workspace.
@@ -296,15 +510,13 @@ async function runAcpx(
       acpxArgs.push(agent, 'exec', prompt);
     }
 
-    // When isolation is available, wrap acpx inside `unshare` so that the
+    // Wrap acpx inside `unshare` so that the
     // agent process gets its own PID and mount namespaces.  Inside those
     // namespaces the sh init script bind-mounts the per-session directory
     // over /workspace and a per-session tmpdir over /tmp before exec-ing
     // acpx, giving each session a completely private filesystem view.
-    const execCommand = useIsolation ? 'unshare' : 'acpx';
-    const execArgs = useIsolation
-      ? buildIsolationWrapArgs('acpx', acpxArgs, sessionDir, sessionTmpDir)
-      : acpxArgs;
+    const execCommand = 'unshare';
+    const execArgs = buildIsolationWrapArgs('acpx', acpxArgs, sessionDir, sessionTmpDir);
 
     const execOptions = {
       env: buildSafeEnv(),
@@ -364,15 +576,11 @@ async function runAcpx(
     } catch {}
     // Clean up the isolated session workspace so that a re-opened session
     // starts with a fresh directory rather than stale state.
-    // Only run when isolation was actually used — without isolation there is
-    // no per-session directory to remove.
-    if (useIsolation) {
-      client
-        .exec('sh', ['-c', `rm -rf ${shellQuote(sessionDir)} ${shellQuote(sessionTmpDir)}`], {
-          timeout: 10,
-        })
-        .catch(() => {});
-    }
+    client
+      .exec('sh', ['-c', `rm -rf ${shellQuote(sessionDir)} ${shellQuote(sessionTmpDir)}`], {
+        timeout: 10,
+      })
+      .catch(() => {});
   }
 
   if (options.sessionId) {
@@ -436,13 +644,11 @@ async function runAcpx(
 
   // Anonymous one-shot request: clean up the workspace after exec completes.
   const result = await execPrompt();
-  if (useIsolation) {
-    client
-      .exec('sh', ['-c', `rm -rf ${shellQuote(sessionDir)} ${shellQuote(sessionTmpDir)}`], {
-        timeout: 10,
-      })
-      .catch(() => {});
-  }
+  client
+    .exec('sh', ['-c', `rm -rf ${shellQuote(sessionDir)} ${shellQuote(sessionTmpDir)}`], {
+      timeout: 10,
+    })
+    .catch(() => {});
   return {
     stdout: result.stdout,
     stderr: result.stderr,
@@ -475,6 +681,32 @@ export async function runAgentServeCommand(
   // the real ANTHROPIC_API_KEY never enters the sandbox at all. This removes
   // the prompt-injection key-exfiltration vector entirely.
   const rootKey = options.rootKey || process.env.L402_ROOT_KEY;
+
+  const parsePositiveIntegerOption = (
+    value: string | undefined,
+    defaultValue: string,
+    optionName: string,
+    errorCode: string,
+  ): number => {
+    const rawValue = (value ?? defaultValue).trim();
+    if (!/^[1-9]\d*$/.test(rawValue)) {
+      const message = `Invalid value for ${optionName}: expected a positive integer, received "${value ?? defaultValue}".`;
+      if (asJson) {
+        printJsonError({
+          code: errorCode,
+          message,
+          recoverable: true,
+          suggestion: `Provide ${optionName} as a positive integer value.`,
+        });
+      } else {
+        console.error(`Error: ${message}`);
+        console.error(`  Provide ${optionName} as a positive integer value.`);
+      }
+      process.exit(1);
+    }
+
+    return Number(rawValue);
+  };
 
   if (Number.isNaN(port) || port < 0 || port > 65535) {
     if (asJson) {
@@ -521,6 +753,37 @@ export async function runAgentServeCommand(
     process.exit(1);
   }
 
+  const sessionSecret = parseRootKey(rootKey);
+  if (!sessionSecret) {
+    if (asJson) {
+      printJsonError({
+        code: 'AGENT_SERVE_INVALID_ROOT_KEY',
+        message: 'Invalid root key format.',
+        recoverable: true,
+        suggestion: 'Provide a 32-byte hex key with --root-key (example: openssl rand -hex 32).',
+      });
+    } else {
+      console.error('Error: Invalid root key format.');
+      console.error('  Provide a 32-byte hex key with --root-key (example: openssl rand -hex 32).');
+    }
+    process.exit(1);
+  }
+  const sessionSigningSecret = deriveSessionSigningKey(sessionSecret);
+
+  const workspaceMinFreeMb = parsePositiveIntegerOption(
+    options.workspaceMinFreeMb,
+    '100',
+    '--workspace-min-free-mb',
+    'AGENT_SERVE_INVALID_WORKSPACE_MIN_FREE_MB',
+  );
+  const workspaceTtlOption = options.workspaceTtl ?? options.workspaceTtlHours;
+  const workspaceTtlHours = parsePositiveIntegerOption(
+    workspaceTtlOption,
+    '24',
+    '--workspace-ttl',
+    'AGENT_SERVE_INVALID_WORKSPACE_TTL',
+  );
+
   // Pre-flight: check BoxLite connectivity and acpx availability
   const client = new BoxliteClient(boxliteUrl, boxliteBoxId);
   try {
@@ -558,76 +821,84 @@ export async function runAgentServeCommand(
     process.exit(1);
   }
 
-  // When isolation is requested, prepare the directory structure and probe
-  // whether the kernel supports unprivileged user namespaces.
-  let isolationAvailable = false;
-  const workspaceMinFreeMb = parseInt(options.workspaceMinFreeMb || '100', 10);
-  const workspaceTtlHours = parseInt(options.workspaceTtlHours || '24', 10);
-  if (!options.noIsolation) {
-    // Ensure the base session directories exist (non-fatal; the isolation
-    // script also creates them lazily, but pre-creating avoids a race on
-    // the very first request).
-    try {
-      await client.exec('sh', ['-c', 'mkdir -p /workspace/sessions /tmp/fiber-sessions'], {
-        timeout: 5,
+  // Isolation is mandatory: prepare directory structure and verify that
+  // unprivileged user namespaces work before serving traffic.
+  const sessionTokenTtlSeconds = Math.max(MIN_SESSION_TOKEN_TTL_SECONDS, workspaceTtlHours * 3600);
+  // Ensure the base session directories exist (non-fatal; the isolation
+  // script also creates them lazily, but pre-creating avoids a race on
+  // the very first request).
+  try {
+    await client.exec('sh', ['-c', 'mkdir -p /workspace/sessions /tmp/fiber-sessions'], {
+      timeout: 5,
+    });
+  } catch {
+    // Non-fatal: the namespace init script will retry inside unshare.
+  }
+
+  // Probe whether the kernel allows unprivileged user namespaces.
+  try {
+    await client.exec(
+      'unshare',
+      [
+        '--user',
+        '--pid',
+        '--mount',
+        '--fork',
+        '--map-root-user',
+        '--mount-proc',
+        'sh',
+        '-c',
+        'echo isolation-probe-ok',
+      ],
+      { timeout: 10 },
+    );
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const message = `Linux namespace isolation probe failed: ${errorMsg}. This deployment requires unshare-based isolation.`;
+    if (asJson) {
+      printJsonError({
+        code: 'AGENT_SERVE_ISOLATION_REQUIRED',
+        message,
+        recoverable: true,
+        suggestion:
+          'Run scripts/boxlite-setup.sh in the Box and ensure kernel.unprivileged_userns_clone=1 on the host.',
       });
-    } catch {
-      // Non-fatal: the namespace init script will retry inside unshare.
-    }
-
-    // Probe whether the kernel allows unprivileged user namespaces.
-    try {
-      await client.exec(
-        'unshare',
-        [
-          '--user',
-          '--pid',
-          '--mount',
-          '--fork',
-          '--map-root-user',
-          '--mount-proc',
-          'sh',
-          '-c',
-          'echo isolation-probe-ok',
-        ],
-        { timeout: 10 },
+    } else {
+      console.error(`Error: ${message}`);
+      console.error(
+        '  Run scripts/boxlite-setup.sh in the Box and ensure kernel.unprivileged_userns_clone=1 on the host.',
       );
-      isolationAvailable = true;
-    } catch {
-      // Kernel does not allow unprivileged namespaces; fall back to
-      // directory-only isolation.  Run `scripts/boxlite-setup.sh` inside
-      // the box and check kernel.unprivileged_userns_clone on the host.
-      isolationAvailable = false;
     }
+    process.exit(1);
+  }
 
-    // Disk-space guard: probe /workspace availability at startup.
-    const disk = await checkDiskSpace(client);
-    if (disk) {
-      const availableMb = Math.floor(disk.availableBytes / (1024 * 1024));
-      if (disk.usedPercent >= 95) {
-        const message = `Workspace disk is critically full (${disk.usedPercent}% used, ${availableMb} MB free).`;
-        if (asJson) {
-          printJsonError({
-            code: 'AGENT_SERVE_DISK_FULL',
-            message,
-            recoverable: true,
-            suggestion: 'Free up disk space on the BoxLite host or increase container storage.',
-          });
-        } else {
-          console.error(`Error: ${message}`);
-        }
-        process.exit(1);
+  // Disk-space guard: probe /workspace availability at startup.
+  const disk = await checkDiskSpace(client);
+  if (disk) {
+    const availableMb = Math.floor(disk.availableBytes / (1024 * 1024));
+    if (disk.usedPercent >= 95) {
+      const message = `Workspace disk is critically full (${disk.usedPercent}% used, ${availableMb} MB free).`;
+      if (asJson) {
+        printJsonError({
+          code: 'AGENT_SERVE_DISK_FULL',
+          message,
+          recoverable: true,
+          suggestion: 'Free up disk space on the BoxLite host or increase container storage.',
+        });
+      } else {
+        console.error(`Error: ${message}`);
       }
-      if (disk.usedPercent >= 90) {
-        console.warn(
-          `Warning: Workspace disk is nearly full (${disk.usedPercent}% used, ${availableMb} MB free).`,
-        );
-      }
-      if (availableMb < workspaceMinFreeMb) {
-        console.warn(
-          `Warning: Workspace free space (${availableMb} MB) is below --workspace-min-free-mb (${workspaceMinFreeMb} MB). New sessions may be rejected.`,
-        );
-      }
+      process.exit(1);
+    }
+    if (disk.usedPercent >= 90) {
+      console.warn(
+        `Warning: Workspace disk is nearly full (${disk.usedPercent}% used, ${availableMb} MB free).`,
+      );
+    }
+    if (availableMb < workspaceMinFreeMb) {
+      console.warn(
+        `Warning: Workspace free space (${availableMb} MB) is below --workspace-min-free-mb (${workspaceMinFreeMb} MB). New sessions may be rejected.`,
+      );
     }
   }
 
@@ -711,7 +982,6 @@ export async function runAgentServeCommand(
   app.post('/', async (req: AgentServeRequest, res) => {
     const requestId = getRequestId(req);
     const prompt = req.body?.prompt;
-    const sessionId = req.body?.sessionId;
     const requestFormat = typeof req.body?.format === 'string' ? req.body.format : options.format;
     if (!prompt || typeof prompt !== 'string') {
       if (!asJson) {
@@ -723,14 +993,39 @@ export async function runAgentServeCommand(
       return;
     }
 
+    const sessionResolution = resolveSessionCredentials(
+      req.body as Record<string, unknown> | undefined,
+      sessionSigningSecret,
+      sessionTokenTtlSeconds,
+    );
+
+    if (!sessionResolution.ok) {
+      if (!asJson) {
+        console.log(
+          `[REQ ${requestId}] rejected session credentials code=${sessionResolution.code} status=${sessionResolution.status}`,
+        );
+      }
+      res.status(sessionResolution.status).json({
+        error: sessionResolution.message,
+        code: sessionResolution.code,
+      });
+      return;
+    }
+
+    const session = sessionResolution.credentials;
+    const responseSession = {
+      id: session.sessionId,
+      token: session.sessionToken,
+      created: session.created,
+    };
+
     const startTime = Date.now();
-    const normalizedSessionId = typeof sessionId === 'string' ? sessionId : undefined;
     const useSse = shouldUseSse(req);
 
     try {
       if (!asJson) {
         console.log(
-          `[REQ ${requestId}] payment accepted, invoking agent=${options.agent} promptChars=${prompt.length}${sessionId ? ` session=${sessionId}` : ''}${requestFormat && requestFormat !== 'quiet' ? ` format=${requestFormat}` : ''}${useSse ? ' stream=sse' : ''}`,
+          `[REQ ${requestId}] payment accepted, invoking agent=${options.agent} promptChars=${prompt.length} session=${session.sessionId}${requestFormat && requestFormat !== 'quiet' ? ` format=${requestFormat}` : ''}${useSse ? ' stream=sse' : ''}`,
         );
       }
 
@@ -787,11 +1082,9 @@ export async function runAgentServeCommand(
           timeoutSeconds,
           boxliteUrl,
           boxliteBoxId,
-          sessionId: normalizedSessionId,
+          sessionId: session.sessionId,
           format: requestFormat,
           signal: abortController.signal,
-          isolationAvailable,
-          noIsolation: options.noIsolation,
           onChunk: (chunk) => {
             sendSse('chunk', chunk);
           },
@@ -816,6 +1109,7 @@ export async function runAgentServeCommand(
             message: result.stderr.slice(0, 1000) || 'Agent execution failed.',
             agent: options.agent,
             durationMs,
+            session: responseSession,
           });
           closeStream();
           return;
@@ -828,6 +1122,7 @@ export async function runAgentServeCommand(
         sendSse('done', {
           durationMs,
           agent: options.agent,
+          session: responseSession,
           ...(requestFormat && requestFormat !== 'quiet' ? { format: requestFormat } : {}),
         });
         closeStream();
@@ -840,10 +1135,8 @@ export async function runAgentServeCommand(
         timeoutSeconds,
         boxliteUrl,
         boxliteBoxId,
-        sessionId: normalizedSessionId,
+        sessionId: session.sessionId,
         format: requestFormat,
-        isolationAvailable,
-        noIsolation: options.noIsolation,
       });
 
       const durationMs = Date.now() - startTime;
@@ -860,6 +1153,7 @@ export async function runAgentServeCommand(
           agent: options.agent,
           stderr: result.stderr.slice(0, 1000),
           durationMs,
+          session: responseSession,
         });
         return;
       }
@@ -874,6 +1168,7 @@ export async function runAgentServeCommand(
         response: result.stdout.trim(),
         agent: options.agent,
         durationMs,
+        session: responseSession,
         ...(requestFormat && requestFormat !== 'quiet' ? { format: requestFormat } : {}),
         ...(data !== undefined ? { data } : {}),
       });
@@ -883,14 +1178,14 @@ export async function runAgentServeCommand(
         console.log(`[REQ ${requestId}] agent execution error: ${message}`);
       }
 
-      if (typeof normalizedSessionId === 'string' && !normalizedSessionId.startsWith('__')) {
+      if (!session.sessionId.startsWith('__')) {
         try {
           const cleanupClient = new BoxliteClient(boxliteUrl, boxliteBoxId);
           await cleanupClient.exec(
             'sh',
             [
               '-c',
-              `cd /workspace && acpx ${shellQuote(options.agent)} sessions close ${shellQuote(normalizedSessionId)}`,
+              `cd /workspace && acpx ${shellQuote(options.agent)} sessions close ${shellQuote(session.sessionId)}`,
             ],
             {
               env: buildSafeEnv(),
@@ -918,6 +1213,7 @@ export async function runAgentServeCommand(
                 message: error.message.slice(0, 1000),
                 agent: options.agent,
                 durationMs: Date.now() - startTime,
+                session: responseSession,
               })}\n\n`,
             );
           } else {
@@ -928,6 +1224,7 @@ export async function runAgentServeCommand(
                 message: error instanceof Error ? error.message : String(error),
                 agent: options.agent,
                 durationMs: Date.now() - startTime,
+                session: responseSession,
               })}\n\n`,
             );
           }
@@ -943,6 +1240,7 @@ export async function runAgentServeCommand(
           agent: options.agent,
           stderr: error.message.slice(0, 1000),
           durationMs: Date.now() - startTime,
+          session: responseSession,
         });
         return;
       }
@@ -950,6 +1248,7 @@ export async function runAgentServeCommand(
       res.status(500).json({
         error: 'Internal server error.',
         message: error instanceof Error ? error.message : String(error),
+        session: responseSession,
       });
     }
   });
@@ -999,11 +1298,7 @@ export async function runAgentServeCommand(
       boxliteBoxId,
     });
   } else {
-    const isolationLabel = options.noIsolation
-      ? 'disabled (--no-isolation)'
-      : isolationAvailable
-        ? 'namespace (PID + mount + user)'
-        : 'directory-only (unshare unavailable)';
+    const isolationLabel = 'namespace (PID + mount + user)';
     console.log('Agent service started');
     console.log(`  Listen:     ${listenUrl}`);
     console.log(`  Agent:      ${options.agent}`);
