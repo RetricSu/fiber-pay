@@ -8,14 +8,17 @@ import {
   type PasskeySupportReason,
   type PasskeySupportStatus,
   PasswordCredentialProvider,
+  RawKeyCredentialProvider,
 } from '@fiber-pay/sdk/browser';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export interface UseFiberNodeOptions {
   network: 'testnet' | 'mainnet';
   walletId?: string;
   nodeConfig?: FiberBrowserNodeConfig['nodeConfig'];
   wasmFactory?: FiberWasmFactory;
+  /** If false, suppresses initialization effects (like passkey detection). Default true. */
+  enabled?: boolean;
 }
 
 export interface UseFiberNodeResult {
@@ -23,6 +26,10 @@ export interface UseFiberNodeResult {
   node: FiberBrowserNode | null;
   nodeInfo: NodeInfoResult | null;
   error: string | null;
+  /** Whether the node is currently starting (unlocking or starting state) */
+  isStarting: boolean;
+  /** Whether the node is running and ready for RPC calls */
+  isRunning: boolean;
   isPasskeySupported: boolean;
   passkeySupportReason: PasskeySupportReason | null;
   passkeyUnavailableReason: string | null;
@@ -30,6 +37,7 @@ export interface UseFiberNodeResult {
   startWithPassword: (password: string) => Promise<void>;
   createPasskeyAndStart: (username?: string) => Promise<void>;
   startWithPasskey: () => Promise<void>;
+  startWithRawKey: (fiberKey: Uint8Array, ckbSecretKey?: Uint8Array) => Promise<void>;
   stop: () => Promise<void>;
 }
 
@@ -109,6 +117,7 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
   );
 
   useEffect(() => {
+    if (options.enabled === false) return;
     let cancelled = false;
 
     PasskeyCredentialProvider.getSupportStatus()
@@ -138,10 +147,12 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
     return () => {
       cancelled = true;
     };
-  }, [walletId]);
+  }, [walletId, options.enabled]);
 
   const initNode = useCallback(
-    (credential: PasswordCredentialProvider | PasskeyCredentialProvider) => {
+    (
+      credential: PasswordCredentialProvider | PasskeyCredentialProvider | RawKeyCredentialProvider,
+    ) => {
       if (nodeRef.current) {
         const existingState = nodeRef.current.state;
         if (existingState !== 'idle' && existingState !== 'stopped' && existingState !== 'error') {
@@ -291,6 +302,29 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
     }
   }, [cleanupFailedStart, initNode, walletId]);
 
+  const startWithRawKey = useCallback(
+    async (fiberKey: Uint8Array, ckbSecretKey?: Uint8Array) => {
+      setError(null);
+      let node: FiberBrowserNode | null = null;
+
+      try {
+        const credential = new RawKeyCredentialProvider(fiberKey, ckbSecretKey, walletId);
+        node = initNode(credential);
+        const info = await node.start();
+        if (isMountedRef.current) {
+          setNodeInfo(info);
+        }
+      } catch (startError) {
+        if (isMountedRef.current) {
+          setError(asErrorMessage(startError));
+        }
+
+        await cleanupFailedStart(node);
+      }
+    },
+    [cleanupFailedStart, initNode, walletId],
+  );
+
   const stop = useCallback(async () => {
     const node = nodeRef.current;
     if (!node) {
@@ -315,11 +349,16 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
     }
   }, [detachNodeListeners]);
 
+  const isStarting = useMemo(() => state === 'unlocking' || state === 'starting', [state]);
+  const isRunning = useMemo(() => state === 'running', [state]);
+
   return {
     state,
     node: nodeRef.current,
     nodeInfo,
     error,
+    isStarting,
+    isRunning,
     isPasskeySupported,
     passkeySupportReason,
     passkeyUnavailableReason,
@@ -327,6 +366,7 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
     startWithPassword,
     createPasskeyAndStart,
     startWithPasskey,
+    startWithRawKey,
     stop,
   };
 }

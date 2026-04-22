@@ -42,7 +42,13 @@
     "@nervosnetwork/fiber-js": "~0.8.0"
   },
   "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0"
+    "react": "^18.0.0 || ^19.0.0",
+    "qrcode.react": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "qrcode.react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^18.0.0 || ^19.0.0"
