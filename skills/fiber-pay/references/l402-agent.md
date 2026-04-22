@@ -169,12 +169,15 @@ fiber-pay --profile user agent call http://127.0.0.1:8402 --prompt "say hello"
 
 ## Security model summary
 
-| Threat | With mandatory namespace isolation |
+| Threat | Mitigation |
 | ------ | ---------------------------------- |
 | Agent reads another session's `/workspace` | ❌ path not visible in mount namespace |
 | Agent sees other sessions' processes | ❌ PID namespace hides them |
 | Agent pollutes shared `/tmp` | ❌ private `/tmp` per session |
 | Deliberate path traversal by known abs path | ⚠️ same UID; use UUID session IDs |
+| Agent steals API key via `env`/`printenv` | ❌ proxy injects `fp-shim-placeholder` |
+| Agent accesses host internal services | ❌ proxy CONNECT tunnel deny-list |
+| Agent accesses private network (RFC-1918) | ❌ proxy CONNECT tunnel deny-list |
 
 Session IDs are generated server-side and signed into a `sessionToken`.
 Resuming a session requires both fields (`sessionId` + `sessionToken`), and

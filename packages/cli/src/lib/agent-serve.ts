@@ -30,6 +30,7 @@ import type { Currency } from '@fiber-pay/sdk';
 import { createL402Middleware, FiberRpcClient } from '@fiber-pay/sdk/node';
 import cors from 'cors';
 import express from 'express';
+import { AgentProxy } from './agent-proxy.js';
 import { BoxliteClient, BoxliteError } from './boxlite-client.js';
 import type { CliConfig } from './config.js';
 import { printJsonError, printJsonSuccess } from './format.js';
@@ -54,6 +55,12 @@ export interface AgentServeOptions {
   workspaceTtl?: string;
   /** Minimum free space (in MB) required on /workspace before accepting a new session. */
   workspaceMinFreeMb?: string;
+  /** Port for the host-side proxy (default 8111). */
+  proxyPort?: string;
+  /** Address the container uses to reach the host (auto-detected if omitted). */
+  proxyHostAddr?: string;
+  /** Set to false via --no-proxy to disable the host-side proxy. */
+  proxy?: boolean;
 }
 
 interface AgentServeRequest extends express.Request {
@@ -131,7 +138,23 @@ function parseJsonLines(text: string): Array<Record<string, unknown>> | undefine
   }
 }
 
-function buildSafeEnv(): Record<string, string> {
+/**
+ * Build the environment variables passed into the BoxLite container.
+ *
+ * When `proxyEnv` is provided (the proxy is enabled), the container receives:
+ *   - Fake API keys (`fp-shim-placeholder`)
+ *   - `*_BASE_URL` pointing to the host proxy's reverse-proxy routes
+ *   - `HTTP_PROXY` / `HTTPS_PROXY` for outbound traffic filtering
+ *
+ * When `proxyEnv` is `undefined` (proxy disabled via `--no-proxy`),
+ * real API keys from the host process are passed through directly.
+ */
+function buildSafeEnv(proxyEnv?: Record<string, string>): Record<string, string> {
+  if (proxyEnv) {
+    return { ...proxyEnv };
+  }
+
+  // Fallback: no proxy — pass real keys (less secure, for debugging only).
   const allowed = [
     'PATH',
     'OPENAI_API_KEY',
@@ -484,6 +507,7 @@ async function runAcpx(
     format?: string;
     signal?: AbortSignal;
     onChunk?: (chunk: { type: 'stdout' | 'stderr'; text: string }) => void;
+    proxyEnv?: Record<string, string>;
   },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const client = new BoxliteClient(options.boxliteUrl, options.boxliteBoxId);
@@ -519,7 +543,7 @@ async function runAcpx(
     const execArgs = buildIsolationWrapArgs('acpx', acpxArgs, sessionDir, sessionTmpDir);
 
     const execOptions = {
-      env: buildSafeEnv(),
+      env: buildSafeEnv(options.proxyEnv),
       timeout: options.timeoutSeconds,
       signal: options.signal,
     };
@@ -569,7 +593,7 @@ async function runAcpx(
           `cd /workspace && acpx ${shellQuote(agent)} sessions close ${shellQuote(options.sessionId)}`,
         ],
         {
-          env: buildSafeEnv(),
+          env: buildSafeEnv(options.proxyEnv),
           timeout: 10,
         },
       );
@@ -592,7 +616,7 @@ async function runAcpx(
           `cd /workspace && acpx ${shellQuote(agent)} sessions ensure --name ${shellQuote(options.sessionId)}`,
         ],
         {
-          env: buildSafeEnv(),
+          env: buildSafeEnv(options.proxyEnv),
           timeout: 10,
         },
       );
@@ -619,7 +643,7 @@ async function runAcpx(
             `cd /workspace && acpx ${shellQuote(agent)} sessions ensure --name ${shellQuote(options.sessionId)}`,
           ],
           {
-            env: buildSafeEnv(),
+            env: buildSafeEnv(options.proxyEnv),
             timeout: 10,
           },
         );
@@ -669,17 +693,6 @@ export async function runAgentServeCommand(
   const boxliteUrl = options.boxliteUrl || process.env.BOXLITE_URL || 'http://localhost:8100';
   const boxliteBoxId = options.boxliteBoxId || process.env.BOXLITE_BOX_ID || 'fiber-pay-agent';
 
-  // TODO: BoxLite only supports an allowNet whitelist, which is either too
-  // permissive or too restrictive for production agents that need to browse.
-  // A better long-term approach is to run a small host-side HTTP proxy that
-  // supports a denyList (e.g. localhost / 127.0.0.1 / RFC-1918 IPs) and let
-  // the Box route all outbound traffic through it. This gives us blacklist
-  // semantics for security while keeping the agent free to search and fetch.
-  //
-  // The same proxy can also act as an API-key shim: the Box talks to a
-  // host-local pseudo-provider endpoint (e.g. http://host:8101/v1/chat) so
-  // the real ANTHROPIC_API_KEY never enters the sandbox at all. This removes
-  // the prompt-injection key-exfiltration vector entirely.
   const rootKey = options.rootKey || process.env.L402_ROOT_KEY;
 
   const parsePositiveIntegerOption = (
@@ -902,6 +915,82 @@ export async function runAgentServeCommand(
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Host-side proxy: API-key shim + network deny-list
+  // ---------------------------------------------------------------------------
+  const proxyEnabled = options.proxy !== false;
+  let agentProxy: AgentProxy | undefined;
+  let proxyEnv: Record<string, string> | undefined;
+
+  if (proxyEnabled) {
+    const rawProxyPort = options.proxyPort || '8111';
+    const proxyPort = Number.parseInt(rawProxyPort, 10);
+    if (!Number.isInteger(proxyPort) || proxyPort < 0 || proxyPort > 65535) {
+      const message = `Invalid --proxy-port value "${rawProxyPort}". Expected an integer between 1 and 65535.`;
+      if (asJson) {
+        printJsonError({
+          code: 'AGENT_SERVE_INVALID_PROXY_PORT',
+          message,
+          recoverable: true,
+          suggestion: 'Provide a valid TCP port with --proxy-port, for example --proxy-port 8111.',
+        });
+      } else {
+        console.error(`Error: ${message}`);
+      }
+      process.exit(1);
+    }
+    const apiKeys: { anthropic?: string; openai?: string } = {};
+    if (process.env.ANTHROPIC_API_KEY) apiKeys.anthropic = process.env.ANTHROPIC_API_KEY;
+    if (process.env.OPENAI_API_KEY) apiKeys.openai = process.env.OPENAI_API_KEY;
+
+    agentProxy = new AgentProxy({
+      port: proxyPort,
+      hostAddr: options.proxyHostAddr,
+      apiKeys,
+    });
+
+    try {
+      await agentProxy.start();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const displayMessage = `Failed to start host-side proxy: ${message}`;
+      if (asJson) {
+        printJsonError({
+          code: 'AGENT_SERVE_PROXY_ERROR',
+          message: displayMessage,
+          recoverable: true,
+          suggestion: `Check if port ${proxyPort} is available, or use --proxy-port to choose a different port.`,
+        });
+      } else {
+        console.error(`Error: ${displayMessage}`);
+      }
+      process.exit(1);
+    }
+
+    proxyEnv = agentProxy.buildContainerEnv();
+
+    // Write OpenCode config file into the container.
+    // OpenCode reads BASE_URL from a config file, not from env vars.
+    try {
+      const opencodeConfig = agentProxy.buildOpenCodeConfig();
+      await client.exec(
+        'sh',
+        [
+          '-c',
+          `mkdir -p /home/boxlite/.config/opencode && cat > /home/boxlite/.config/opencode/opencode.json << 'PROXYEOF'
+${opencodeConfig}
+PROXYEOF`,
+        ],
+        { timeout: 5 },
+      );
+    } catch {
+      // Non-fatal: OpenCode config is best-effort.
+      if (!asJson) {
+        console.warn('Warning: Failed to write OpenCode proxy config into the container.');
+      }
+    }
+  }
+
   const rpcClient = new FiberRpcClient({
     url: config.rpcUrl,
     biscuitToken: config.rpcBiscuitToken,
@@ -1088,6 +1177,7 @@ export async function runAgentServeCommand(
           onChunk: (chunk) => {
             sendSse('chunk', chunk);
           },
+          proxyEnv,
         });
 
         if (clientClosed) {
@@ -1137,6 +1227,7 @@ export async function runAgentServeCommand(
         boxliteBoxId,
         sessionId: session.sessionId,
         format: requestFormat,
+        proxyEnv,
       });
 
       const durationMs = Date.now() - startTime;
@@ -1188,7 +1279,7 @@ export async function runAgentServeCommand(
               `cd /workspace && acpx ${shellQuote(options.agent)} sessions close ${shellQuote(session.sessionId)}`,
             ],
             {
-              env: buildSafeEnv(),
+              env: buildSafeEnv(proxyEnv),
               timeout: 10,
             },
           );
@@ -1296,6 +1387,7 @@ export async function runAgentServeCommand(
       fiberRpcUrl: config.rpcUrl,
       boxliteUrl,
       boxliteBoxId,
+      proxy: agentProxy ? { url: agentProxy.proxyUrl, port: agentProxy.listeningPort } : undefined,
     });
   } else {
     const isolationLabel = 'namespace (PID + mount + user)';
@@ -1309,6 +1401,11 @@ export async function runAgentServeCommand(
     console.log(`  Fiber RPC:  ${config.rpcUrl}`);
     console.log(`  BoxLite:    ${boxliteUrl} (box: ${boxliteBoxId})`);
     console.log(`  Isolation:  ${isolationLabel}`);
+    if (agentProxy) {
+      console.log(`  Proxy:      ${agentProxy.proxyUrl} (API key shim + network deny-list)`);
+    } else {
+      console.log('  Proxy:      disabled (--no-proxy)');
+    }
     console.log('');
     console.log('Endpoint:');
     console.log(`  POST ${listenUrl}/  {"prompt": "your question"}`);
@@ -1322,7 +1419,10 @@ export async function runAgentServeCommand(
     if (!asJson) {
       console.log('\nStopping agent service...');
     }
-    server.close(() => {
+    server.close(async () => {
+      if (agentProxy) {
+        await agentProxy.stop();
+      }
       if (asJson) {
         printJsonSuccess({ status: 'stopped' });
       } else {
