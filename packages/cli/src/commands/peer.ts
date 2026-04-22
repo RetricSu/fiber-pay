@@ -85,13 +85,21 @@ export function createPeerCommand(config: CliConfig): Command {
     .command('connect')
     .argument('<multiaddrOrPubkey>')
     .option('--address <addr>', 'Optional peer address (multiaddr) to connect to')
+    .option('--addr-type <type>', 'Filter peer addresses by transport type (tcp, ws, wss)')
     .option('--timeout <sec>', 'Wait timeout for peer to appear in peer list', '8')
     .option('--json')
     .action(async (input, options) => {
       const rpc = await createReadyRpcClient(config);
       const trimmedInput = input.trim();
 
-      let connectParams: { address: string } | { pubkey: HexString };
+      const addrType = options.addrType as 'tcp' | 'ws' | 'wss' | undefined;
+      if (addrType && !['tcp', 'ws', 'wss'].includes(addrType)) {
+        throw new Error('Invalid --addr-type: expected one of tcp, ws, wss');
+      }
+
+      let connectParams:
+        | { address: string }
+        | { pubkey: HexString; addr_type?: 'tcp' | 'ws' | 'wss' };
       let targetForWait: string;
 
       if (isPubkey(trimmedInput)) {
@@ -101,11 +109,16 @@ export function createPeerCommand(config: CliConfig): Command {
           if (!address.startsWith('/')) {
             throw new Error('Invalid --address: expected a multiaddr starting with "/"');
           }
+          if (addrType) {
+            throw new Error(
+              'Cannot use --addr-type together with --address (transport is already specified by the address)',
+            );
+          }
           const multiaddr = await buildMultiaddrFromNodeId(address, normalized);
           connectParams = { address: multiaddr };
           targetForWait = normalized;
         } else {
-          connectParams = { pubkey: normalized };
+          connectParams = { pubkey: normalized, ...(addrType && { addr_type: addrType }) };
           targetForWait = normalized;
         }
       } else if (trimmedInput.startsWith('/')) {
@@ -118,6 +131,9 @@ export function createPeerCommand(config: CliConfig): Command {
         }
         if (options.address) {
           throw new Error('Cannot use --address when the first argument is already a multiaddr');
+        }
+        if (addrType) {
+          throw new Error('Cannot use --addr-type when connecting with a full multiaddr');
         }
         connectParams = { address: trimmedInput };
         targetForWait = peerId;
