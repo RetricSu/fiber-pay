@@ -806,9 +806,9 @@ export async function runAgentServeCommand(
       ],
       { timeout: 10 },
     );
-  } catch {
-    const message =
-      'Linux namespace isolation probe failed. This deployment requires unshare-based isolation.';
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const message = `Linux namespace isolation probe failed: ${errorMsg}. This deployment requires unshare-based isolation.`;
     if (asJson) {
       printJsonError({
         code: 'AGENT_SERVE_ISOLATION_REQUIRED',
