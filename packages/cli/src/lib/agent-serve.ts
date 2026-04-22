@@ -50,6 +50,8 @@ export interface AgentServeOptions {
   json?: boolean;
   /** How long (in hours) to keep a named session workspace before auto-cleanup. */
   workspaceTtlHours?: string;
+  /** Commander maps --workspace-ttl to workspaceTtl at runtime. */
+  workspaceTtl?: string;
   /** Minimum free space (in MB) required on /workspace before accepting a new session. */
   workspaceMinFreeMb?: string;
 }
@@ -290,6 +292,11 @@ function parseRootKey(rootKey: string): Buffer | undefined {
     return undefined;
   }
   return Buffer.from(normalized, 'hex');
+}
+
+function deriveSessionSigningKey(rootKey: Buffer): Buffer {
+  // Use a dedicated context so session-token signing is separated from L402 macaroon key usage.
+  return createHmac('sha256', rootKey).update('fiber-pay:agent-serve:session-token:v1').digest();
 }
 
 function resolveSessionCredentials(
@@ -675,6 +682,32 @@ export async function runAgentServeCommand(
   // the prompt-injection key-exfiltration vector entirely.
   const rootKey = options.rootKey || process.env.L402_ROOT_KEY;
 
+  const parsePositiveIntegerOption = (
+    value: string | undefined,
+    defaultValue: string,
+    optionName: string,
+    errorCode: string,
+  ): number => {
+    const rawValue = (value ?? defaultValue).trim();
+    if (!/^[1-9]\d*$/.test(rawValue)) {
+      const message = `Invalid value for ${optionName}: expected a positive integer, received "${value ?? defaultValue}".`;
+      if (asJson) {
+        printJsonError({
+          code: errorCode,
+          message,
+          recoverable: true,
+          suggestion: `Provide ${optionName} as a positive integer value.`,
+        });
+      } else {
+        console.error(`Error: ${message}`);
+        console.error(`  Provide ${optionName} as a positive integer value.`);
+      }
+      process.exit(1);
+    }
+
+    return Number(rawValue);
+  };
+
   if (Number.isNaN(port) || port < 0 || port > 65535) {
     if (asJson) {
       printJsonError({
@@ -735,6 +768,21 @@ export async function runAgentServeCommand(
     }
     process.exit(1);
   }
+  const sessionSigningSecret = deriveSessionSigningKey(sessionSecret);
+
+  const workspaceMinFreeMb = parsePositiveIntegerOption(
+    options.workspaceMinFreeMb,
+    '100',
+    '--workspace-min-free-mb',
+    'AGENT_SERVE_INVALID_WORKSPACE_MIN_FREE_MB',
+  );
+  const workspaceTtlOption = options.workspaceTtl ?? options.workspaceTtlHours;
+  const workspaceTtlHours = parsePositiveIntegerOption(
+    workspaceTtlOption,
+    '24',
+    '--workspace-ttl',
+    'AGENT_SERVE_INVALID_WORKSPACE_TTL',
+  );
 
   // Pre-flight: check BoxLite connectivity and acpx availability
   const client = new BoxliteClient(boxliteUrl, boxliteBoxId);
@@ -775,8 +823,6 @@ export async function runAgentServeCommand(
 
   // Isolation is mandatory: prepare directory structure and verify that
   // unprivileged user namespaces work before serving traffic.
-  const workspaceMinFreeMb = parseInt(options.workspaceMinFreeMb || '100', 10);
-  const workspaceTtlHours = parseInt(options.workspaceTtlHours || '24', 10);
   const sessionTokenTtlSeconds = Math.max(MIN_SESSION_TOKEN_TTL_SECONDS, workspaceTtlHours * 3600);
   // Ensure the base session directories exist (non-fatal; the isolation
   // script also creates them lazily, but pre-creating avoids a race on
@@ -949,7 +995,7 @@ export async function runAgentServeCommand(
 
     const sessionResolution = resolveSessionCredentials(
       req.body as Record<string, unknown> | undefined,
-      sessionSecret,
+      sessionSigningSecret,
       sessionTokenTtlSeconds,
     );
 
