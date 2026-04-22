@@ -43,6 +43,12 @@ Build a browser payment UI component quickly with SDK browser APIs:
 
 - [docs/wasm-passkey-payment-component-quickstart.md](docs/wasm-passkey-payment-component-quickstart.md)
 
+## Agent serve app integration
+
+For external frontend/app projects that call `agent serve` directly:
+
+- [docs/agent-serve-frontend-integration.md](docs/agent-serve-frontend-integration.md)
+
 ## Development
 
 Please read `docs/develop.md` for details.

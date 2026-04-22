@@ -5,6 +5,10 @@ This guide covers two features:
 1. **L402 SDK module** — build L402-gated APIs using `@fiber-pay/sdk/node`
 2. **CLI agent commands** — one-command paid AI agent services
 
+If you are integrating `agent serve` from an external frontend or app project,
+see [agent-serve-frontend-integration.md](./agent-serve-frontend-integration.md)
+for migration and security guidance.
+
 ## Prerequisites
 
 - A running Fiber node (`fiber-pay node start`)
