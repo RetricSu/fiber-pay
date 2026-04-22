@@ -13,6 +13,7 @@
  *   const info = await client.nodeInfo();
  *   const channels = await client.listChannels();
  *   // Works identically regardless of RPC vs browser node
+ *   return channels;
  * }
  * ```
  */
@@ -52,6 +53,7 @@ import type {
   SendPaymentParams,
   SendPaymentResult,
   SendPaymentWithRouterParams,
+  SettleInvoiceParams,
   ShutdownChannelParams,
   UpdateChannelParams,
 } from './rpc.js';
@@ -137,6 +139,9 @@ export interface IFiberClient {
 
   /** Cancel an open invoice. */
   cancelInvoice(params: CancelInvoiceParams): Promise<CancelInvoiceResult>;
+
+  /** Settle a hold invoice with the preimage. */
+  settleInvoice(params: SettleInvoiceParams): Promise<void>;
 
   // ---------------------------------------------------------------------------
   // Graph
