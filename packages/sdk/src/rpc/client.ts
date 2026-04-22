@@ -17,7 +17,6 @@ import type {
   CkbInvoiceStatus,
   // Peer methods
   ConnectPeerParams,
-  ConnectPeerResult,
   DisconnectPeerParams,
   GetInvoiceParams,
   GetInvoiceResult,
@@ -28,6 +27,8 @@ import type {
   // Graph methods
   GraphNodesParams,
   GraphNodesResult,
+  // Shared client interface
+  IFiberClient,
   JsonRpcError,
   JsonRpcRequest,
   JsonRpcResponse,
@@ -98,7 +99,7 @@ export class FiberRpcError extends Error {
 // RPC Client
 // =============================================================================
 
-export class FiberRpcClient {
+export class FiberRpcClient implements IFiberClient {
   private requestId = 0;
   private config: Required<Pick<RpcClientConfig, 'url' | 'timeout'>> & RpcClientConfig;
 
@@ -196,15 +197,15 @@ export class FiberRpcClient {
   /**
    * Connect to a peer
    */
-  async connectPeer(params: ConnectPeerParams): Promise<ConnectPeerResult> {
-    return this.call<ConnectPeerResult>('connect_peer', [params]);
+  async connectPeer(params: ConnectPeerParams): Promise<void> {
+    await this.call<null>('connect_peer', [params]);
   }
 
   /**
    * Disconnect from a peer
    */
-  async disconnectPeer(params: DisconnectPeerParams): Promise<null> {
-    return this.call<null>('disconnect_peer', [params]);
+  async disconnectPeer(params: DisconnectPeerParams): Promise<void> {
+    await this.call<null>('disconnect_peer', [params]);
   }
 
   /**
@@ -271,22 +272,22 @@ export class FiberRpcClient {
   /**
    * Shutdown (close) a channel
    */
-  async shutdownChannel(params: ShutdownChannelParams): Promise<null> {
-    return this.call<null>('shutdown_channel', [params]);
+  async shutdownChannel(params: ShutdownChannelParams): Promise<void> {
+    await this.call<null>('shutdown_channel', [params]);
   }
 
   /**
    * Abandon a pending channel
    */
-  async abandonChannel(params: AbandonChannelParams): Promise<null> {
-    return this.call<null>('abandon_channel', [params]);
+  async abandonChannel(params: AbandonChannelParams): Promise<void> {
+    await this.call<null>('abandon_channel', [params]);
   }
 
   /**
    * Update channel parameters
    */
-  async updateChannel(params: UpdateChannelParams): Promise<null> {
-    return this.call<null>('update_channel', [params]);
+  async updateChannel(params: UpdateChannelParams): Promise<void> {
+    await this.call<null>('update_channel', [params]);
   }
 
   // ===========================================================================
@@ -342,8 +343,8 @@ export class FiberRpcClient {
    * Used for conditional/escrow payments where the invoice was created
    * with a payment_hash (no preimage provided upfront)
    */
-  async settleInvoice(params: SettleInvoiceParams): Promise<null> {
-    return this.call<null>('settle_invoice', [params]);
+  async settleInvoice(params: SettleInvoiceParams): Promise<void> {
+    await this.call<null>('settle_invoice', [params]);
   }
 
   // ===========================================================================

@@ -26,6 +26,7 @@
  */
 
 import { FiberRpcError } from '../rpc/client.js';
+import type { IFiberClient } from '../types/fiber-client.js';
 import type {
   AbandonChannelParams,
   AcceptChannelParams,
@@ -61,6 +62,7 @@ import type {
   SendPaymentParams,
   SendPaymentResult,
   SendPaymentWithRouterParams,
+  SettleInvoiceParams,
   ShutdownChannelParams,
   UpdateChannelParams,
 } from '../types/rpc.js';
@@ -114,7 +116,7 @@ export interface BrowserNodeEvents {
 // FiberBrowserNode
 // =============================================================================
 
-export class FiberBrowserNode {
+export class FiberBrowserNode implements IFiberClient {
   private config: FiberBrowserNodeConfig;
   private adapter: FiberWasmAdapter | null = null;
   private _state: BrowserNodeState = 'idle';
@@ -260,8 +262,15 @@ export class FiberBrowserNode {
 
   // --- Info ---
 
-  async getNodeInfo(): Promise<NodeInfoResult> {
+  async nodeInfo(): Promise<NodeInfoResult> {
     return this.ensureRunning().nodeInfo();
+  }
+
+  /**
+   * @deprecated Use `nodeInfo()` instead for consistency with FiberRpcClient.
+   */
+  async getNodeInfo(): Promise<NodeInfoResult> {
+    return this.nodeInfo();
   }
 
   // --- Peer ---
@@ -338,6 +347,10 @@ export class FiberBrowserNode {
 
   async cancelInvoice(params: CancelInvoiceParams): Promise<CancelInvoiceResult> {
     return this.ensureRunning().cancelInvoice(params);
+  }
+
+  async settleInvoice(params: SettleInvoiceParams): Promise<void> {
+    return this.ensureRunning().settleInvoice(params);
   }
 
   // --- Graph ---

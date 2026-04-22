@@ -107,7 +107,7 @@ describe('FiberRpcClient - New Methods', () => {
 
       const result = await client.settleInvoice(params);
 
-      expect(result).toBeNull();
+      expect(result).toBeUndefined();
       expect(fetchMock).toHaveBeenCalledOnce();
 
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
