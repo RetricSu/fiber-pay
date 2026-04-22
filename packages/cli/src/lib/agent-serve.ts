@@ -24,7 +24,7 @@
  * `util-linux` (full-featured `unshare`) and create the required base directories.
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { Currency } from '@fiber-pay/sdk';
 import { createL402Middleware, FiberRpcClient } from '@fiber-pay/sdk/node';
@@ -58,6 +58,22 @@ interface AgentServeRequest extends express.Request {
   l402?: { valid?: boolean; paymentHash?: string; preimage?: string };
   _fiberPayRequestId?: number;
 }
+
+interface SessionCredentials {
+  sessionId: string;
+  sessionToken: string;
+  created: boolean;
+}
+
+interface SessionTokenPayload {
+  v: 1;
+  sid: string;
+  iat: number;
+  exp: number;
+}
+
+const SESSION_TOKEN_PREFIX = 'fpst';
+const MIN_SESSION_TOKEN_TTL_SECONDS = 300;
 
 function getClientIp(req: AgentServeRequest): string {
   const forwarded = req.headers['x-forwarded-for'];
@@ -149,6 +165,205 @@ function sanitizeSessionId(raw: string): string {
  */
 function shellQuote(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}' `;
+}
+
+function encodeBase64Url(data: Buffer | string): string {
+  return Buffer.from(data)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function decodeBase64Url(value: string): Buffer | undefined {
+  if (!/^[A-Za-z0-9\-_]+$/.test(value)) {
+    return undefined;
+  }
+
+  const padding = (4 - (value.length % 4)) % 4;
+  const base64 = `${value}${'='.repeat(padding)}`.replace(/-/g, '+').replace(/_/g, '/');
+
+  try {
+    return Buffer.from(base64, 'base64');
+  } catch {
+    return undefined;
+  }
+}
+
+function sessionTokenSignature(payloadPart: string, secret: Buffer): string {
+  return encodeBase64Url(createHmac('sha256', secret).update(payloadPart).digest());
+}
+
+function mintSessionToken(sessionId: string, secret: Buffer, ttlSeconds: number): string {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const payload: SessionTokenPayload = {
+    v: 1,
+    sid: sessionId,
+    iat: nowSeconds,
+    exp: nowSeconds + ttlSeconds,
+  };
+  const payloadPart = encodeBase64Url(JSON.stringify(payload));
+  const signaturePart = sessionTokenSignature(payloadPart, secret);
+  return `${SESSION_TOKEN_PREFIX}.${payloadPart}.${signaturePart}`;
+}
+
+function timingSafeStringEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function isValidSessionId(sessionId: string): boolean {
+  if (sessionId.length === 0 || sessionId.length > 64) {
+    return false;
+  }
+
+  return sanitizeSessionId(sessionId) === sessionId;
+}
+
+function verifySessionToken(
+  sessionId: string,
+  token: string,
+  secret: Buffer,
+): { valid: true } | { valid: false; reason: string } {
+  const parts = token.split('.');
+  if (parts.length !== 3 || parts[0] !== SESSION_TOKEN_PREFIX) {
+    return { valid: false, reason: 'Invalid session token format.' };
+  }
+
+  const payloadPart = parts[1] || '';
+  const signaturePart = parts[2] || '';
+  if (payloadPart.length === 0 || signaturePart.length === 0) {
+    return { valid: false, reason: 'Invalid session token format.' };
+  }
+
+  const expectedSignature = sessionTokenSignature(payloadPart, secret);
+  if (!timingSafeStringEqual(signaturePart, expectedSignature)) {
+    return { valid: false, reason: 'Session token signature mismatch.' };
+  }
+
+  const payloadBuffer = decodeBase64Url(payloadPart);
+  if (!payloadBuffer) {
+    return { valid: false, reason: 'Invalid session token payload encoding.' };
+  }
+
+  let payload: SessionTokenPayload;
+  try {
+    payload = JSON.parse(payloadBuffer.toString('utf-8')) as SessionTokenPayload;
+  } catch {
+    return { valid: false, reason: 'Invalid session token payload.' };
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (payload.v !== 1) {
+    return { valid: false, reason: 'Unsupported session token version.' };
+  }
+
+  if (typeof payload.sid !== 'string' || !isValidSessionId(payload.sid)) {
+    return { valid: false, reason: 'Invalid session token session id.' };
+  }
+
+  if (!Number.isInteger(payload.exp) || payload.exp <= nowSeconds) {
+    return { valid: false, reason: 'Session token expired.' };
+  }
+
+  if (!Number.isInteger(payload.iat) || payload.iat <= 0 || payload.iat > payload.exp) {
+    return { valid: false, reason: 'Invalid session token timestamps.' };
+  }
+
+  if (payload.sid !== sessionId) {
+    return { valid: false, reason: 'Session token does not match session id.' };
+  }
+
+  return { valid: true };
+}
+
+function parseRootKey(rootKey: string): Buffer | undefined {
+  const trimmed = rootKey.trim();
+  const normalized = trimmed.startsWith('0x') ? trimmed.slice(2) : trimmed;
+  if (!/^[a-fA-F0-9]{64}$/.test(normalized)) {
+    return undefined;
+  }
+  return Buffer.from(normalized, 'hex');
+}
+
+function resolveSessionCredentials(
+  body: Record<string, unknown> | undefined,
+  secret: Buffer,
+  ttlSeconds: number,
+):
+  | { ok: true; credentials: SessionCredentials }
+  | { ok: false; status: number; code: string; message: string } {
+  const rawSessionId = body?.sessionId;
+  const rawSessionToken = body?.sessionToken;
+  const hasSessionId = rawSessionId !== undefined;
+  const hasSessionToken = rawSessionToken !== undefined;
+
+  if (!hasSessionId && !hasSessionToken) {
+    const sessionId = `sess-${randomUUID()}`;
+    return {
+      ok: true,
+      credentials: {
+        sessionId,
+        sessionToken: mintSessionToken(sessionId, secret, ttlSeconds),
+        created: true,
+      },
+    };
+  }
+
+  if (!hasSessionId || !hasSessionToken) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'SESSION_MISSING_TOKEN',
+      message: 'Both "sessionId" and "sessionToken" are required when resuming a session.',
+    };
+  }
+
+  if (typeof rawSessionId !== 'string' || typeof rawSessionToken !== 'string') {
+    return {
+      ok: false,
+      status: 400,
+      code: 'SESSION_INVALID_INPUT',
+      message: '"sessionId" and "sessionToken" must be strings.',
+    };
+  }
+
+  const sessionId = rawSessionId.trim();
+  const sessionToken = rawSessionToken.trim();
+
+  if (!isValidSessionId(sessionId)) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'SESSION_INVALID_ID',
+      message: 'Invalid "sessionId" format.',
+    };
+  }
+
+  const verifyResult = verifySessionToken(sessionId, sessionToken, secret);
+  if (!verifyResult.valid) {
+    return {
+      ok: false,
+      status: 403,
+      code: 'SESSION_INVALID_TOKEN',
+      message: verifyResult.reason,
+    };
+  }
+
+  return {
+    ok: true,
+    credentials: {
+      sessionId,
+      sessionToken,
+      created: false,
+    },
+  };
 }
 
 /**
@@ -505,6 +720,22 @@ export async function runAgentServeCommand(
     process.exit(1);
   }
 
+  const sessionSecret = parseRootKey(rootKey);
+  if (!sessionSecret) {
+    if (asJson) {
+      printJsonError({
+        code: 'AGENT_SERVE_INVALID_ROOT_KEY',
+        message: 'Invalid root key format.',
+        recoverable: true,
+        suggestion: 'Provide a 32-byte hex key with --root-key (example: openssl rand -hex 32).',
+      });
+    } else {
+      console.error('Error: Invalid root key format.');
+      console.error('  Provide a 32-byte hex key with --root-key (example: openssl rand -hex 32).');
+    }
+    process.exit(1);
+  }
+
   // Pre-flight: check BoxLite connectivity and acpx availability
   const client = new BoxliteClient(boxliteUrl, boxliteBoxId);
   try {
@@ -546,6 +777,7 @@ export async function runAgentServeCommand(
   // unprivileged user namespaces work before serving traffic.
   const workspaceMinFreeMb = parseInt(options.workspaceMinFreeMb || '100', 10);
   const workspaceTtlHours = parseInt(options.workspaceTtlHours || '24', 10);
+  const sessionTokenTtlSeconds = Math.max(MIN_SESSION_TOKEN_TTL_SECONDS, workspaceTtlHours * 3600);
   // Ensure the base session directories exist (non-fatal; the isolation
   // script also creates them lazily, but pre-creating avoids a race on
   // the very first request).
@@ -704,7 +936,6 @@ export async function runAgentServeCommand(
   app.post('/', async (req: AgentServeRequest, res) => {
     const requestId = getRequestId(req);
     const prompt = req.body?.prompt;
-    const sessionId = req.body?.sessionId;
     const requestFormat = typeof req.body?.format === 'string' ? req.body.format : options.format;
     if (!prompt || typeof prompt !== 'string') {
       if (!asJson) {
@@ -716,14 +947,39 @@ export async function runAgentServeCommand(
       return;
     }
 
+    const sessionResolution = resolveSessionCredentials(
+      req.body as Record<string, unknown> | undefined,
+      sessionSecret,
+      sessionTokenTtlSeconds,
+    );
+
+    if (!sessionResolution.ok) {
+      if (!asJson) {
+        console.log(
+          `[REQ ${requestId}] rejected session credentials code=${sessionResolution.code} status=${sessionResolution.status}`,
+        );
+      }
+      res.status(sessionResolution.status).json({
+        error: sessionResolution.message,
+        code: sessionResolution.code,
+      });
+      return;
+    }
+
+    const session = sessionResolution.credentials;
+    const responseSession = {
+      id: session.sessionId,
+      token: session.sessionToken,
+      created: session.created,
+    };
+
     const startTime = Date.now();
-    const normalizedSessionId = typeof sessionId === 'string' ? sessionId : undefined;
     const useSse = shouldUseSse(req);
 
     try {
       if (!asJson) {
         console.log(
-          `[REQ ${requestId}] payment accepted, invoking agent=${options.agent} promptChars=${prompt.length}${sessionId ? ` session=${sessionId}` : ''}${requestFormat && requestFormat !== 'quiet' ? ` format=${requestFormat}` : ''}${useSse ? ' stream=sse' : ''}`,
+          `[REQ ${requestId}] payment accepted, invoking agent=${options.agent} promptChars=${prompt.length} session=${session.sessionId}${requestFormat && requestFormat !== 'quiet' ? ` format=${requestFormat}` : ''}${useSse ? ' stream=sse' : ''}`,
         );
       }
 
@@ -780,7 +1036,7 @@ export async function runAgentServeCommand(
           timeoutSeconds,
           boxliteUrl,
           boxliteBoxId,
-          sessionId: normalizedSessionId,
+          sessionId: session.sessionId,
           format: requestFormat,
           signal: abortController.signal,
           onChunk: (chunk) => {
@@ -807,6 +1063,7 @@ export async function runAgentServeCommand(
             message: result.stderr.slice(0, 1000) || 'Agent execution failed.',
             agent: options.agent,
             durationMs,
+            session: responseSession,
           });
           closeStream();
           return;
@@ -819,6 +1076,7 @@ export async function runAgentServeCommand(
         sendSse('done', {
           durationMs,
           agent: options.agent,
+          session: responseSession,
           ...(requestFormat && requestFormat !== 'quiet' ? { format: requestFormat } : {}),
         });
         closeStream();
@@ -831,7 +1089,7 @@ export async function runAgentServeCommand(
         timeoutSeconds,
         boxliteUrl,
         boxliteBoxId,
-        sessionId: normalizedSessionId,
+        sessionId: session.sessionId,
         format: requestFormat,
       });
 
@@ -849,6 +1107,7 @@ export async function runAgentServeCommand(
           agent: options.agent,
           stderr: result.stderr.slice(0, 1000),
           durationMs,
+          session: responseSession,
         });
         return;
       }
@@ -863,6 +1122,7 @@ export async function runAgentServeCommand(
         response: result.stdout.trim(),
         agent: options.agent,
         durationMs,
+        session: responseSession,
         ...(requestFormat && requestFormat !== 'quiet' ? { format: requestFormat } : {}),
         ...(data !== undefined ? { data } : {}),
       });
@@ -872,14 +1132,14 @@ export async function runAgentServeCommand(
         console.log(`[REQ ${requestId}] agent execution error: ${message}`);
       }
 
-      if (typeof normalizedSessionId === 'string' && !normalizedSessionId.startsWith('__')) {
+      if (!session.sessionId.startsWith('__')) {
         try {
           const cleanupClient = new BoxliteClient(boxliteUrl, boxliteBoxId);
           await cleanupClient.exec(
             'sh',
             [
               '-c',
-              `cd /workspace && acpx ${shellQuote(options.agent)} sessions close ${shellQuote(normalizedSessionId)}`,
+              `cd /workspace && acpx ${shellQuote(options.agent)} sessions close ${shellQuote(session.sessionId)}`,
             ],
             {
               env: buildSafeEnv(),
@@ -907,6 +1167,7 @@ export async function runAgentServeCommand(
                 message: error.message.slice(0, 1000),
                 agent: options.agent,
                 durationMs: Date.now() - startTime,
+                session: responseSession,
               })}\n\n`,
             );
           } else {
@@ -917,6 +1178,7 @@ export async function runAgentServeCommand(
                 message: error instanceof Error ? error.message : String(error),
                 agent: options.agent,
                 durationMs: Date.now() - startTime,
+                session: responseSession,
               })}\n\n`,
             );
           }
@@ -932,6 +1194,7 @@ export async function runAgentServeCommand(
           agent: options.agent,
           stderr: error.message.slice(0, 1000),
           durationMs: Date.now() - startTime,
+          session: responseSession,
         });
         return;
       }
@@ -939,6 +1202,7 @@ export async function runAgentServeCommand(
       res.status(500).json({
         error: 'Internal server error.',
         message: error instanceof Error ? error.message : String(error),
+        session: responseSession,
       });
     }
   });

@@ -72,6 +72,12 @@ const baseOptions: AgentServeOptions = {
   boxliteBoxId: 'test-box',
 };
 
+interface SessionEnvelope {
+  id: string;
+  token: string;
+  created: boolean;
+}
+
 function getTestServer() {
   return globalThis.__testServer;
 }
@@ -95,6 +101,25 @@ async function startTestServer(options: Partial<AgentServeOptions> = {}) {
   const url = `http://${addr.address}:${addr.port}`;
 
   return { server, url, serverPromise };
+}
+
+function readSession(body: unknown): SessionEnvelope {
+  if (
+    !body ||
+    typeof body !== 'object' ||
+    !('session' in body) ||
+    typeof (body as { session?: unknown }).session !== 'object' ||
+    (body as { session?: unknown }).session === null
+  ) {
+    throw new Error('expected response.session');
+  }
+
+  const session = (body as { session: SessionEnvelope }).session;
+  if (typeof session.id !== 'string' || typeof session.token !== 'string') {
+    throw new Error('expected session.id and session.token');
+  }
+
+  return session;
 }
 
 describe('runAgentServeCommand', () => {
@@ -165,6 +190,7 @@ describe('runAgentServeCommand', () => {
     });
 
     it('returns 200 with agent response on successful exec', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'hello world', stderr: '', exit_code: 0 });
 
       const { server, url } = await startTestServer();
@@ -176,9 +202,11 @@ describe('runAgentServeCommand', () => {
       });
 
       expect(response.status).toBe(200);
-      const body = (await response.json()) as { response: string; agent: string };
+      const body = (await response.json()) as { response: string; agent: string; session: unknown };
       expect(body.response).toBe('hello world');
       expect(body.agent).toBe('codex');
+      const session = readSession(body);
+      expect(session.created).toBe(true);
 
       server?.close();
     });
@@ -247,7 +275,12 @@ describe('runAgentServeCommand', () => {
     });
 
     it('returns 502 with stderr on non-zero exit code', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: 'agent crashed', exit_code: 1 });
+      mockExec.mockResolvedValueOnce({ stdout: 'closed', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: 'agent crashed again', exit_code: 1 });
 
       const { server, url } = await startTestServer();
 
@@ -260,21 +293,37 @@ describe('runAgentServeCommand', () => {
       expect(response.status).toBe(502);
       const body = (await response.json()) as { error: string; stderr: string };
       expect(body.error).toBe('Agent execution failed.');
-      expect(body.stderr).toBe('agent crashed');
+      expect(body.stderr).toContain('agent crashed');
 
       server?.close();
     });
 
-    it('passes sessionId to acpx via -s flag and ensures session first', async () => {
-      mockExec.mockResolvedValueOnce({ stdout: 'ses_123\tcreated', stderr: '', exit_code: 0 });
-      mockExec.mockResolvedValueOnce({ stdout: 'hello session', stderr: '', exit_code: 0 });
+    it('reuses a server-issued session when sessionId and sessionToken are provided', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
 
       const { server, url } = await startTestServer();
+
+      const firstResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      expect(firstResponse.status).toBe(200);
+      const firstBody = (await firstResponse.json()) as { session: unknown };
+      const session = readSession(firstBody);
+
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'hello session', stderr: '', exit_code: 0 });
 
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: 'say hello', sessionId: 'my-session-123' }),
+        body: JSON.stringify({
+          prompt: 'say hello',
+          sessionId: session.id,
+          sessionToken: session.token,
+        }),
       });
 
       expect(response.status).toBe(200);
@@ -285,43 +334,60 @@ describe('runAgentServeCommand', () => {
         (call) =>
           call[0] === 'sh' &&
           (call[1] as string[])[1]?.includes('sessions ensure') &&
-          (call[1] as string[])[1]?.includes('my-session-123'),
+          (call[1] as string[])[1]?.includes(session.id),
       );
       expect(ensureCall).toBeDefined();
       const ensureScript = ((ensureCall?.[1] as string[]) || [])[1] || '';
       expect(ensureScript).toContain('acpx');
       expect(ensureScript).toContain('sessions ensure');
-      expect(ensureScript).toContain('my-session-123');
+      expect(ensureScript).toContain(session.id);
 
       const agentExecCall = mockExec.mock.calls.find(
         (call) =>
           call[0] === 'unshare' &&
           typeof (call[1] as string[]).at(-1) === 'string' &&
-          ((call[1] as string[]).at(-1) as string).includes('my-session-123'),
+          ((call[1] as string[]).at(-1) as string).includes(session.id),
       );
       expect(agentExecCall).toBeDefined();
       const shScript = ((agentExecCall?.[1] as string[]) || []).at(-1) || '';
       expect(shScript).toContain('-s');
-      expect(shScript).toContain('my-session-123');
+      expect(shScript).toContain(session.id);
       expect(shScript).not.toContain("'exec'");
 
       server?.close();
     });
 
     it('retries session prompt after closing and re-ensuring on failure', async () => {
-      mockExec.mockResolvedValueOnce({ stdout: 'ses_123\tcreated', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const firstResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+
+      expect(firstResponse.status).toBe(200);
+      const firstBody = (await firstResponse.json()) as { session: unknown };
+      const session = readSession(firstBody);
+
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: 'agent needs reconnect', exit_code: 1 });
       mockExec.mockResolvedValueOnce({ stdout: 'closed', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
-      mockExec.mockResolvedValueOnce({ stdout: 'ses_123\tcreated', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'hello retry', stderr: '', exit_code: 0 });
-
-      const { server, url } = await startTestServer();
 
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: 'say hello', sessionId: 'my-session-123' }),
+        body: JSON.stringify({
+          prompt: 'say hello',
+          sessionId: session.id,
+          sessionToken: session.token,
+        }),
       });
 
       expect(response.status).toBe(200);
@@ -332,7 +398,7 @@ describe('runAgentServeCommand', () => {
         (call) =>
           call[0] === 'sh' &&
           (call[1] as string[])[1]?.includes('sessions close') &&
-          (call[1] as string[])[1]?.includes('my-session-123'),
+          (call[1] as string[])[1]?.includes(session.id),
       );
       expect(closeCall).toBeDefined();
 
@@ -340,7 +406,7 @@ describe('runAgentServeCommand', () => {
         (call) =>
           call[0] === 'sh' &&
           (call[1] as string[])[1]?.includes('sessions ensure') &&
-          (call[1] as string[])[1]?.includes('my-session-123'),
+          (call[1] as string[])[1]?.includes(session.id),
       );
       expect(ensureCalls.length).toBeGreaterThanOrEqual(2);
 
@@ -348,7 +414,7 @@ describe('runAgentServeCommand', () => {
         (call) =>
           call[0] === 'unshare' &&
           typeof (call[1] as string[]).at(-1) === 'string' &&
-          ((call[1] as string[]).at(-1) as string).includes('my-session-123'),
+          ((call[1] as string[]).at(-1) as string).includes(session.id),
       );
       expect(execCalls.length).toBeGreaterThanOrEqual(2);
 
@@ -356,16 +422,33 @@ describe('runAgentServeCommand', () => {
     });
 
     it('closes session when execPrompt throws a BoxliteError', async () => {
-      mockExec.mockResolvedValueOnce({ stdout: 'ses_123\tcreated', stderr: '', exit_code: 0 });
-      mockExec.mockRejectedValueOnce(new BoxliteError('EXEC_FAILED', 'BoxLite exec timed out'));
-      mockExec.mockResolvedValueOnce({ stdout: 'closed', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
 
       const { server, url } = await startTestServer();
+
+      const firstResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+
+      expect(firstResponse.status).toBe(200);
+      const firstBody = (await firstResponse.json()) as { session: unknown };
+      const session = readSession(firstBody);
+
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockRejectedValueOnce(new BoxliteError('EXEC_FAILED', 'BoxLite exec timed out'));
+      mockExec.mockResolvedValueOnce({ stdout: 'closed', stderr: '', exit_code: 0 });
 
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: 'say hello', sessionId: 'my-session-123' }),
+        body: JSON.stringify({
+          prompt: 'say hello',
+          sessionId: session.id,
+          sessionToken: session.token,
+        }),
       });
 
       expect(response.status).toBe(502);
@@ -374,7 +457,7 @@ describe('runAgentServeCommand', () => {
         (call) =>
           call[0] === 'sh' &&
           (call[1] as string[])[1]?.includes('sessions close') &&
-          (call[1] as string[])[1]?.includes('my-session-123'),
+          (call[1] as string[])[1]?.includes(session.id),
       );
       expect(closeCall).toBeDefined();
 
@@ -382,15 +465,32 @@ describe('runAgentServeCommand', () => {
     });
 
     it('closes session when ensure throws a BoxliteError', async () => {
-      mockExec.mockRejectedValueOnce(new BoxliteError('EXEC_FAILED', 'BoxLite exec timed out'));
-      mockExec.mockResolvedValueOnce({ stdout: 'closed', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
 
       const { server, url } = await startTestServer();
+
+      const firstResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+
+      expect(firstResponse.status).toBe(200);
+      const firstBody = (await firstResponse.json()) as { session: unknown };
+      const session = readSession(firstBody);
+
+      mockExec.mockRejectedValueOnce(new BoxliteError('EXEC_FAILED', 'BoxLite exec timed out'));
+      mockExec.mockResolvedValueOnce({ stdout: 'closed', stderr: '', exit_code: 0 });
 
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: 'say hello', sessionId: 'my-session-123' }),
+        body: JSON.stringify({
+          prompt: 'say hello',
+          sessionId: session.id,
+          sessionToken: session.token,
+        }),
       });
 
       expect(response.status).toBe(502);
@@ -399,7 +499,7 @@ describe('runAgentServeCommand', () => {
         (call) =>
           call[0] === 'sh' &&
           (call[1] as string[])[1]?.includes('sessions close') &&
-          (call[1] as string[])[1]?.includes('my-session-123'),
+          (call[1] as string[])[1]?.includes(session.id),
       );
       expect(closeCalls.length).toBeGreaterThanOrEqual(1);
 
@@ -407,6 +507,7 @@ describe('runAgentServeCommand', () => {
     });
 
     it('passes format option to acpx and returns parsed data for json format', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({
         stdout: '{"jsonrpc":"2.0","id":1}\n{"jsonrpc":"2.0","result":"done"}',
         stderr: '',
@@ -448,6 +549,7 @@ describe('runAgentServeCommand', () => {
     });
 
     it('allows request body to override CLI format option', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'plain text', stderr: '', exit_code: 0 });
 
       const { server, url } = await startTestServer({ format: 'json' });
@@ -486,6 +588,7 @@ describe('runAgentServeCommand', () => {
       process.env.OPENAI_API_KEY = 'openai-key';
       process.env.PATH = '/usr/bin';
 
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'ok', stderr: '', exit_code: 0 });
 
       const { server, url } = await startTestServer();
@@ -525,6 +628,56 @@ describe('runAgentServeCommand', () => {
 
       server?.close();
     });
+
+    it('rejects sessionId without sessionToken', async () => {
+      const { server, url } = await startTestServer();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'hello', sessionId: 'sess-test' }),
+      });
+
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as { code?: string };
+      expect(body.code).toBe('SESSION_MISSING_TOKEN');
+
+      server?.close();
+    });
+
+    it('rejects a tampered sessionToken', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const firstResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+
+      expect(firstResponse.status).toBe(200);
+      const firstBody = (await firstResponse.json()) as { session: unknown };
+      const session = readSession(firstBody);
+      const tampered = `${session.token}tampered`;
+
+      const secondResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'hello',
+          sessionId: session.id,
+          sessionToken: tampered,
+        }),
+      });
+
+      expect(secondResponse.status).toBe(403);
+      const secondBody = (await secondResponse.json()) as { code?: string };
+      expect(secondBody.code).toBe('SESSION_INVALID_TOKEN');
+
+      server?.close();
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -552,6 +705,7 @@ describe('runAgentServeCommand', () => {
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'isolation-probe-ok', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: '1000000 50%', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'wrapped result', stderr: '', exit_code: 0 });
       // Default fallback for any subsequent fire-and-forget cleanup calls
       mockExec.mockResolvedValue({ stdout: '', stderr: '', exit_code: 0 });
@@ -569,8 +723,10 @@ describe('runAgentServeCommand', () => {
       expect(body.response).toBe('wrapped result');
 
       const agentExecCall = mockExec.mock.calls[4];
-      expect(agentExecCall[0]).toBe('unshare');
-      const unshareArgs = agentExecCall[1] as string[];
+      expect(agentExecCall[0]).toBe('sh');
+      const unshareCall = mockExec.mock.calls[5];
+      expect(unshareCall[0]).toBe('unshare');
+      const unshareArgs = unshareCall[1] as string[];
       expect(unshareArgs).toContain('--user');
       expect(unshareArgs).toContain('--pid');
       expect(unshareArgs).toContain('--mount');
@@ -602,16 +758,32 @@ describe('runAgentServeCommand', () => {
       mockExec.mockResolvedValueOnce({ stdout: 'isolation-probe-ok', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: '1000000 50%', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
-      mockExec.mockRejectedValueOnce(new BoxliteError('EXEC_FAILED', 'timed out'));
-      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValue({ stdout: '', stderr: '', exit_code: 0 });
 
       const { server, url, serverPromise } = await startIsolatedServer();
 
+      const firstResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      expect(firstResponse.status).toBe(200);
+      const firstBody = (await firstResponse.json()) as { session: unknown };
+      const session = readSession(firstBody);
+
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockRejectedValueOnce(new BoxliteError('EXEC_FAILED', 'timed out'));
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: 'work', sessionId: 'cleanup-test' }),
+        body: JSON.stringify({
+          prompt: 'work',
+          sessionId: session.id,
+          sessionToken: session.token,
+        }),
       });
 
       expect(response.status).toBe(502);
@@ -623,8 +795,8 @@ describe('runAgentServeCommand', () => {
       );
       expect(rmCall).toBeDefined();
       const rmScript = (rmCall?.[1] as string[])[1];
-      expect(rmScript).toContain('/workspace/sessions/cleanup-test');
-      expect(rmScript).toContain('/tmp/fiber-sessions/cleanup-test');
+      expect(rmScript).toContain(`/workspace/sessions/${session.id}`);
+      expect(rmScript).toContain(`/tmp/fiber-sessions/${session.id}`);
 
       server.close();
       serverPromise.catch(() => {});

@@ -40,10 +40,11 @@ HTTP service that invokes a local AI agent via [acpx](https://github.com/opencla
 fiber-pay agent serve --agent opencode --price 0.1 --root-key <hex> --approve-all
 ```
 
-- Endpoint: `POST /` with `{"prompt": "...", "sessionId": "<optional>"}`
+- Endpoint: `POST /` with `{"prompt": "..."}` for a new session, or
+   `{"prompt": "...", "sessionId": "...", "sessionToken": "..."}` to resume.
 - Requires: `npm install -g acpx` and the target agent installed
 - Agents: any acpx-compatible — `codex`, `claude`, `opencode`, `gemini`, `pi`, etc.
-- Session mode: pass `sessionId` to maintain multi-turn context across requests
+- Session mode: server issues `sessionId` + `sessionToken`; clients must send both to resume.
 
 Key flags: `--port`, `--cwd`, `--timeout`, `--approve-all`, `--format`.
 
@@ -175,5 +176,6 @@ fiber-pay --profile user agent call http://127.0.0.1:8402 --prompt "say hello"
 | Agent pollutes shared `/tmp` | ❌ private `/tmp` per session |
 | Deliberate path traversal by known abs path | ⚠️ same UID; use UUID session IDs |
 
-Session IDs are sanitized and session dirs are named with the sanitized ID.
-For additional hardening, use random UUID values as session IDs from the client side.
+Session IDs are generated server-side and signed into a `sessionToken`.
+Resuming a session requires both fields (`sessionId` + `sessionToken`), and
+token validation rejects guessed or cross-user session reuse.
