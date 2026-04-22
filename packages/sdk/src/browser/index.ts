@@ -68,6 +68,7 @@ export {
   FiberRpcError,
 } from '../rpc/client.js';
 export { ckbHash, derivePublicKey } from '../security/crypto.js';
+export type { IFiberClient } from '../types/fiber-client.js';
 export type {
   AbandonChannelParams,
   AcceptChannelParams,
@@ -108,6 +109,7 @@ export type {
   SendPaymentParams,
   SendPaymentResult,
   SendPaymentWithRouterParams,
+  SettleInvoiceParams,
   ShutdownChannelParams,
   UpdateChannelParams,
 } from '../types/rpc.js';

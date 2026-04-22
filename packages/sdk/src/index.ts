@@ -49,6 +49,7 @@ export {
 export { PolicyEngine } from './security/policy-engine.js';
 export type * from './types/index.js';
 // Types - Re-export all types from types module
+// Note: IFiberClient is included via the wildcard type export above
 export { ChannelState } from './types/index.js';
 // Utility functions
 export {

@@ -43,6 +43,7 @@ import type {
   SendPaymentParams,
   SendPaymentResult,
   SendPaymentWithRouterParams,
+  SettleInvoiceParams,
   ShutdownChannelParams,
   UpdateChannelParams,
 } from '../types/rpc.js';
@@ -272,6 +273,10 @@ export class FiberWasmAdapter {
 
   async cancelInvoice(params: CancelInvoiceParams): Promise<CancelInvoiceResult> {
     return this.invoke<CancelInvoiceResult>('cancel_invoice', [params]);
+  }
+
+  async settleInvoice(params: SettleInvoiceParams): Promise<void> {
+    await this.invoke('settle_invoice', [params]);
   }
 
   // ===========================================================================
