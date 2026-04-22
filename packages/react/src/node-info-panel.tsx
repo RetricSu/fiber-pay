@@ -342,7 +342,6 @@ export function NodeInfoPanel(props: NodeInfoPanelProps) {
   // Attempt to dynamically import qrcode.react if needed
   useEffect(() => {
     if (!showQrCode || renderQrCode) return;
-    // @ts-expect-error — qrcode.react is an optional peer dependency
     import('qrcode.react')
       .then((mod: Record<string, unknown>) => {
         const Comp = (mod.QRCodeSVG ?? mod.default) as
