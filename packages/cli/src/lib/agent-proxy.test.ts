@@ -1,10 +1,36 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   AgentProxy,
   isDeniedAddress,
-  resolveAndCheckDenied,
+  resolveAllAndCheck,
   SHIM_PLACEHOLDER,
 } from './agent-proxy.js';
+
+// Mock dns/promises to avoid real DNS lookups in tests (CI-safe).
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(async (hostname: string, opts?: { all?: boolean }) => {
+    const records: Record<string, Array<{ address: string; family: number }>> = {
+      localhost: [{ address: '127.0.0.1', family: 4 }],
+      'example.com': [{ address: '93.184.216.34', family: 4 }],
+      'dual.example.com': [
+        { address: '93.184.216.34', family: 4 },
+        { address: '10.0.0.1', family: 4 },
+      ],
+    };
+
+    const entries = records[hostname];
+    if (!entries) {
+      const err = new Error(`getaddrinfo ENOTFOUND ${hostname}`);
+      (err as NodeJS.ErrnoException).code = 'ENOTFOUND';
+      throw err;
+    }
+
+    if (opts?.all) {
+      return entries;
+    }
+    return entries[0];
+  }),
+}));
 
 // ---------------------------------------------------------------------------
 // isDeniedAddress — synchronous CIDR check
@@ -87,6 +113,28 @@ describe('isDeniedAddress', () => {
     });
   });
 
+  describe('IPv4-mapped IPv6 addresses', () => {
+    it('denies ::ffff:127.0.0.1 (mapped loopback)', () => {
+      expect(isDeniedAddress('::ffff:127.0.0.1')).toBe(true);
+    });
+
+    it('denies ::ffff:10.0.0.1 (mapped RFC-1918)', () => {
+      expect(isDeniedAddress('::ffff:10.0.0.1')).toBe(true);
+    });
+
+    it('denies ::ffff:192.168.1.1 (mapped RFC-1918)', () => {
+      expect(isDeniedAddress('::ffff:192.168.1.1')).toBe(true);
+    });
+
+    it('denies ::ffff:172.16.0.1 (mapped RFC-1918)', () => {
+      expect(isDeniedAddress('::ffff:172.16.0.1')).toBe(true);
+    });
+
+    it('allows ::ffff:8.8.8.8 (mapped public)', () => {
+      expect(isDeniedAddress('::ffff:8.8.8.8')).toBe(false);
+    });
+  });
+
   describe('edge cases', () => {
     it('returns false for invalid IP', () => {
       expect(isDeniedAddress('not-an-ip')).toBe(false);
@@ -99,25 +147,37 @@ describe('isDeniedAddress', () => {
 });
 
 // ---------------------------------------------------------------------------
-// resolveAndCheckDenied — async DNS resolve + check
+// resolveAllAndCheck — async DNS resolve + check (mocked)
 // ---------------------------------------------------------------------------
 
-describe('resolveAndCheckDenied', () => {
-  it('denies raw loopback IP without DNS lookup', async () => {
-    expect(await resolveAndCheckDenied('127.0.0.1')).toBe(true);
+describe('resolveAllAndCheck', () => {
+  it('returns null for raw loopback IP', async () => {
+    expect(await resolveAllAndCheck('127.0.0.1')).toBe(null);
   });
 
-  it('denies raw private IP without DNS lookup', async () => {
-    expect(await resolveAndCheckDenied('10.0.0.5')).toBe(true);
+  it('returns null for raw private IP', async () => {
+    expect(await resolveAllAndCheck('10.0.0.5')).toBe(null);
   });
 
-  it('denies localhost (resolves to 127.0.0.1)', async () => {
-    expect(await resolveAndCheckDenied('localhost')).toBe(true);
+  it('returns null for localhost (resolves to 127.0.0.1)', async () => {
+    expect(await resolveAllAndCheck('localhost')).toBe(null);
   });
 
-  it('allows a public hostname', async () => {
-    // dns.google resolves to 8.8.8.8 / 8.8.4.4
-    expect(await resolveAndCheckDenied('dns.google')).toBe(false);
+  it('returns the resolved IP for a public hostname', async () => {
+    expect(await resolveAllAndCheck('example.com')).toBe('93.184.216.34');
+  });
+
+  it('returns null if any resolved address is denied', async () => {
+    // dual.example.com resolves to both public and private IPs.
+    expect(await resolveAllAndCheck('dual.example.com')).toBe(null);
+  });
+
+  it('returns null for unresolvable hostnames (fail-closed)', async () => {
+    expect(await resolveAllAndCheck('nonexistent.invalid')).toBe(null);
+  });
+
+  it('returns raw allowed IP as-is', async () => {
+    expect(await resolveAllAndCheck('8.8.8.8')).toBe('8.8.8.8');
   });
 });
 

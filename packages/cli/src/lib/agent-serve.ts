@@ -923,7 +923,22 @@ export async function runAgentServeCommand(
   let proxyEnv: Record<string, string> | undefined;
 
   if (proxyEnabled) {
-    const proxyPort = parseInt(options.proxyPort || '8111', 10);
+    const rawProxyPort = options.proxyPort || '8111';
+    const proxyPort = Number.parseInt(rawProxyPort, 10);
+    if (!Number.isInteger(proxyPort) || proxyPort < 0 || proxyPort > 65535) {
+      const message = `Invalid --proxy-port value "${rawProxyPort}". Expected an integer between 1 and 65535.`;
+      if (asJson) {
+        printJsonError({
+          code: 'AGENT_SERVE_INVALID_PROXY_PORT',
+          message,
+          recoverable: true,
+          suggestion: 'Provide a valid TCP port with --proxy-port, for example --proxy-port 8111.',
+        });
+      } else {
+        console.error(`Error: ${message}`);
+      }
+      process.exit(1);
+    }
     const apiKeys: { anthropic?: string; openai?: string } = {};
     if (process.env.ANTHROPIC_API_KEY) apiKeys.anthropic = process.env.ANTHROPIC_API_KEY;
     if (process.env.OPENAI_API_KEY) apiKeys.openai = process.env.OPENAI_API_KEY;

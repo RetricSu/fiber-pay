@@ -22,6 +22,7 @@ import { lookup } from 'node:dns/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { connect, type Socket } from 'node:net';
 import { networkInterfaces } from 'node:os';
+import { Readable } from 'node:stream';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,7 +31,7 @@ import { networkInterfaces } from 'node:os';
 export interface AgentProxyOptions {
   /** Port the proxy listens on. */
   port: number;
-  /** Host/IP the proxy binds to (default `0.0.0.0`). */
+  /** Host/IP the proxy binds to (default: auto-detected hostAddr or `127.0.0.1`). */
   host?: string;
   /**
    * Address that the **container** uses to reach this proxy.
@@ -100,25 +101,97 @@ const DENIED_CIDRS: CidrEntry[] = DENIED_CIDRS_RAW.map(parseCidr).filter(
   (entry): entry is CidrEntry => entry !== undefined,
 );
 
-/** IPv6 addresses that are always denied. */
-const DENIED_IPV6_PREFIXES = [
-  '::1', // loopback
-  'fc', // unique local (fc00::/7)
-  'fd', // unique local (fc00::/7)
-  'fe80:', // link-local (fe80::/10)
+/**
+ * Parse an IPv6 address into a 128-bit bigint.
+ * Handles compressed (`::`) and IPv4-mapped (`::ffff:1.2.3.4`) forms.
+ */
+function parseIpv6ToBigInt(ip: string): bigint | undefined {
+  // Handle IPv4-mapped IPv6 (e.g. ::ffff:192.168.1.1)
+  const v4MappedMatch = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (v4MappedMatch) {
+    const v4 = parseIpv4ToBigInt(v4MappedMatch[1]);
+    if (v4 === undefined) return undefined;
+    return (0xffffn << 32n) | v4;
+  }
+
+  // Expand :: notation
+  const halves = ip.split('::');
+  if (halves.length > 2) return undefined;
+
+  let groups: string[];
+  if (halves.length === 2) {
+    const left = halves[0] ? halves[0].split(':') : [];
+    const right = halves[1] ? halves[1].split(':') : [];
+    const missing = 8 - left.length - right.length;
+    if (missing < 0) return undefined;
+    groups = [...left, ...Array(missing).fill('0'), ...right];
+  } else {
+    groups = ip.split(':');
+  }
+
+  if (groups.length !== 8) return undefined;
+
+  let result = 0n;
+  for (const group of groups) {
+    const n = parseInt(group, 16);
+    if (Number.isNaN(n) || n < 0 || n > 0xffff) return undefined;
+    result = (result << 16n) | BigInt(n);
+  }
+  return result;
+}
+
+/** IPv6 CIDR ranges to deny. */
+interface Ipv6CidrEntry {
+  addr: bigint;
+  mask: bigint;
+}
+
+const IPV6_MAX = (1n << 128n) - 1n;
+
+function parseIpv6Cidr(cidr: string): Ipv6CidrEntry | undefined {
+  const [ipPart, prefixPart] = cidr.split('/');
+  if (!ipPart || !prefixPart) return undefined;
+  const prefix = Number(prefixPart);
+  if (Number.isNaN(prefix) || prefix < 0 || prefix > 128) return undefined;
+  const addr = parseIpv6ToBigInt(ipPart);
+  if (addr === undefined) return undefined;
+  const mask = prefix === 0 ? 0n : (IPV6_MAX << BigInt(128 - prefix)) & IPV6_MAX;
+  return { addr: addr & mask, mask };
+}
+
+const DENIED_IPV6_CIDRS_RAW = [
+  '::1/128', // loopback
+  'fc00::/7', // unique local
+  'fe80::/10', // link-local
+  '::ffff:127.0.0.0/104', // IPv4-mapped loopback  — handled via v4 check
+  '::ffff:10.0.0.0/104', // IPv4-mapped RFC-1918  — handled via v4 check
+  '::ffff:172.16.0.0/108', // IPv4-mapped RFC-1918  — handled via v4 check
+  '::ffff:192.168.0.0/112', // IPv4-mapped RFC-1918  — handled via v4 check
+  '::ffff:169.254.0.0/112', // IPv4-mapped link-local — handled via v4 check
+  '::ffff:0.0.0.0/104', // IPv4-mapped "this" network
 ];
+
+const DENIED_IPV6_CIDRS: Ipv6CidrEntry[] = DENIED_IPV6_CIDRS_RAW.map(parseIpv6Cidr).filter(
+  (entry): entry is Ipv6CidrEntry => entry !== undefined,
+);
 
 /**
  * Check whether an IP address string falls within the deny-list.
- * Supports both IPv4 and IPv6.
+ * Supports both IPv4, IPv6, and IPv4-mapped IPv6 addresses.
  */
 export function isDeniedAddress(ip: string): boolean {
-  // IPv6 check (simple prefix match — sufficient for loopback/ULA/link-local)
+  // Handle IPv4-mapped IPv6 — extract the embedded v4 address and check it.
+  const v4MappedMatch = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (v4MappedMatch) {
+    return isDeniedAddress(v4MappedMatch[1]);
+  }
+
+  // IPv6 check
   if (ip.includes(':')) {
-    const lower = ip.toLowerCase();
-    if (lower === '::1') return true;
-    for (const prefix of DENIED_IPV6_PREFIXES) {
-      if (lower.startsWith(prefix)) return true;
+    const addr = parseIpv6ToBigInt(ip);
+    if (addr === undefined) return false;
+    for (const cidr of DENIED_IPV6_CIDRS) {
+      if ((addr & cidr.mask) === cidr.addr) return true;
     }
     return false;
   }
@@ -134,21 +207,41 @@ export function isDeniedAddress(ip: string): boolean {
 
 /**
  * DNS-resolve a hostname and check whether **any** of its addresses
- * fall within the deny-list.
+ * fall within the deny-list. Returns the first allowed resolved IP
+ * if any, or `null` if all are denied or DNS fails.
  *
- * @returns `true` if the hostname resolves to a denied address.
+ * Uses `{ all: true }` to resolve all A/AAAA records and denies
+ * if **any** resolved address is in the deny-list (fail-closed).
+ *
+ * @returns The first allowed IP address, or `null` if denied / unresolvable.
  */
-export async function resolveAndCheckDenied(hostname: string): Promise<boolean> {
-  // If the hostname is already a raw IP, skip DNS.
-  if (isDeniedAddress(hostname)) return true;
+export async function resolveAllAndCheck(hostname: string): Promise<string | null> {
+  // If the hostname is already a raw IP, check directly.
+  if (isDeniedAddress(hostname)) return null;
+  // If it's a raw IP that's allowed, return it as-is.
+  if (parseIpv4ToBigInt(hostname) !== undefined || hostname.includes(':')) {
+    return hostname;
+  }
 
   try {
-    const { address } = await lookup(hostname);
-    return isDeniedAddress(address);
+    const results = await lookup(hostname, { all: true });
+    // Deny if ANY resolved address is in the deny-list (fail-closed).
+    for (const result of results) {
+      if (isDeniedAddress(result.address)) return null;
+    }
+    // Return the first resolved address to connect to (avoids TOCTOU).
+    return results.length > 0 ? results[0].address : null;
   } catch {
     // DNS failure — deny by default (fail-closed).
-    return true;
+    return null;
   }
+}
+
+/**
+ * @deprecated Use `resolveAllAndCheck` instead. Kept for backward compatibility.
+ */
+export async function resolveAndCheckDenied(hostname: string): Promise<boolean> {
+  return (await resolveAllAndCheck(hostname)) === null;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,15 +270,6 @@ export function detectHostAddress(): string {
 // ---------------------------------------------------------------------------
 // Reverse proxy helpers
 // ---------------------------------------------------------------------------
-
-/** Pipe an incoming Node request body to an outgoing fetch-style request. */
-async function collectBody(req: IncomingMessage): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-  }
-  return Buffer.concat(chunks);
-}
 
 /** Copy select headers from the incoming request, stripping hop-by-hop. */
 function forwardHeaders(
@@ -231,9 +315,12 @@ export class AgentProxy {
   private boundPort = 0;
 
   constructor(options: AgentProxyOptions) {
+    const hostAddr = options.hostAddr || detectHostAddress();
     this.options = {
-      host: '0.0.0.0',
-      hostAddr: options.hostAddr || detectHostAddress(),
+      // Bind to the detected host address by default, not 0.0.0.0,
+      // to avoid exposing an open proxy on all interfaces.
+      host: options.host || hostAddr,
+      hostAddr,
       ...options,
     };
   }
@@ -333,6 +420,10 @@ export class AgentProxy {
     const server = this.server;
     if (!server) return;
     this.server = null;
+    // Force-close active CONNECT tunnels so the server doesn't hang.
+    if (typeof server.closeAllConnections === 'function') {
+      server.closeAllConnections();
+    }
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
     });
@@ -397,13 +488,17 @@ export class AgentProxy {
     const upstreamUrl = `${config.upstream}${upstreamPath}`;
 
     try {
-      const body = await collectBody(req);
       const headers = forwardHeaders(req, config.authHeader);
+      const isBodyless = ['GET', 'HEAD'].includes(req.method || '');
+
+      // Stream the request body directly instead of buffering it entirely.
+      const body = isBodyless ? undefined : (Readable.toWeb(req) as ReadableStream);
 
       const upstreamResponse = await fetch(upstreamUrl, {
         method: req.method || 'POST',
         headers,
-        body: ['GET', 'HEAD'].includes(req.method || '') ? undefined : body,
+        body,
+        duplex: isBodyless ? undefined : 'half',
       });
 
       // Stream the response back.
@@ -418,21 +513,19 @@ export class AgentProxy {
       res.writeHead(upstreamResponse.status, responseHeaders);
 
       if (upstreamResponse.body) {
-        const reader = (upstreamResponse.body as ReadableStream<Uint8Array>).getReader();
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            res.write(Buffer.from(value));
-          }
-        } catch {
-          // Client may have disconnected.
-        } finally {
-          reader.releaseLock();
-        }
+        // Pipe the upstream response through a Node Readable to handle backpressure.
+        const nodeStream = Readable.fromWeb(
+          upstreamResponse.body as import('stream/web').ReadableStream,
+        );
+        nodeStream.pipe(res);
+        await new Promise<void>((resolve, reject) => {
+          nodeStream.on('end', resolve);
+          nodeStream.on('error', reject);
+          res.on('error', () => nodeStream.destroy());
+        });
+      } else {
+        res.end();
       }
-
-      res.end();
     } catch (error) {
       if (!res.headersSent) {
         res.writeHead(502, { 'Content-Type': 'application/json' });
@@ -466,9 +559,10 @@ export class AgentProxy {
       return;
     }
 
-    // Deny-list check.
-    const denied = await resolveAndCheckDenied(hostname);
-    if (denied) {
+    // Resolve DNS once and use the resolved IP for both the deny-list
+    // check and the actual connection to prevent TOCTOU / DNS rebinding.
+    const resolvedIp = await resolveAllAndCheck(hostname);
+    if (!resolvedIp) {
       clientSocket.write(
         'HTTP/1.1 403 Forbidden\r\n' +
           'Content-Type: text/plain\r\n' +
@@ -479,8 +573,13 @@ export class AgentProxy {
       return;
     }
 
-    // Establish tunnel.
-    const serverSocket = connect(port, hostname, () => {
+    // Track whether we've sent the 200 response.
+    let tunnelEstablished = false;
+
+    // Establish tunnel to the resolved IP (not the hostname) to
+    // prevent a second DNS resolution from yielding a different address.
+    const serverSocket = connect(port, resolvedIp, () => {
+      tunnelEstablished = true;
       clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
       if (head.length > 0) {
         serverSocket.write(head);
@@ -490,7 +589,10 @@ export class AgentProxy {
     });
 
     serverSocket.on('error', () => {
-      clientSocket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+      // Only send an error response if we haven't sent 200 yet.
+      if (!tunnelEstablished) {
+        clientSocket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+      }
       clientSocket.destroy();
     });
 
