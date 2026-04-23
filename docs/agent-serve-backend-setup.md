@@ -2,6 +2,38 @@
 
 This guide provides a comprehensive overview of how to set up the backend environment for running `fiber-pay agent serve`. Running AI agents securely requires specific sandbox configurations (via BoxLite), network isolation, and API proxying. This document details how these mechanisms work and how to configure them for different AI agents (like OpenCode, Claude, Codex, etc.).
 
+## 0. Quick Deployment Checklist (From Scratch)
+
+Use this checklist when installing on a new server:
+
+1. Install and run BoxLite REST server (`boxlite serve`).
+2. Create a persistent Box (`node:22-alpine`, disk >= 10 GB, strict `allowNet`).
+3. Install required tools in Box:
+    - `acpx@0.5.3`
+    - `opencode-ai@latest`
+    - `gcompat` (Alpine)
+4. Verify OpenCode binary and ACP health in Box (`opencode --version`, `acpx opencode sessions ensure --name smoke`).
+5. Start host Fiber node(s) for L402 issuance/payment.
+6. Export provider key on host (for example `KIMI_API_KEY`) and start `fiber-pay agent serve`.
+7. Validate with `fiber-pay agent call` from a payer profile.
+
+Recommended startup command:
+
+```bash
+export KIMI_API_KEY="sk-kimi-..."
+export L402_ROOT_KEY=$(openssl rand -hex 32)
+
+fiber-pay agent serve \
+   --agent opencode \
+   --price 0.1 \
+   --approve-all \
+   --host 127.0.0.1 \
+   --port 8402 \
+   --boxlite-url http://localhost:8100 \
+   --boxlite-box-id fiber-pay-agent \
+   --timeout 180
+```
+
 ## 1. Architecture Overview
 
 When you run `fiber-pay agent serve`, the process involves several layers of isolation and security:
@@ -54,6 +86,26 @@ The proxy acts as an explicit HTTP/HTTPS tunnel (`HTTP_PROXY`, `HTTPS_PROXY`). A
 - Link-local and other restricted spaces.
 
 This prevents the sandboxed agent from scanning or attacking internal services on your local network.
+
+### Proxy Host Address Selection
+
+By default, host address is auto-detected and injected into Box proxy env.
+If your runtime topology is non-standard (nested VM/container, custom bridge), auto-detection may choose an unreachable address.
+
+Symptoms:
+
+- payment succeeds
+- request later fails with timeout / 502
+
+Fix:
+
+```bash
+fiber-pay agent serve \
+   --proxy-host-addr <HOST_IP_VISIBLE_FROM_BOX> \
+   ...
+```
+
+Avoid hardcoding `10.0.2.2` unless it is confirmed reachable in your environment.
 
 ## 4. Configuring Specific Agents
 
@@ -122,3 +174,54 @@ The server routinely checks the container's `/workspace` disk space.
 - You can configure the `workspaceTtl` (default: 24 hours).
 - If disk usage exceeds 90%, the service automatically drops the TTL to 1 hour and accelerates the cleanup interval.
 - If disk usage exceeds 95%, the service will crash proactively to prevent corruption. Use `--workspace-min-free-mb` to enforce a buffer.
+
+## 6. Real-World Pitfalls And Fixes
+
+### A. Warning: No provider API keys found for proxy injection
+
+Meaning:
+
+- service did not find supported key envs on host at startup (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `KIMI_API_KEY`, or fallback `OPENCODE_API_KEY`)
+
+Behavior:
+
+- service still starts
+- existing in-Box OpenCode config is preserved
+- proxy key-shim is not configured for missing providers
+
+Action:
+
+- export the expected provider key before startup (for Kimi: `KIMI_API_KEY`)
+
+### B. opencode initializes but first request is slow or times out
+
+Cause:
+
+- cold install/cache of provider adapters and daemon startup
+
+Action:
+
+- keep startup prewarm enabled
+- restart service if Box had stale `opencode`/`acpx` processes
+
+### C. Session ensure/new mismatch leads to request failure
+
+Cause:
+
+- session bootstrap can fail in one step and needs fallback path
+
+Action:
+
+- use isolated `sessions ensure`, then fallback to `sessions new` and surface both stderr snippets for debugging
+
+### D. Response appears truncated in client UI
+
+Two different classes of issues can look similar:
+
+1. Transport accumulation issue
+   - stream may flush stdout frames after an `exit` frame
+   - runtime should consume full response body before finalizing
+2. UI parser issue
+   - model text may contain markers like `[thinking]` and `[done] end_turn`
+   - frontend must not treat inline marker text as protocol EOF
+   - in SSE mode, only `event: done` indicates completion

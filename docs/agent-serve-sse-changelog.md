@@ -101,6 +101,9 @@ Fields:
 2. End-of-stream success is defined by receiving `event: done`.
 3. You should merge all `chunk` events in order to build final transcript/output.
 4. Keep your UI resilient to partial output and abrupt disconnect.
+5. Do not treat inline text markers (for example `[done] end_turn`) as transport EOF.
+  - These markers can appear inside model output text.
+  - Completion signal is still SSE `event: done` only.
 
 ## Minimal Frontend Migration Steps
 
