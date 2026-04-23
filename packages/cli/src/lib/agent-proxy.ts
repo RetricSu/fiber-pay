@@ -296,7 +296,7 @@ function forwardHeaders(
     }
   }
   // Remove auth headers that carry fake keys.
-  delete headers['authorization'];
+  delete headers.authorization;
   delete headers['x-api-key'];
   // Apply overrides (real auth headers).
   Object.assign(headers, overrides);
@@ -318,11 +318,11 @@ export class AgentProxy {
   constructor(options: AgentProxyOptions) {
     const hostAddr = options.hostAddr || detectHostAddress();
     this.options = {
+      ...options,
       // Bind to the detected host address by default, not 0.0.0.0,
       // to avoid exposing an open proxy on all interfaces.
       host: options.host || hostAddr,
       hostAddr,
-      ...options,
     };
   }
 
@@ -350,8 +350,11 @@ export class AgentProxy {
       PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
       HTTP_PROXY: base,
       HTTPS_PROXY: base,
-      // Ensure the proxy itself is not proxied (avoid loops).
-      NO_PROXY: this.options.hostAddr,
+      // Ensure the proxy itself is not proxied, and local IPC (e.g. opencode daemon) bypasses the proxy.
+      // Also bypass npm registry so acpx adapter bootstrap does not rely on proxy CONNECT.
+      NO_PROXY: `127.0.0.1,localhost,${this.options.hostAddr},registry.npmjs.org`,
+      // Prevent npm exec from hanging on confirmation prompts
+      npm_config_yes: 'true',
     };
 
     if (this.options.apiKeys.anthropic) {
@@ -372,29 +375,58 @@ export class AgentProxy {
     return env;
   }
 
-  /**
-   * Build the OpenCode `opencode.json` config content for BASE_URL override.
-   * OpenCode does not read `*_BASE_URL` from env vars — it requires a config file.
-   */
   buildOpenCodeConfig(): string {
     const base = this.proxyUrl;
 
-    interface ProviderEntry {
-      options: { baseURL: string };
-    }
-    const providers: Record<string, ProviderEntry> = {};
+    const config: {
+      $schema: string;
+      model: string;
+      plugin: string[];
+      provider: Record<string, unknown>;
+    } = {
+      $schema: 'https://opencode.ai/config.json',
+      model: 'kimi-for-coding/k2p5',
+      plugin: ['oh-my-openagent'],
+      provider: {},
+    };
 
     if (this.options.apiKeys.anthropic) {
-      providers.anthropic = { options: { baseURL: `${base}/anthropic` } };
+      config.provider.anthropic = { options: { baseURL: `${base}/anthropic` } };
     }
     if (this.options.apiKeys.openai) {
-      providers.openai = { options: { baseURL: `${base}/openai` } };
+      config.provider.openai = { options: { baseURL: `${base}/openai` } };
     }
     if (this.options.apiKeys.kimi) {
-      providers['kimi-for-coding'] = { options: { baseURL: `${base}/kimi` } };
+      config.provider['kimi-for-coding'] = {
+        name: 'Kimi For Coding',
+        npm: '@ai-sdk/anthropic',
+        options: {
+          baseURL: `${base}/kimi`,
+        },
+        models: {
+          k2p5: {
+            name: 'Kimi K2.5',
+            reasoning: true,
+            attachment: false,
+            limit: {
+              context: 262144,
+              output: 32768,
+            },
+            modalities: {
+              input: ['text', 'image', 'video'],
+              output: ['text'],
+            },
+            options: {
+              interleaved: {
+                field: 'reasoning_content',
+              },
+            },
+          },
+        },
+      };
     }
 
-    return JSON.stringify({ provider: providers }, null, 2);
+    return JSON.stringify(config, null, 2);
   }
 
   // -----------------------------------------------------------------------
@@ -444,6 +476,7 @@ export class AgentProxy {
 
   private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = req.url || '/';
+    console.log(`[Proxy] Incoming HTTP request: ${req.method} ${url}`);
 
     // Health check
     if (req.method === 'GET' && url === '/health') {
@@ -570,6 +603,7 @@ export class AgentProxy {
     head: Buffer,
   ): Promise<void> {
     const target = req.url || '';
+    console.log(`[Proxy] Incoming CONNECT tunnel: ${target}`);
     const colonIdx = target.lastIndexOf(':');
     const hostname = colonIdx > 0 ? target.slice(0, colonIdx) : target;
     const port = colonIdx > 0 ? Number(target.slice(colonIdx + 1)) : 443;
