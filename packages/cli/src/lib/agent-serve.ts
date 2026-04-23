@@ -159,6 +159,7 @@ function buildSafeEnv(proxyEnv?: Record<string, string>): Record<string, string>
     'PATH',
     'OPENAI_API_KEY',
     'ANTHROPIC_API_KEY',
+    'KIMI_API_KEY',
     'OPENCODE_API_KEY',
     'GEMINI_API_KEY',
   ];
@@ -471,12 +472,11 @@ function buildIsolationWrapArgs(
     `export HOME=${shellQuote('/home/boxlite')}`,
     `mkdir -p ${shellQuote(sessionDir)}`,
     `mkdir -p ${shellQuote(sessionTmpDir)}`,
-    // acpx searches for sessions from cwd upward (looking for .acpx/).
-    // Bind-mount the shared acpx state directly onto /workspace/.acpx so
-    // the agent can find its session after /workspace is rebound.
+    // Bind-mount the session-specific directory over /workspace.
+    // Because `ensure` runs inside this same namespace, it will safely
+    // create the `.acpx` state directly inside the session directory.
     `mount --bind ${shellQuote(sessionDir)} /workspace`,
     `cd /workspace`,
-    `mount --bind /home/boxlite/.acpx /workspace/.acpx 2>/dev/null || true`,
     `mount --bind ${shellQuote(sessionTmpDir)} /tmp`,
     `exec ${quotedCmd}`,
   ].join(' && ');
@@ -607,19 +607,38 @@ async function runAcpx(
       .catch(() => {});
   }
 
+  async function ensureNamedSession(sessionName: string): Promise<void> {
+    const execIsolated = async (acpxArgs: string[], timeoutSeconds: number) => {
+      const args = buildIsolationWrapArgs('acpx', acpxArgs, sessionDir, sessionTmpDir);
+      return client.exec('unshare', args, {
+        env: buildSafeEnv(options.proxyEnv),
+        timeout: timeoutSeconds,
+      });
+    };
+
+    const ensureResult = await execIsolated(
+      [agent, 'sessions', 'ensure', '--name', sessionName],
+      120,
+    );
+
+    if (ensureResult.exit_code === 0) {
+      return;
+    }
+
+    const createResult = await execIsolated([agent, 'sessions', 'new', '--name', sessionName], 120);
+    if (createResult.exit_code !== 0) {
+      const ensureErr = ensureResult.stderr.trim().slice(0, 500);
+      const createErr = createResult.stderr.trim().slice(0, 500);
+      throw new BoxliteError(
+        'EXEC_FAILED',
+        `Failed to prepare acpx session "${sessionName}" (ensure=${ensureResult.exit_code}, new=${createResult.exit_code}). ensureStderr=${ensureErr || 'n/a'} newStderr=${createErr || 'n/a'}`,
+      );
+    }
+  }
+
   if (options.sessionId) {
     try {
-      await client.exec(
-        'sh',
-        [
-          '-c',
-          `cd /workspace && acpx ${shellQuote(agent)} sessions ensure --name ${shellQuote(options.sessionId)}`,
-        ],
-        {
-          env: buildSafeEnv(options.proxyEnv),
-          timeout: 10,
-        },
-      );
+      await ensureNamedSession(options.sessionId);
     } catch (err) {
       await closeSession();
       throw err;
@@ -636,17 +655,7 @@ async function runAcpx(
     if (result.exit_code !== 0 && !options.sessionId.startsWith('__')) {
       await closeSession();
       try {
-        await client.exec(
-          'sh',
-          [
-            '-c',
-            `cd /workspace && acpx ${shellQuote(agent)} sessions ensure --name ${shellQuote(options.sessionId)}`,
-          ],
-          {
-            env: buildSafeEnv(options.proxyEnv),
-            timeout: 10,
-          },
-        );
+        await ensureNamedSession(options.sessionId);
       } catch (ensureErr) {
         await closeSession();
         throw ensureErr;
@@ -797,6 +806,39 @@ export async function runAgentServeCommand(
     'AGENT_SERVE_INVALID_WORKSPACE_TTL',
   );
 
+  const proxyEnabled = options.proxy !== false;
+  if (!proxyEnabled) {
+    const allowInsecureNoProxy = process.env.FIBER_PAY_ALLOW_INSECURE_NO_PROXY === '1';
+    const loopbackHosts = new Set(['127.0.0.1', 'localhost', '::1']);
+    const hostIsLoopback = loopbackHosts.has(host);
+
+    if (!allowInsecureNoProxy || !hostIsLoopback) {
+      const message =
+        'Refusing to start with --no-proxy. This mode bypasses proxy key-shim and network deny-list protections.';
+      const suggestion =
+        'For local debugging only, set FIBER_PAY_ALLOW_INSECURE_NO_PROXY=1 and bind --host to loopback (127.0.0.1, localhost, or ::1).';
+
+      if (asJson) {
+        printJsonError({
+          code: 'AGENT_SERVE_INSECURE_NO_PROXY_BLOCKED',
+          message,
+          recoverable: true,
+          suggestion,
+        });
+      } else {
+        console.error(`Error: ${message}`);
+        console.error(`  ${suggestion}`);
+      }
+      process.exit(1);
+    }
+
+    if (!asJson) {
+      console.warn(
+        'Warning: --no-proxy is enabled for local debugging. Real API keys are passed into the container and outbound network filtering is disabled.',
+      );
+    }
+  }
+
   // Pre-flight: check BoxLite connectivity and acpx availability
   const client = new BoxliteClient(boxliteUrl, boxliteBoxId);
   try {
@@ -918,7 +960,6 @@ export async function runAgentServeCommand(
   // ---------------------------------------------------------------------------
   // Host-side proxy: API-key shim + network deny-list
   // ---------------------------------------------------------------------------
-  const proxyEnabled = options.proxy !== false;
   let agentProxy: AgentProxy | undefined;
   let proxyEnv: Record<string, string> | undefined;
 
@@ -939,12 +980,21 @@ export async function runAgentServeCommand(
       }
       process.exit(1);
     }
-    const apiKeys: { anthropic?: string; openai?: string } = {};
+    const apiKeys: { anthropic?: string; openai?: string; kimi?: string } = {};
     if (process.env.ANTHROPIC_API_KEY) apiKeys.anthropic = process.env.ANTHROPIC_API_KEY;
     if (process.env.OPENAI_API_KEY) apiKeys.openai = process.env.OPENAI_API_KEY;
+    if (process.env.KIMI_API_KEY) {
+      apiKeys.kimi = process.env.KIMI_API_KEY;
+    } else if (process.env.OPENCODE_API_KEY) {
+      // Common local setup keeps Kimi credentials under OPENCODE_API_KEY.
+      apiKeys.kimi = process.env.OPENCODE_API_KEY;
+    }
+
+    const hasProxyApiKeys = Boolean(apiKeys.anthropic || apiKeys.openai || apiKeys.kimi);
 
     agentProxy = new AgentProxy({
       port: proxyPort,
+      host: '0.0.0.0',
       hostAddr: options.proxyHostAddr,
       apiKeys,
     });
@@ -969,24 +1019,137 @@ export async function runAgentServeCommand(
 
     proxyEnv = agentProxy.buildContainerEnv();
 
-    // Write OpenCode config file into the container.
-    // OpenCode reads BASE_URL from a config file, not from env vars.
+    // Write OpenCode config file into the container only when at least one
+    // provider key is available for proxy-side auth injection.
+    if (hasProxyApiKeys) {
+      // OpenCode reads BASE_URL from a config file, not from env vars.
+      try {
+        const opencodeConfig = agentProxy.buildOpenCodeConfig();
+        await client.exec(
+          'sh',
+          [
+            '-c',
+            `mkdir -p /home/boxlite/.config/opencode && cat > /home/boxlite/.config/opencode/opencode.json << 'PROXYEOF'
+${opencodeConfig}
+PROXYEOF`,
+          ],
+          { timeout: 5 },
+        );
+      } catch {
+        // Non-fatal: OpenCode config is best-effort.
+        if (!asJson) {
+          console.warn('Warning: Failed to write OpenCode proxy config into the container.');
+        }
+      }
+    } else if (!asJson) {
+      console.warn(
+        'Warning: No provider API keys found for proxy injection; preserving existing OpenCode config in the Box.',
+      );
+    }
+  }
+
+  // Kill stale agent processes inside the container from previous runs.
+  // Zombie opencode/acpx/npm processes can hold port 4096 or npm locks,
+  // preventing the daemon from starting and causing all requests to hang.
+  try {
+    await client.exec(
+      'sh',
+      [
+        '-c',
+        "kill -9 $(ps aux | grep -E 'opencode|acpx|npm.exec' | grep -v grep | awk '{print $1}') 2>/dev/null; rm -f /tmp/.npm/_locks/* 2>/dev/null; true",
+      ],
+      { timeout: 10 },
+    );
+  } catch {
+    // Best-effort cleanup; ignore failures.
+  }
+
+  // Pre-install the provider SDK that opencode.json references (npm: @ai-sdk/anthropic).
+  // Without this, the opencode daemon tries to npm-install it on first start,
+  // which hangs or takes minutes through the proxy, causing all requests to time out.
+  if (proxyEnabled) {
     try {
-      const opencodeConfig = agentProxy.buildOpenCodeConfig();
+      if (!asJson) {
+        console.log('Pre-installing opencode provider dependencies...');
+      }
       await client.exec(
         'sh',
         [
           '-c',
-          `mkdir -p /home/boxlite/.config/opencode && cat > /home/boxlite/.config/opencode/opencode.json << 'PROXYEOF'
-${opencodeConfig}
-PROXYEOF`,
+          'rm -rf /root/.npm/_locks /tmp/.npm/_locks 2>/dev/null; cd /home/boxlite/.config/opencode && npm cache clean --force 2>/dev/null; npm install --prefer-offline --no-audit --no-fund @ai-sdk/anthropic 2>&1 || true',
         ],
-        { timeout: 5 },
+        {
+          // Do NOT pass proxyEnv here — npm needs direct internet access to
+          // reach registry.npmjs.org.  The proxy is only for API key shimming.
+          env: {
+            HOME: '/home/boxlite',
+            PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+            npm_config_yes: 'true',
+          },
+          timeout: 60,
+        },
       );
     } catch {
-      // Non-fatal: OpenCode config is best-effort.
       if (!asJson) {
-        console.warn('Warning: Failed to write OpenCode proxy config into the container.');
+        console.warn('Warning: Failed to pre-install opencode provider SDK.');
+      }
+    }
+
+    // Warm npx cache for opencode-ai so acpx session bootstrap does not
+    // attempt a network fetch during paid requests.
+    try {
+      if (!asJson) {
+        console.log('Pre-warming opencode npx adapter cache...');
+      }
+      await client.exec(
+        'sh',
+        [
+          '-c',
+          'HOME=/home/boxlite npm_config_yes=true npx --yes opencode-ai --version >/dev/null 2>&1 || true',
+        ],
+        {
+          // Keep this direct (no proxy) so npm can always reach the registry.
+          env: {
+            HOME: '/home/boxlite',
+            PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+            npm_config_yes: 'true',
+            NO_PROXY: 'registry.npmjs.org',
+          },
+          timeout: 60,
+        },
+      );
+    } catch {
+      if (!asJson) {
+        console.warn('Warning: Failed to pre-warm opencode npx adapter cache.');
+      }
+    }
+
+    // Pre-warm the opencode daemon so it is ready when the first request arrives.
+    // The daemon needs ~5-10s to initialize; without pre-warming, the first
+    // request pays a cold-start penalty that compounds with session setup.
+    try {
+      if (!asJson) {
+        console.log('Pre-warming opencode daemon...');
+      }
+      await client.exec(
+        'sh',
+        [
+          '-c',
+          'cd /workspace && HOME=/home/boxlite /usr/local/bin/opencode acp &\n' +
+            'for i in $(seq 1 15); do\n' +
+            '  if nc -z 127.0.0.1 4096 2>/dev/null; then echo "daemon ready"; exit 0; fi\n' +
+            '  sleep 2\n' +
+            'done\n' +
+            'echo "daemon not ready after 30s"',
+        ],
+        {
+          env: buildSafeEnv(proxyEnv),
+          timeout: 40,
+        },
+      );
+    } catch {
+      if (!asJson) {
+        console.warn('Warning: opencode daemon pre-warming did not complete in time.');
       }
     }
   }

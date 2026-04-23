@@ -359,7 +359,8 @@ export class BoxliteClient {
 
           if (chunk.exit_code !== undefined) {
             sawExit = true;
-            return;
+            // Some runtimes can flush trailing stdout frames after emitting exit.
+            // Keep consuming this response body so we do not truncate tail content.
           }
         }
       } catch (error) {

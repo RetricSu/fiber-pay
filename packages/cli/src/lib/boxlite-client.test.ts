@@ -122,6 +122,33 @@ describe('BoxliteClient', () => {
       });
     });
 
+    it('does not truncate stdout when frames appear after exit in same payload', async () => {
+      const headB64 = Buffer.from('Hello! How can', 'utf-8').toString('base64');
+      const tailB64 = Buffer.from(' I help?', 'utf-8').toString('base64');
+
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ execution_id: 'exec-tail-after-exit' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () =>
+            `${sseOutput('stdout', { data: headB64 })}\n\n${sseOutput('exit', { exit_code: 0 })}\n\n${sseOutput('stdout', { data: tailB64 })}\n\n`,
+        });
+
+      const result = await client.exec('echo', ['hello']);
+
+      expect(result).toEqual({
+        stdout: 'Hello! How can I help?',
+        stderr: '',
+        exit_code: 0,
+      });
+    });
+
     it('throws BOX_NOT_FOUND when the box does not exist on exec', async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,

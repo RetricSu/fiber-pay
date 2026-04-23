@@ -2,6 +2,38 @@
 
 This guide walks you through manually configuring [BoxLite](https://github.com/boxlite-ai/boxlite) to securely run `fiber-pay agent serve` inside a hardware-isolated sandbox, based on real deployment experience with BoxLite 0.8.2 on macOS Apple Silicon.
 
+## TL;DR (Server Quickstart)
+
+If you are deploying on a fresh server and want the shortest path to a working setup:
+
+1. Start BoxLite (`boxlite serve`).
+2. Create a persistent Box (`node:22-alpine`, disk >= 10 GB).
+3. Install runtime tools in the Box:
+   - `acpx@0.5.3`
+   - `opencode-ai@latest`
+   - `gcompat` (Alpine)
+4. Verify `opencode --version` in the Box and fix to musl binary if ACP is broken.
+5. Start Fiber node(s) on host (`fiber-pay node start --daemon`).
+6. Start `fiber-pay agent serve` on host with BoxLite flags.
+7. Verify with `fiber-pay agent call` from a separate profile/node.
+
+Minimal service start example:
+
+```bash
+export KIMI_API_KEY="sk-kimi-..."
+export L402_ROOT_KEY=$(openssl rand -hex 32)
+
+fiber-pay agent serve \
+  --agent opencode \
+  --price 0.1 \
+  --approve-all \
+  --host 127.0.0.1 \
+  --port 8402 \
+  --boxlite-url http://localhost:8100 \
+  --boxlite-box-id fiber-pay-agent \
+  --timeout 180
+```
+
 ## Prerequisites
 
 Before you begin, make sure your platform supports BoxLite:
@@ -188,7 +220,7 @@ BoxLite 0.8.2 on Alpine may install a glibc-linked binary that silently fails. V
 boxlite --url http://localhost:8100 exec fiber-pay-agent -- opencode --version
 ```
 
-If it reports **1.3.11** instead of **1.4.6+**, or if `acpx opencode exec` later fails with `Script not found "acp"`, manually replace the cached binary with the musl build:
+If it reports an old version (for example **1.3.11**) or if `acpx opencode exec` later fails with `Script not found "acp"`, manually replace the cached binary with the musl build:
 
 ```bash
 boxlite --url http://localhost:8100 exec fiber-pay-agent -- sh -c \
@@ -288,6 +320,50 @@ A safe `allowNet` configuration for an AI agent Box looks like this:
 
 Add only the exact API endpoints your agent needs. If you are unsure of a domain, leave it out and test the agent. Add domains one at a time until the agent works.
 
+### Strict allowNet templates (recommended)
+
+If your goal is stronger egress control and you run in proxy mode (recommended), start with a proxy-only allow list and expand only when requests fail.
+
+Proxy mode minimum (production):
+
+```json
+{
+  "network": {
+    "mode": "enabled",
+    "allowNet": [
+      "<PROXY_HOST_ADDR>"
+    ]
+  }
+}
+```
+
+Examples for `<PROXY_HOST_ADDR>`:
+
+- `192.168.10.152` (host LAN IP)
+- `host.docker.internal` (Docker Desktop style setups)
+
+If you need first-run package bootstrap in-box, temporarily add only the npm registry and remove it after prewarm:
+
+```json
+{
+  "network": {
+    "mode": "enabled",
+    "allowNet": [
+      "<PROXY_HOST_ADDR>",
+      "registry.npmjs.org"
+    ]
+  }
+}
+```
+
+Direct provider domains are needed only if you intentionally bypass proxy mode:
+
+- Codex/OpenAI: `api.openai.com`
+- Claude/Anthropic: `api.anthropic.com`
+- Kimi: `api.kimi.com`
+
+Avoid broad search/documentation domains in production unless your agent truly requires web browsing.
+
 ## Configure environment variables
 
 Agent API keys belong inside the Box environment. Fiber secrets must **never** be passed to the Box.
@@ -353,6 +429,22 @@ export BOXLITE_BOX_ID=fiber-pay-agent
 
 The service listens on `http://127.0.0.1:8402` by default. Change the port with `--port` if needed.
 
+### Proxy host address note (important for VMs/containers)
+
+`agent serve` auto-detects the host address used by the Box-side proxy path.
+In most environments, auto-detection is correct.
+
+If payment succeeds but requests later time out, the Box may not be able to reach the detected host address. In this case, set a reachable address explicitly:
+
+```bash
+fiber-pay agent serve \
+  --agent opencode \
+  --proxy-host-addr <HOST_IP_VISIBLE_FROM_BOX> \
+  ...
+```
+
+Do not hardcode `10.0.2.2` unless you have confirmed your runtime topology uses it.
+
 ## Call the agent
 
 From another terminal, use `fiber-pay agent call` to test the service. If you started a separate Fiber node for the `user` profile, pass `--profile user` so the CLI can auto-pay the L402 invoice:
@@ -368,6 +460,24 @@ The call will:
 4. Return the agent's response from the BoxLite sandbox
 
 ## Troubleshooting
+
+### Payment succeeds but response times out
+
+Common causes:
+
+1. Box cannot reach host proxy address.
+  - Fix: set `--proxy-host-addr` to an IP visible from inside the Box.
+2. OpenCode cold start or stale processes.
+  - Fix: restart `agent serve` (startup prewarm will run again).
+3. Provider config mismatch.
+  - Fix: inspect `/home/boxlite/.config/opencode/opencode.json` in the Box.
+
+Proxy reachability check from inside the Box:
+
+```bash
+boxlite --url http://localhost:8100 exec fiber-pay-agent -- sh -lc \
+  'HTTP_PROXY=http://<HOST_IP>:8111 HTTPS_PROXY=http://<HOST_IP>:8111 npm view opencode-ai version'
+```
 
 ### "Box not found" errors
 
@@ -437,3 +547,27 @@ If you see `ACP agent exited before initialize completed`, this is usually an in
 1. Calling the agent again (it often succeeds on the second attempt)
 2. Restarting `agent serve`
 3. Switching to a different agent such as `codex` if the problem persists
+
+### Warning: No provider API keys found for proxy injection
+
+This warning means host process environment does not contain supported provider keys at startup (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `KIMI_API_KEY`, or fallback `OPENCODE_API_KEY`).
+
+Behavior is intentional:
+
+- service keeps running
+- existing in-Box OpenCode config is preserved
+- proxy key-shim is not configured for missing providers
+
+If you expect Kimi through proxy, export `KIMI_API_KEY` before starting service.
+
+### Output appears truncated in frontend
+
+Two separate issues can look similar:
+
+1. Transport-side truncation (fixed in current CLI)
+  - BoxLite stream can flush stdout frames after an `exit` frame.
+  - Runtime now consumes the full response body before finishing.
+2. Rendering-side truncation
+  - OpenCode output may contain text markers like `[thinking]` and `[done] end_turn`.
+  - Frontend should not treat inline `[done]` text as protocol EOF.
+  - In SSE mode, only `event: done` should mark completion.
