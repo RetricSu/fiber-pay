@@ -89,7 +89,10 @@ function queueSuccessfulIsolationPreflight() {
   mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
   mockExec.mockResolvedValueOnce({ stdout: 'isolation-probe-ok', stderr: '', exit_code: 0 });
   mockExec.mockResolvedValueOnce({ stdout: '1000000 50%', stderr: '', exit_code: 0 });
-  mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // opencode config
+  mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // stale process cleanup
+  mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // npm pre-install
+  mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // npx prewarm
+  mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // daemon prewarm
 }
 
 async function startTestServer(options: Partial<AgentServeOptions> = {}) {
@@ -127,6 +130,14 @@ function readSession(body: unknown): SessionEnvelope {
 
 describe('runAgentServeCommand', () => {
   const originalExit = process.exit;
+  const originalProviderEnv: Record<string, string | undefined> = {};
+  const providerEnvKeys = [
+    'OPENAI_API_KEY',
+    'ANTHROPIC_API_KEY',
+    'KIMI_API_KEY',
+    'OPENCODE_API_KEY',
+    'GEMINI_API_KEY',
+  ] as const;
 
   beforeEach(() => {
     mockCheckBoxExists.mockReset();
@@ -134,6 +145,10 @@ describe('runAgentServeCommand', () => {
     mockExecStream.mockReset();
     mockExec.mockResolvedValue({ stdout: '', stderr: '', exit_code: 0 });
     delete process.env.FIBER_PAY_ALLOW_INSECURE_NO_PROXY;
+    for (const key of providerEnvKeys) {
+      originalProviderEnv[key] = process.env[key];
+      delete process.env[key];
+    }
     delete globalThis.__testServer;
     process.exit = vi.fn().mockImplementation((code: number) => {
       throw new Error(`process.exit(${code})`);
@@ -144,6 +159,13 @@ describe('runAgentServeCommand', () => {
     const server = getTestServer();
     if (server?.listening) {
       server.close();
+    }
+    for (const key of providerEnvKeys) {
+      if (originalProviderEnv[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = originalProviderEnv[key];
+      }
     }
     process.exit = originalExit;
     vi.restoreAllMocks();
@@ -361,14 +383,17 @@ describe('runAgentServeCommand', () => {
 
       const ensureCall = mockExec.mock.calls.find(
         (call) =>
-          call[0] === 'sh' &&
-          (call[1] as string[])[1]?.includes('sessions ensure') &&
-          (call[1] as string[])[1]?.includes(session.id),
+          call[0] === 'unshare' &&
+          typeof (call[1] as string[]).at(-1) === 'string' &&
+          ((call[1] as string[]).at(-1) as string).includes('sessions') &&
+          ((call[1] as string[]).at(-1) as string).includes('ensure') &&
+          ((call[1] as string[]).at(-1) as string).includes(session.id),
       );
       expect(ensureCall).toBeDefined();
-      const ensureScript = ((ensureCall?.[1] as string[]) || [])[1] || '';
+      const ensureScript = ((ensureCall?.[1] as string[]) || []).at(-1) || '';
       expect(ensureScript).toContain('acpx');
-      expect(ensureScript).toContain('sessions ensure');
+      expect(ensureScript).toContain('sessions');
+      expect(ensureScript).toContain('ensure');
       expect(ensureScript).toContain(session.id);
 
       const agentExecCall = mockExec.mock.calls.find(
@@ -433,9 +458,11 @@ describe('runAgentServeCommand', () => {
 
       const ensureCalls = mockExec.mock.calls.filter(
         (call) =>
-          call[0] === 'sh' &&
-          (call[1] as string[])[1]?.includes('sessions ensure') &&
-          (call[1] as string[])[1]?.includes(session.id),
+          call[0] === 'unshare' &&
+          typeof (call[1] as string[]).at(-1) === 'string' &&
+          ((call[1] as string[]).at(-1) as string).includes('sessions') &&
+          ((call[1] as string[]).at(-1) as string).includes('ensure') &&
+          ((call[1] as string[]).at(-1) as string).includes(session.id),
       );
       expect(ensureCalls.length).toBeGreaterThanOrEqual(2);
 
@@ -730,11 +757,7 @@ describe('runAgentServeCommand', () => {
     }
 
     it('wraps acpx with unshare when namespace probe succeeds', async () => {
-      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
-      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
-      mockExec.mockResolvedValueOnce({ stdout: 'isolation-probe-ok', stderr: '', exit_code: 0 });
-      mockExec.mockResolvedValueOnce({ stdout: '1000000 50%', stderr: '', exit_code: 0 });
-      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // opencode config
+      queueSuccessfulIsolationPreflight();
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'wrapped result', stderr: '', exit_code: 0 });
       // Default fallback for any subsequent fire-and-forget cleanup calls
@@ -752,9 +775,16 @@ describe('runAgentServeCommand', () => {
       const body = (await response.json()) as { response: string };
       expect(body.response).toBe('wrapped result');
 
-      const agentExecCall = mockExec.mock.calls[5];
-      expect(agentExecCall[0]).toBe('sh');
-      const unshareCall = mockExec.mock.calls[6];
+      const unshareCall = mockExec.mock.calls.find(
+        (call) =>
+          call[0] === 'unshare' &&
+          typeof (call[1] as string[]).at(-1) === 'string' &&
+          ((call[1] as string[]).at(-1) as string).includes('say hello'),
+      );
+      expect(unshareCall).toBeDefined();
+      if (!unshareCall) {
+        throw new Error('expected unshare call for agent execution');
+      }
       expect(unshareCall[0]).toBe('unshare');
       const unshareArgs = unshareCall[1] as string[];
       expect(unshareArgs).toContain('--user');
@@ -783,11 +813,7 @@ describe('runAgentServeCommand', () => {
     });
 
     it('session dir is cleaned up when a named session is closed', async () => {
-      mockExec.mockResolvedValueOnce({ stdout: '1.0.0', stderr: '', exit_code: 0 });
-      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
-      mockExec.mockResolvedValueOnce({ stdout: 'isolation-probe-ok', stderr: '', exit_code: 0 });
-      mockExec.mockResolvedValueOnce({ stdout: '1000000 50%', stderr: '', exit_code: 0 });
-      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // opencode config
+      queueSuccessfulIsolationPreflight();
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValue({ stdout: '', stderr: '', exit_code: 0 });
@@ -822,7 +848,10 @@ describe('runAgentServeCommand', () => {
       // A fire-and-forget rm -rf should have been issued for the session dirs
       await new Promise((r) => setTimeout(r, 20)); // let fire-and-forget settle
       const rmCall = mockExec.mock.calls.find(
-        (call) => call[0] === 'sh' && (call[1] as string[])[1]?.includes('rm -rf'),
+        (call) =>
+          call[0] === 'sh' &&
+          (call[1] as string[])[1]?.includes('rm -rf') &&
+          (call[1] as string[])[1]?.includes(`/workspace/sessions/${session.id}`),
       );
       expect(rmCall).toBeDefined();
       const rmScript = (rmCall?.[1] as string[])[1];
