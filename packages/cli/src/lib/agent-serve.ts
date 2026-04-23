@@ -83,6 +83,8 @@ interface SessionTokenPayload {
 
 const SESSION_TOKEN_PREFIX = 'fpst';
 const MIN_SESSION_TOKEN_TTL_SECONDS = 300;
+const RECONNECT_PATTERN = /agent needs reconnect/i;
+const SECCOMP_NOT_AVAILABLE_PATTERN = /\bseccomp\b.*\bnot available\b/i;
 
 function getClientIp(req: AgentServeRequest): string {
   const forwarded = req.headers['x-forwarded-for'];
@@ -191,9 +193,20 @@ function isIgnorableAcpxStderrLine(line: string): boolean {
     return false;
   }
 
-  return (
-    /agent needs reconnect/i.test(normalized) || /\bseccomp\b.*\bnot available\b/i.test(normalized)
-  );
+  return RECONNECT_PATTERN.test(normalized) || SECCOMP_NOT_AVAILABLE_PATTERN.test(normalized);
+}
+
+function hasOnlyIgnorableAcpxStderr(stderr: string): boolean {
+  const nonEmptyLines = stderr
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (nonEmptyLines.length === 0) {
+    return false;
+  }
+
+  return nonEmptyLines.every((line) => isIgnorableAcpxStderrLine(line));
 }
 
 /**
@@ -678,9 +691,12 @@ async function runAcpx(
       throw err;
     }
 
-    const reconnectHint = /agent needs reconnect/i.test(result.stderr);
+    const reconnectHint = RECONNECT_PATTERN.test(result.stderr);
     const reconnectWithoutOutput =
-      reconnectHint && result.exit_code === 0 && result.stdout.trim().length === 0;
+      reconnectHint &&
+      result.exit_code === 0 &&
+      result.stdout.trim().length === 0 &&
+      hasOnlyIgnorableAcpxStderr(result.stderr);
 
     // First try a non-destructive retry when acpx reports reconnect-needed
     // but produced no output. This often resolves first-attach jitter without
@@ -694,9 +710,12 @@ async function runAcpx(
       }
     }
 
-    const postRetryReconnectHint = /agent needs reconnect/i.test(result.stderr);
+    const postRetryReconnectHint = RECONNECT_PATTERN.test(result.stderr);
     const postRetryReconnectWithoutOutput =
-      postRetryReconnectHint && result.exit_code === 0 && result.stdout.trim().length === 0;
+      postRetryReconnectHint &&
+      result.exit_code === 0 &&
+      result.stdout.trim().length === 0 &&
+      hasOnlyIgnorableAcpxStderr(result.stderr);
     const shouldReconnectRetry =
       !options.sessionId.startsWith('__') &&
       (result.exit_code !== 0 || postRetryReconnectWithoutOutput);

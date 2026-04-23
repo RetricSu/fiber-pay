@@ -558,6 +558,69 @@ describe('runAgentServeCommand', () => {
       server?.close();
     });
 
+    it('does not perform immediate retry when reconnect hint stderr includes non-ignorable output', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const firstResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+
+      expect(firstResponse.status).toBe(200);
+      const firstBody = (await firstResponse.json()) as { session: unknown };
+      const session = readSession(firstBody);
+
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // ensure
+      mockExec.mockResolvedValueOnce({
+        stdout: '',
+        stderr: 'agent needs reconnect\nreal warning\n',
+        exit_code: 0,
+      }); // exec #1 should be returned as-is
+
+      const unshareSessionCallsBefore = mockExec.mock.calls.filter(
+        (call) =>
+          call[0] === 'unshare' &&
+          typeof (call[1] as string[]).at(-1) === 'string' &&
+          ((call[1] as string[]).at(-1) as string).includes(session.id),
+      ).length;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'say hello',
+          sessionId: session.id,
+          sessionToken: session.token,
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { response: string };
+      expect(body.response).toBe('');
+
+      const closeCall = mockExec.mock.calls.find(
+        (call) =>
+          call[0] === 'sh' &&
+          (call[1] as string[])[1]?.includes('sessions close') &&
+          (call[1] as string[])[1]?.includes(session.id),
+      );
+      expect(closeCall).toBeUndefined();
+
+      const unshareSessionCallsAfter = mockExec.mock.calls.filter(
+        (call) =>
+          call[0] === 'unshare' &&
+          typeof (call[1] as string[]).at(-1) === 'string' &&
+          ((call[1] as string[]).at(-1) as string).includes(session.id),
+      ).length;
+      expect(unshareSessionCallsAfter - unshareSessionCallsBefore).toBe(2);
+
+      server?.close();
+    });
+
     it('falls back to hard reset when reconnect warning persists after immediate retry', async () => {
       mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
       mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
