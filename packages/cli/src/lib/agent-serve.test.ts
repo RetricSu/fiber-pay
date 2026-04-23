@@ -133,6 +133,7 @@ describe('runAgentServeCommand', () => {
     mockExec.mockReset();
     mockExecStream.mockReset();
     mockExec.mockResolvedValue({ stdout: '', stderr: '', exit_code: 0 });
+    delete process.env.FIBER_PAY_ALLOW_INSECURE_NO_PROXY;
     delete globalThis.__testServer;
     process.exit = vi.fn().mockImplementation((code: number) => {
       throw new Error(`process.exit(${code})`);
@@ -184,6 +185,31 @@ describe('runAgentServeCommand', () => {
         'process.exit(1)',
       );
       expect(mockCheckBoxExists).toHaveBeenCalled();
+    });
+
+    it('blocks --no-proxy unless explicit insecure env opt-in is set', async () => {
+      await expect(
+        runAgentServeCommand(baseConfig, {
+          ...baseOptions,
+          proxy: false,
+        }),
+      ).rejects.toThrow('process.exit(1)');
+
+      expect(mockCheckBoxExists).not.toHaveBeenCalled();
+    });
+
+    it('blocks --no-proxy when host is not loopback even with env opt-in', async () => {
+      process.env.FIBER_PAY_ALLOW_INSECURE_NO_PROXY = '1';
+
+      await expect(
+        runAgentServeCommand(baseConfig, {
+          ...baseOptions,
+          proxy: false,
+          host: '0.0.0.0',
+        }),
+      ).rejects.toThrow('process.exit(1)');
+
+      expect(mockCheckBoxExists).not.toHaveBeenCalled();
     });
   });
 

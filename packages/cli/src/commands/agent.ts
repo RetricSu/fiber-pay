@@ -51,7 +51,10 @@ export function createAgentCommand(config: CliConfig): Command {
       '--proxy-host-addr <addr>',
       'Address the container uses to reach the host (auto-detected if omitted)',
     )
-    .option('--no-proxy', 'Disable host-side proxy (passes real API keys to container — INSECURE)')
+    .option(
+      '--no-proxy',
+      'Disable host-side proxy (local debug only; requires FIBER_PAY_ALLOW_INSECURE_NO_PROXY=1 and loopback --host)',
+    )
     .option('--json')
     .addHelpText(
       'after',

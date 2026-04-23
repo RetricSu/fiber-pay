@@ -806,6 +806,39 @@ export async function runAgentServeCommand(
     'AGENT_SERVE_INVALID_WORKSPACE_TTL',
   );
 
+  const proxyEnabled = options.proxy !== false;
+  if (!proxyEnabled) {
+    const allowInsecureNoProxy = process.env.FIBER_PAY_ALLOW_INSECURE_NO_PROXY === '1';
+    const loopbackHosts = new Set(['127.0.0.1', 'localhost', '::1']);
+    const hostIsLoopback = loopbackHosts.has(host);
+
+    if (!allowInsecureNoProxy || !hostIsLoopback) {
+      const message =
+        'Refusing to start with --no-proxy. This mode bypasses proxy key-shim and network deny-list protections.';
+      const suggestion =
+        'For local debugging only, set FIBER_PAY_ALLOW_INSECURE_NO_PROXY=1 and bind --host to loopback (127.0.0.1, localhost, or ::1).';
+
+      if (asJson) {
+        printJsonError({
+          code: 'AGENT_SERVE_INSECURE_NO_PROXY_BLOCKED',
+          message,
+          recoverable: true,
+          suggestion,
+        });
+      } else {
+        console.error(`Error: ${message}`);
+        console.error(`  ${suggestion}`);
+      }
+      process.exit(1);
+    }
+
+    if (!asJson) {
+      console.warn(
+        'Warning: --no-proxy is enabled for local debugging. Real API keys are passed into the container and outbound network filtering is disabled.',
+      );
+    }
+  }
+
   // Pre-flight: check BoxLite connectivity and acpx availability
   const client = new BoxliteClient(boxliteUrl, boxliteBoxId);
   try {
@@ -927,7 +960,6 @@ export async function runAgentServeCommand(
   // ---------------------------------------------------------------------------
   // Host-side proxy: API-key shim + network deny-list
   // ---------------------------------------------------------------------------
-  const proxyEnabled = options.proxy !== false;
   let agentProxy: AgentProxy | undefined;
   let proxyEnv: Record<string, string> | undefined;
 

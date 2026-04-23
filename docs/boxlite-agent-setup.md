@@ -320,6 +320,50 @@ A safe `allowNet` configuration for an AI agent Box looks like this:
 
 Add only the exact API endpoints your agent needs. If you are unsure of a domain, leave it out and test the agent. Add domains one at a time until the agent works.
 
+### Strict allowNet templates (recommended)
+
+If your goal is stronger egress control and you run in proxy mode (recommended), start with a proxy-only allow list and expand only when requests fail.
+
+Proxy mode minimum (production):
+
+```json
+{
+  "network": {
+    "mode": "enabled",
+    "allowNet": [
+      "<PROXY_HOST_ADDR>"
+    ]
+  }
+}
+```
+
+Examples for `<PROXY_HOST_ADDR>`:
+
+- `192.168.10.152` (host LAN IP)
+- `host.docker.internal` (Docker Desktop style setups)
+
+If you need first-run package bootstrap in-box, temporarily add only the npm registry and remove it after prewarm:
+
+```json
+{
+  "network": {
+    "mode": "enabled",
+    "allowNet": [
+      "<PROXY_HOST_ADDR>",
+      "registry.npmjs.org"
+    ]
+  }
+}
+```
+
+Direct provider domains are needed only if you intentionally bypass proxy mode:
+
+- Codex/OpenAI: `api.openai.com`
+- Claude/Anthropic: `api.anthropic.com`
+- Kimi: `api.kimi.com`
+
+Avoid broad search/documentation domains in production unless your agent truly requires web browsing.
+
 ## Configure environment variables
 
 Agent API keys belong inside the Box environment. Fiber secrets must **never** be passed to the Box.

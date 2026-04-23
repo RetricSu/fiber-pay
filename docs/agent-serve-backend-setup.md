@@ -155,13 +155,20 @@ boxlite --url http://localhost:8100 exec fiber-pay-agent -- sh -c 'echo "export 
 ```
 
 **Option B (Insecure): Disable the Proxy**
-You can run `agent serve` with `--no-proxy`. This disables both the API-key shim and the network deny-list. The server will pass the host's raw API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENCODE_API_KEY`, `GEMINI_API_KEY`) directly into the container's environment.
+You can run `agent serve` with `--no-proxy` only in guarded local-debug mode. This disables both the API-key shim and the network deny-list, and the server passes host API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENCODE_API_KEY`, `GEMINI_API_KEY`) directly into the container environment.
 
 ```bash
 export GEMINI_API_KEY="AIzaSy..."
-fiber-pay agent serve --agent gemini --no-proxy ...
+export FIBER_PAY_ALLOW_INSECURE_NO_PROXY=1
+fiber-pay agent serve --agent gemini --host 127.0.0.1 --no-proxy ...
 ```
-> **WARNING**: Disabling the proxy allows the container to make unrestricted network requests to your local network and exposes your raw API keys within the container's environment.
+
+Guardrails enforced by CLI:
+
+- `FIBER_PAY_ALLOW_INSECURE_NO_PROXY=1` must be present
+- `--host` must be loopback (`127.0.0.1`, `localhost`, or `::1`)
+
+> **WARNING**: Even with these guardrails, no-proxy mode is unsafe for production. Use proxy mode by default.
 
 ## 5. Session Management & Cleanup
 
@@ -225,3 +232,50 @@ Two different classes of issues can look similar:
    - model text may contain markers like `[thinking]` and `[done] end_turn`
    - frontend must not treat inline marker text as protocol EOF
    - in SSE mode, only `event: done` indicates completion
+
+### E. Should NO_PROXY be considered a hard security boundary?
+
+No. In-process code can override env vars like `NO_PROXY` for its own outbound requests.
+
+Use defense in depth:
+
+1. Keep proxy mode enabled (default).
+2. Do not place raw provider keys in Box environment.
+3. Restrict BoxLite `allowNet` to minimal required domains.
+4. Keep host services (Fiber RPC, internal APIs) out of reachable network scope.
+
+### F. Is `KIMI_BASE_URL=http://<HOST_IP>:<PROXY_PORT>/kimi` visible in Box a risk?
+
+Short answer: visibility of the base URL itself is expected and not a secret.
+
+Risk comes from capability, not from URL disclosure:
+
+- code in the Box can call that endpoint
+- if proxy is overly exposed, unauthorized callers may abuse your key-shim
+- prompt-injected workloads can still consume quota through the proxy
+
+Mitigations:
+
+1. Keep proxy mode enabled and keep no-proxy blocked in production.
+2. Keep Box `allowNet` as proxy-only (`<PROXY_HOST_ADDR>`), plus temporary `registry.npmjs.org` only when needed.
+3. Restrict proxy listener reachability with host firewall/security group (Box subnet only).
+4. Add request auth between Box and proxy (for example static bearer token or mTLS) if you deploy across hosts.
+5. Enforce rate limits and request timeouts at proxy.
+
+### G. Risks of proxy listening on `0.0.0.0:3000` and how to defend
+
+Main risks:
+
+- anyone who can reach the port can attempt to use your proxy endpoints
+- potential key-shim abuse and external API cost burn
+- open forward-proxy behavior can be abused for scanning/SSRF if controls are weak
+- DoS risk from connection floods
+
+Recommended hardening:
+
+1. Prefer binding proxy to loopback or a dedicated private interface, not public `0.0.0.0`.
+2. If `0.0.0.0` is required, enforce network ACL/firewall allow-list to Box nodes only.
+3. Require authentication for proxy requests.
+4. Keep CONNECT restrictions strict (deny private/loopback/link-local/metadata ranges).
+5. Add connection limits, body-size limits, and per-IP rate limiting.
+6. Log and alert on abnormal proxy usage (burst traffic, unknown destinations, repeated 407/403 patterns).
