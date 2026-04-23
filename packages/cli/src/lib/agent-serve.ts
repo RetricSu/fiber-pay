@@ -185,6 +185,17 @@ function sanitizeSessionId(raw: string): string {
   return raw.replace(/[^a-zA-Z0-9\-_]/g, '-').slice(0, 64);
 }
 
+function isIgnorableAcpxStderrLine(line: string): boolean {
+  const normalized = line.trim();
+  if (normalized.length === 0) {
+    return false;
+  }
+
+  return (
+    /agent needs reconnect/i.test(normalized) || /\bseccomp\b.*\bnot available\b/i.test(normalized)
+  );
+}
+
 /**
  * Single-quote a string for safe embedding in a POSIX sh -c script.
  * Handles embedded single-quotes via the '\'' escape sequence.
@@ -554,6 +565,7 @@ async function runAcpx(
 
     let stdout = '';
     let stderr = '';
+    let stderrLineBuffer = '';
     let exitCode: number | undefined;
 
     for await (const chunk of client.execStream(execCommand, execArgs, execOptions)) {
@@ -564,7 +576,17 @@ async function runAcpx(
 
       if (chunk.stderr.length > 0) {
         stderr += chunk.stderr;
-        options.onChunk({ type: 'stderr', text: chunk.stderr });
+        stderrLineBuffer += chunk.stderr;
+
+        let nextLineBreak = stderrLineBuffer.indexOf('\n');
+        while (nextLineBreak !== -1) {
+          const line = stderrLineBuffer.slice(0, nextLineBreak + 1);
+          if (!isIgnorableAcpxStderrLine(line)) {
+            options.onChunk({ type: 'stderr', text: line });
+          }
+          stderrLineBuffer = stderrLineBuffer.slice(nextLineBreak + 1);
+          nextLineBreak = stderrLineBuffer.indexOf('\n');
+        }
       }
 
       if (chunk.exit_code !== undefined) {
@@ -574,6 +596,10 @@ async function runAcpx(
 
     if (exitCode === undefined) {
       throw new BoxliteError('EXEC_FAILED', 'BoxLite exec returned without exit code');
+    }
+
+    if (stderrLineBuffer.length > 0 && !isIgnorableAcpxStderrLine(stderrLineBuffer)) {
+      options.onChunk({ type: 'stderr', text: stderrLineBuffer });
     }
 
     return {
@@ -652,7 +678,30 @@ async function runAcpx(
       throw err;
     }
 
-    if (result.exit_code !== 0 && !options.sessionId.startsWith('__')) {
+    const reconnectHint = /agent needs reconnect/i.test(result.stderr);
+    const reconnectWithoutOutput =
+      reconnectHint && result.exit_code === 0 && result.stdout.trim().length === 0;
+
+    // First try a non-destructive retry when acpx reports reconnect-needed
+    // but produced no output. This often resolves first-attach jitter without
+    // tearing down session state.
+    if (reconnectWithoutOutput) {
+      try {
+        result = await execPrompt();
+      } catch (err) {
+        await closeSession();
+        throw err;
+      }
+    }
+
+    const postRetryReconnectHint = /agent needs reconnect/i.test(result.stderr);
+    const postRetryReconnectWithoutOutput =
+      postRetryReconnectHint && result.exit_code === 0 && result.stdout.trim().length === 0;
+    const shouldReconnectRetry =
+      !options.sessionId.startsWith('__') &&
+      (result.exit_code !== 0 || postRetryReconnectWithoutOutput);
+
+    if (shouldReconnectRetry) {
       await closeSession();
       try {
         await ensureNamedSession(options.sessionId);

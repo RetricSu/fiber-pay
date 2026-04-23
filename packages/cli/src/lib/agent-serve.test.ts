@@ -296,6 +296,42 @@ describe('runAgentServeCommand', () => {
       server?.close();
     });
 
+    it('filters reconnect advisory stderr from SSE chunks', async () => {
+      mockExecStream.mockReturnValueOnce(
+        (async function* () {
+          yield { stdout: 'hello', stderr: '' };
+          yield {
+            stdout: '',
+            stderr:
+              '[acpx] session sess-123 (ses_123) · /workspace · agent needs reconnect\n[unshare] seccomp not available\n',
+          };
+          yield { stdout: '', stderr: 'real warning\n' };
+          yield { stdout: '', stderr: '', exit_code: 0 };
+        })(),
+      );
+
+      const { server, url } = await startTestServer();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify({ prompt: 'say hello', stream: 'sse' }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(body).toContain('event: chunk');
+      expect(body).toContain('"type":"stderr"');
+      expect(body).toContain('real warning');
+      expect(body).not.toContain('agent needs reconnect');
+      expect(body).not.toContain('seccomp not available');
+
+      server?.close();
+    });
+
     it('streams SSE error event when execution fails in stream mode', async () => {
       mockExecStream.mockReturnValueOnce({
         [Symbol.asyncIterator]: () => ({
@@ -473,6 +509,104 @@ describe('runAgentServeCommand', () => {
           ((call[1] as string[]).at(-1) as string).includes(session.id),
       );
       expect(execCalls.length).toBeGreaterThanOrEqual(2);
+
+      server?.close();
+    });
+
+    it('retries when acpx reports reconnect-needed with empty output', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const firstResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+
+      expect(firstResponse.status).toBe(200);
+      const firstBody = (await firstResponse.json()) as { session: unknown };
+      const session = readSession(firstBody);
+
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: 'agent needs reconnect', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'hello after reconnect', stderr: '', exit_code: 0 });
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'say hello',
+          sessionId: session.id,
+          sessionToken: session.token,
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { response: string };
+      expect(body.response).toBe('hello after reconnect');
+
+      const closeCall = mockExec.mock.calls.find(
+        (call) =>
+          call[0] === 'sh' &&
+          (call[1] as string[])[1]?.includes('sessions close') &&
+          (call[1] as string[])[1]?.includes(session.id),
+      );
+      expect(closeCall).toBeUndefined();
+
+      server?.close();
+    });
+
+    it('falls back to hard reset when reconnect warning persists after immediate retry', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const firstResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+
+      expect(firstResponse.status).toBe(200);
+      const firstBody = (await firstResponse.json()) as { session: unknown };
+      const session = readSession(firstBody);
+
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // ensure
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: 'agent needs reconnect', exit_code: 0 }); // exec #1
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: 'agent needs reconnect', exit_code: 0 }); // exec #2
+      mockExec.mockResolvedValueOnce({ stdout: 'closed', stderr: '', exit_code: 0 }); // close
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // rm -rf cleanup
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 }); // ensure after reset
+      mockExec.mockResolvedValueOnce({
+        stdout: 'hello after hard reset',
+        stderr: '',
+        exit_code: 0,
+      }); // exec #3
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'say hello',
+          sessionId: session.id,
+          sessionToken: session.token,
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { response: string };
+      expect(body.response).toBe('hello after hard reset');
+
+      const closeCall = mockExec.mock.calls.find(
+        (call) =>
+          call[0] === 'sh' &&
+          (call[1] as string[])[1]?.includes('sessions close') &&
+          (call[1] as string[])[1]?.includes(session.id),
+      );
+      expect(closeCall).toBeDefined();
 
       server?.close();
     });
