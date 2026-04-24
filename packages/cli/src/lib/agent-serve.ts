@@ -757,13 +757,13 @@ async function listWorkspaceDirectory(
         'if [ -z "$REAL_DIR" ]; then echo "__ERR__:NOT_FOUND"; exit 0; fi',
         'case "$REAL_DIR" in "$BASE"|"$BASE"/*) ;; *) echo "__ERR__:PATH_OUTSIDE_SESSION"; exit 0 ;; esac',
         'if [ ! -d "$REAL_DIR" ]; then echo "__ERR__:NOT_DIRECTORY"; exit 0; fi',
+        'LIST_FILE="$(mktemp)"',
+        'find "$REAL_DIR" -mindepth 1 -maxdepth 1 -print > "$LIST_FILE"',
         'TRUNCATED=0',
         'COUNT=0',
-        'for ENTRY in "$REAL_DIR"/* "$REAL_DIR"/.*; do',
-        '  [ -e "$ENTRY" ] || continue',
+        'while IFS= read -r ENTRY; do',
+        '  [ -n "$ENTRY" ] || continue',
         '  NAME="$(basename "$ENTRY")"',
-        '  [ "$NAME" = "." ] && continue',
-        '  [ "$NAME" = ".." ] && continue',
         '  if [ "$COUNT" -ge "$MAX_ENTRIES" ]; then TRUNCATED=1; break; fi',
         '  COUNT=$((COUNT + 1))',
         '  if [ -L "$ENTRY" ]; then TYPE="symlink"; SIZE=0;',
@@ -773,7 +773,8 @@ async function listWorkspaceDirectory(
         '  MTIME="$(stat -c %Y "$ENTRY" 2>/dev/null || stat -f %m "$ENTRY" 2>/dev/null || echo 0)"',
         '  NAME_B64="$(printf %s "$NAME" | base64 | tr -d "\\n")"',
         '  printf "__ENTRY__:%s:%s:%s:%s\\n" "$NAME_B64" "$TYPE" "$SIZE" "$MTIME"',
-        'done',
+        'done < "$LIST_FILE"',
+        'rm -f "$LIST_FILE"',
         'printf "__TRUNCATED__:%s\\n" "$TRUNCATED"',
       ].join('\n'),
     ],
@@ -1705,7 +1706,8 @@ PROXYEOF`,
     next();
   });
 
-  // L402 payment gate on all routes
+  // Workspace static/list handlers are registered before L402 middleware.
+  // These routes are session-token protected but not payment-gated.
   const serveWorkspaceDirectoryList = async (req: AgentServeRequest, res: express.Response) => {
     const requestId = getRequestId(req);
     const sessionId = getStaticRequestSessionId(req);
@@ -1890,7 +1892,7 @@ PROXYEOF`,
 
       const { file } = fileReadResult;
       res.setHeader('Content-Type', getStaticContentType(relativePath));
-      res.setHeader('Cache-Control', 'private, max-age=60');
+      res.setHeader('Cache-Control', 'no-store');
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Content-Length', String(file.sizeBytes));
       if (file.mtimeEpochSeconds > 0) {

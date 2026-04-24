@@ -969,6 +969,7 @@ describe('runAgentServeCommand', () => {
 
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('text/html');
+      expect(response.headers.get('cache-control')).toContain('no-store');
       expect(await response.text()).toBe(html);
 
       server?.close();
@@ -1176,9 +1177,8 @@ describe('runAgentServeCommand', () => {
       );
       expect(listCall).toBeDefined();
       const listScript = ((listCall?.[1] as string[]) || [])[1] || '';
-      expect(listScript).toContain('for ENTRY in');
-      expect(listScript).not.toContain('&& for ENTRY in');
-      expect(listScript).not.toContain('do &&');
+      expect(listScript).toContain('find "$REAL_DIR" -mindepth 1 -maxdepth 1 -print');
+      expect(listScript).toContain('while IFS= read -r ENTRY; do');
 
       server?.close();
     });
