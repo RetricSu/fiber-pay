@@ -26,6 +26,7 @@
 
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
+import { extname, posix as pathPosix } from 'node:path';
 import type { Currency } from '@fiber-pay/sdk';
 import { createL402Middleware, FiberRpcClient } from '@fiber-pay/sdk/node';
 import cors from 'cors';
@@ -81,10 +82,54 @@ interface SessionTokenPayload {
   exp: number;
 }
 
+interface WorkspaceStaticFile {
+  content: Buffer;
+  sizeBytes: number;
+  mtimeEpochSeconds: number;
+}
+
+type WorkspaceStaticReadResult =
+  | { ok: true; file: WorkspaceStaticFile }
+  | {
+      ok: false;
+      code:
+        | 'SESSION_NOT_FOUND'
+        | 'NOT_FOUND'
+        | 'PATH_OUTSIDE_SESSION'
+        | 'TOO_LARGE'
+        | 'EXEC_FAILED';
+      sizeBytes?: number;
+      message?: string;
+    };
+
 const SESSION_TOKEN_PREFIX = 'fpst';
 const MIN_SESSION_TOKEN_TTL_SECONDS = 300;
+const MAX_STATIC_FILE_BYTES = 5 * 1024 * 1024;
 const RECONNECT_PATTERN = /agent needs reconnect/i;
 const SECCOMP_NOT_AVAILABLE_PATTERN = /\bseccomp\b.*\bnot available\b/i;
+
+const STATIC_CONTENT_TYPE_BY_EXT: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.cjs': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.wasm': 'application/wasm',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+};
 
 function getClientIp(req: AgentServeRequest): string {
   const forwarded = req.headers['x-forwarded-for'];
@@ -417,6 +462,163 @@ function resolveSessionCredentials(
       sessionId,
       sessionToken,
       created: false,
+    },
+  };
+}
+
+function getStaticRequestSessionToken(req: express.Request): string | undefined {
+  const fromHeader = req.headers['x-session-token'];
+  const headerToken = Array.isArray(fromHeader) ? fromHeader[0] : fromHeader;
+  if (typeof headerToken === 'string' && headerToken.trim().length > 0) {
+    return headerToken.trim();
+  }
+
+  const queryToken = req.query?.sessionToken;
+  const token = Array.isArray(queryToken) ? queryToken[0] : queryToken;
+  if (typeof token === 'string' && token.trim().length > 0) {
+    return token.trim();
+  }
+
+  return undefined;
+}
+
+function normalizeWorkspaceStaticPath(rawPath: string | undefined): string | undefined {
+  if (rawPath?.includes('\0')) {
+    return undefined;
+  }
+
+  let candidate = (rawPath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  if (candidate.length === 0 || candidate.endsWith('/')) {
+    candidate = `${candidate}index.html`;
+  }
+
+  const normalized = pathPosix.normalize(candidate);
+  if (normalized.length === 0 || normalized === '.' || normalized === '..') {
+    return undefined;
+  }
+
+  if (
+    pathPosix.isAbsolute(normalized) ||
+    normalized.startsWith('../') ||
+    normalized.includes('/../')
+  ) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function getStaticContentType(filePath: string): string {
+  const ext = extname(filePath).toLowerCase();
+  return STATIC_CONTENT_TYPE_BY_EXT[ext] || 'application/octet-stream';
+}
+
+async function readWorkspaceStaticFile(
+  client: BoxliteClient,
+  sessionId: string,
+  relativePath: string,
+  maxBytes: number,
+): Promise<WorkspaceStaticReadResult> {
+  const safeSessionId = sanitizeSessionId(sessionId);
+  const sessionDir = `/workspace/sessions/${safeSessionId}`;
+  const sessionDirQuoted = shellQuote(sessionDir).trimEnd();
+  const relativePathQuoted = shellQuote(relativePath).trimEnd();
+
+  const result = await client.exec(
+    'sh',
+    [
+      '-c',
+      [
+        'set -eu',
+        `SESSION_DIR=${sessionDirQuoted}`,
+        `REL_PATH=${relativePathQuoted}`,
+        `MAX_BYTES=${Math.floor(maxBytes)}`,
+        'BASE="$(readlink -f "$SESSION_DIR" 2>/dev/null || true)"',
+        'if [ -z "$BASE" ]; then echo "__ERR__:SESSION_NOT_FOUND"; exit 0; fi',
+        'TARGET="$BASE/$REL_PATH"',
+        'REAL_TARGET="$(readlink -f "$TARGET" 2>/dev/null || true)"',
+        'if [ -z "$REAL_TARGET" ]; then echo "__ERR__:NOT_FOUND"; exit 0; fi',
+        'case "$REAL_TARGET" in "$BASE"|"$BASE"/*) ;; *) echo "__ERR__:PATH_OUTSIDE_SESSION"; exit 0 ;; esac',
+        'if [ -d "$REAL_TARGET" ]; then REAL_TARGET="$REAL_TARGET/index.html"; fi',
+        'if [ ! -f "$REAL_TARGET" ]; then echo "__ERR__:NOT_FOUND"; exit 0; fi',
+        'SIZE="$(wc -c < "$REAL_TARGET" | tr -d "[:space:]")"',
+        'if [ -z "$SIZE" ]; then SIZE=0; fi',
+        'if [ "$SIZE" -gt "$MAX_BYTES" ]; then echo "__ERR__:TOO_LARGE:$SIZE"; exit 0; fi',
+        'MTIME="$(stat -c %Y "$REAL_TARGET" 2>/dev/null || stat -f %m "$REAL_TARGET" 2>/dev/null || echo 0)"',
+        'printf "__META__:%s:%s\\n" "$SIZE" "$MTIME"',
+        'base64 "$REAL_TARGET"',
+      ].join(' && '),
+    ],
+    { timeout: 30 },
+  );
+
+  if (result.exit_code !== 0) {
+    return {
+      ok: false,
+      code: 'EXEC_FAILED',
+      message: result.stderr.trim().slice(0, 300),
+    };
+  }
+
+  const lines = result.stdout.replace(/\r/g, '').split('\n');
+  const firstLine = (lines.shift() || '').trim();
+
+  if (firstLine.startsWith('__ERR__:')) {
+    const detail = firstLine.slice('__ERR__:'.length);
+    if (detail === 'SESSION_NOT_FOUND') {
+      return { ok: false, code: 'SESSION_NOT_FOUND' };
+    }
+    if (detail === 'NOT_FOUND') {
+      return { ok: false, code: 'NOT_FOUND' };
+    }
+    if (detail === 'PATH_OUTSIDE_SESSION') {
+      return { ok: false, code: 'PATH_OUTSIDE_SESSION' };
+    }
+    if (detail.startsWith('TOO_LARGE:')) {
+      const rawSize = detail.slice('TOO_LARGE:'.length);
+      const sizeBytes = Number.parseInt(rawSize, 10);
+      return {
+        ok: false,
+        code: 'TOO_LARGE',
+        sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : undefined,
+      };
+    }
+
+    return {
+      ok: false,
+      code: 'EXEC_FAILED',
+      message: detail,
+    };
+  }
+
+  if (!firstLine.startsWith('__META__:')) {
+    return {
+      ok: false,
+      code: 'EXEC_FAILED',
+      message: 'Unexpected workspace static response format.',
+    };
+  }
+
+  const [, sizePart = '0', mtimePart = '0'] = firstLine.split(':');
+  const sizeBytes = Number.parseInt(sizePart, 10);
+  const mtimeEpochSeconds = Number.parseInt(mtimePart, 10);
+  const base64Payload = lines.join('').trim();
+  const content = Buffer.from(base64Payload, 'base64');
+
+  if (Number.isFinite(sizeBytes) && content.length !== sizeBytes) {
+    return {
+      ok: false,
+      code: 'EXEC_FAILED',
+      message: 'Workspace static file size mismatch.',
+    };
+  }
+
+  return {
+    ok: true,
+    file: {
+      content,
+      sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : content.length,
+      mtimeEpochSeconds: Number.isFinite(mtimeEpochSeconds) ? mtimeEpochSeconds : 0,
     },
   };
 }
@@ -1272,6 +1474,125 @@ PROXYEOF`,
   });
 
   // L402 payment gate on all routes
+  const serveWorkspaceStatic = async (req: AgentServeRequest, res: express.Response) => {
+    const requestId = getRequestId(req);
+    const rawSessionId = req.params.sessionId;
+    const sessionId = typeof rawSessionId === 'string' ? rawSessionId.trim() : '';
+    const sessionToken = getStaticRequestSessionToken(req);
+
+    if (!isValidSessionId(sessionId)) {
+      res.status(400).json({
+        error: 'Invalid "sessionId" format.',
+        code: 'SESSION_INVALID_ID',
+      });
+      return;
+    }
+
+    if (!sessionToken) {
+      res.status(400).json({
+        error: 'Missing session token. Provide x-session-token header or sessionToken query param.',
+        code: 'SESSION_MISSING_TOKEN',
+      });
+      return;
+    }
+
+    const tokenVerifyResult = verifySessionToken(sessionId, sessionToken, sessionSigningSecret);
+    if (!tokenVerifyResult.valid) {
+      res.status(403).json({
+        error: tokenVerifyResult.reason,
+        code: 'SESSION_INVALID_TOKEN',
+      });
+      return;
+    }
+
+    const wildcardParam = req.params.filePath;
+    const wildcardPath = Array.isArray(wildcardParam)
+      ? wildcardParam.join('/')
+      : typeof wildcardParam === 'string'
+        ? wildcardParam
+        : '';
+    const relativePath = normalizeWorkspaceStaticPath(wildcardPath);
+    if (!relativePath) {
+      res.status(400).json({
+        error: 'Invalid static file path.',
+        code: 'WORKSPACE_STATIC_INVALID_PATH',
+      });
+      return;
+    }
+
+    try {
+      const fileReadResult = await readWorkspaceStaticFile(
+        client,
+        sessionId,
+        relativePath,
+        MAX_STATIC_FILE_BYTES,
+      );
+
+      if (!fileReadResult.ok) {
+        if (!asJson) {
+          console.log(
+            `[REQ ${requestId}] workspace static read failed session=${sessionId} path=${relativePath} code=${fileReadResult.code}`,
+          );
+        }
+
+        if (fileReadResult.code === 'NOT_FOUND' || fileReadResult.code === 'SESSION_NOT_FOUND') {
+          res
+            .status(404)
+            .json({ error: 'Workspace file not found.', code: 'WORKSPACE_STATIC_NOT_FOUND' });
+          return;
+        }
+
+        if (fileReadResult.code === 'PATH_OUTSIDE_SESSION') {
+          res
+            .status(403)
+            .json({ error: 'Path escapes session workspace.', code: 'WORKSPACE_STATIC_FORBIDDEN' });
+          return;
+        }
+
+        if (fileReadResult.code === 'TOO_LARGE') {
+          res.status(413).json({
+            error: `Workspace file exceeds max size ${MAX_STATIC_FILE_BYTES} bytes.`,
+            code: 'WORKSPACE_STATIC_TOO_LARGE',
+            sizeBytes: fileReadResult.sizeBytes,
+            maxBytes: MAX_STATIC_FILE_BYTES,
+          });
+          return;
+        }
+
+        res.status(502).json({
+          error: 'Failed to read workspace file from BoxLite.',
+          code: 'WORKSPACE_STATIC_READ_FAILED',
+          details: fileReadResult.message,
+        });
+        return;
+      }
+
+      const { file } = fileReadResult;
+      res.setHeader('Content-Type', getStaticContentType(relativePath));
+      res.setHeader('Cache-Control', 'private, max-age=60');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Length', String(file.sizeBytes));
+      if (file.mtimeEpochSeconds > 0) {
+        res.setHeader('Last-Modified', new Date(file.mtimeEpochSeconds * 1000).toUTCString());
+      }
+      res.status(200).send(file.content);
+    } catch (error) {
+      if (!asJson) {
+        console.log(
+          `[REQ ${requestId}] workspace static read error session=${sessionId} path=${relativePath}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      res.status(502).json({
+        error: 'Failed to read workspace file from BoxLite.',
+        code: 'WORKSPACE_STATIC_READ_FAILED',
+      });
+    }
+  };
+
+  app.get('/workspace/static/:sessionId', serveWorkspaceStatic);
+  app.get('/workspace/static/:sessionId/*filePath', serveWorkspaceStatic);
+
+  // L402 payment gate on all paid routes
   app.use(
     createL402Middleware({
       rootKey,

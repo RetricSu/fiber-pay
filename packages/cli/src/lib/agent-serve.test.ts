@@ -933,6 +933,180 @@ describe('runAgentServeCommand', () => {
     });
   });
 
+  describe('GET /workspace/static', () => {
+    beforeEach(() => {
+      queueSuccessfulIsolationPreflight();
+    });
+
+    it('serves a workspace file when session token is valid', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+      const html = '<!doctype html><h1>ok</h1>';
+      const base64 = Buffer.from(html, 'utf-8').toString('base64');
+      mockExec.mockResolvedValueOnce({
+        stdout: `__META__:${Buffer.byteLength(html, 'utf-8')}:1710000000\n${base64}\n`,
+        stderr: '',
+        exit_code: 0,
+      });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      expect(sessionResponse.status).toBe(200);
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(`${url}/workspace/static/${session.id}/index.html`, {
+        headers: {
+          'x-session-token': session.token,
+        },
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      expect(await response.text()).toBe(html);
+
+      server?.close();
+    });
+
+    it('rejects workspace static request without session token', async () => {
+      const { server, url } = await startTestServer();
+
+      const response = await fetch(`${url}/workspace/static/sess-test/index.html`);
+
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as { code?: string };
+      expect(body.code).toBe('SESSION_MISSING_TOKEN');
+
+      server?.close();
+    });
+
+    it('rejects workspace static request with tampered session token', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      expect(sessionResponse.status).toBe(200);
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(`${url}/workspace/static/${session.id}/index.html`, {
+        headers: {
+          'x-session-token': `${session.token}tampered`,
+        },
+      });
+
+      expect(response.status).toBe(403);
+      const body = (await response.json()) as { code?: string };
+      expect(body.code).toBe('SESSION_INVALID_TOKEN');
+
+      server?.close();
+    });
+
+    it('rejects path traversal for workspace static request', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      expect(sessionResponse.status).toBe(200);
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(
+        `${url}/workspace/static/${session.id}/..%2F..%2Fetc%2Fpasswd?sessionToken=${encodeURIComponent(session.token)}`,
+      );
+
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as { code?: string };
+      expect(body.code).toBe('WORKSPACE_STATIC_INVALID_PATH');
+
+      server?.close();
+    });
+
+    it('returns 413 when workspace static file exceeds size limit', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({
+        stdout: '__ERR__:TOO_LARGE:7340032\n',
+        stderr: '',
+        exit_code: 0,
+      });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      expect(sessionResponse.status).toBe(200);
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(`${url}/workspace/static/${session.id}/big.bin`, {
+        headers: {
+          'x-session-token': session.token,
+        },
+      });
+
+      expect(response.status).toBe(413);
+      const body = (await response.json()) as { code?: string };
+      expect(body.code).toBe('WORKSPACE_STATIC_TOO_LARGE');
+
+      server?.close();
+    });
+
+    it('falls back to index.html for workspace static directory path', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+      const html = '<html>index</html>';
+      const base64 = Buffer.from(html, 'utf-8').toString('base64');
+      mockExec.mockResolvedValueOnce({
+        stdout: `__META__:${Buffer.byteLength(html, 'utf-8')}:1710000000\n${base64}\n`,
+        stderr: '',
+        exit_code: 0,
+      });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      expect(sessionResponse.status).toBe(200);
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(`${url}/workspace/static/${session.id}/`, {
+        headers: {
+          'x-session-token': session.token,
+        },
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe(html);
+
+      server?.close();
+    });
+  });
+
   // ---------------------------------------------------------------------------
   // Isolation-specific behaviour
   // ---------------------------------------------------------------------------

@@ -182,6 +182,29 @@ The server routinely checks the container's `/workspace` disk space.
 - If disk usage exceeds 90%, the service automatically drops the TTL to 1 hour and accelerates the cleanup interval.
 - If disk usage exceeds 95%, the service will crash proactively to prevent corruption. Use `--workspace-min-free-mb` to enforce a buffer.
 
+### Session-scoped static workspace serving
+
+`agent serve` now supports a simple static endpoint for session workspace files:
+
+```http
+GET /workspace/static/:sessionId/<path>
+```
+
+Auth:
+
+- `x-session-token: <token>` header (preferred), or
+- `?sessionToken=<token>` query.
+
+Security behavior:
+
+- Token must verify and match the requested `sessionId`.
+- File access is constrained to `/workspace/sessions/<sessionId>/`.
+- Path traversal and path escape are rejected.
+- Directory path requests fallback to `index.html`.
+
+Token validity uses the same session token TTL rule as chat session resume.
+By default (no `--workspace-ttl` override), effective token window is 24 hours.
+
 ## 6. Real-World Pitfalls And Fixes
 
 ### A. Warning: No provider API keys found for proxy injection

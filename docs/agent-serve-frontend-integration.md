@@ -101,6 +101,33 @@ When using SSE, `done` and `error` events include `session` as well.
 
 This lets streaming clients keep session state in sync.
 
+### 4) Workspace static file access
+
+The service exposes session-scoped static files from the Box workspace:
+
+```http
+GET /workspace/static/:sessionId/<path>
+```
+
+Auth requirement:
+
+- Provide session token via `x-session-token` header, or
+- Provide `sessionToken` query parameter.
+
+Example:
+
+```http
+GET /workspace/static/sess-.../index.html
+x-session-token: fpst....
+```
+
+Behavior:
+
+- Access is allowed only when `sessionToken` matches `sessionId`.
+- Files are resolved under `/workspace/sessions/<sessionId>/` only.
+- Path traversal is rejected.
+- Directory path falls back to `index.html`.
+
 ## Error codes you must handle
 
 Session contract failures:
