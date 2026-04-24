@@ -340,6 +340,91 @@ describe('runAgentServeCommand', () => {
       server.close();
       serverPromise.catch(() => {});
     });
+
+    it('reverts cleanup interval back to 1 hour after disk pressure subsides', async () => {
+      const scheduledTimers: Array<{
+        id: number;
+        timeout: number;
+        handler: Parameters<typeof setInterval>[0];
+      }> = [];
+      const clearedTimers: number[] = [];
+      let nextTimerId = 1;
+
+      vi.spyOn(global, 'setInterval').mockImplementation(((handler, timeout) => {
+        const id = nextTimerId++;
+        scheduledTimers.push({
+          id,
+          timeout: Number(timeout ?? 0),
+          handler,
+        });
+        return id as unknown as ReturnType<typeof setInterval>;
+      }) as typeof setInterval);
+
+      vi.spyOn(global, 'clearInterval').mockImplementation(((timer) => {
+        clearedTimers.push(Number(timer));
+      }) as typeof clearInterval);
+
+      queueSuccessfulIsolationPreflight();
+      const { server, serverPromise } = await startTestServer({ workspaceTtl: '24' });
+
+      const diskStates = ['500000 92%', '500000 50%'];
+      mockExec.mockImplementation(async (command, args) => {
+        if (
+          command === 'sh' &&
+          Array.isArray(args) &&
+          args[0] === '-c' &&
+          typeof args[1] === 'string'
+        ) {
+          const script = args[1] as string;
+          if (script.includes('df -P /workspace')) {
+            return {
+              stdout: diskStates.shift() ?? '100000 50%',
+              stderr: '',
+              exit_code: 0,
+            };
+          }
+          if (script.includes('find /workspace/sessions /tmp/fiber-sessions')) {
+            return { stdout: '', stderr: '', exit_code: 0 };
+          }
+        }
+        return { stdout: '', stderr: '', exit_code: 0 };
+      });
+
+      const firstTimer = scheduledTimers[0];
+      if (!firstTimer || typeof firstTimer.handler !== 'function') {
+        throw new Error('expected first cleanup timer handler to be a function');
+      }
+      await firstTimer.handler();
+
+      const pressureTimer = scheduledTimers[1];
+      expect(pressureTimer?.timeout).toBe(10 * 60 * 1000);
+
+      if (!pressureTimer || typeof pressureTimer.handler !== 'function') {
+        throw new Error('expected pressure cleanup timer handler to be a function');
+      }
+      await pressureTimer.handler();
+
+      expect(clearedTimers).toContain(firstTimer.id);
+      expect(clearedTimers).toContain(pressureTimer.id);
+      expect(scheduledTimers).toHaveLength(3);
+      expect(scheduledTimers[2]?.timeout).toBe(60 * 60 * 1000);
+
+      const cleanupCalls = mockExec.mock.calls.filter(
+        (call) =>
+          call[0] === 'sh' &&
+          Array.isArray(call[1]) &&
+          typeof (call[1] as string[])[1] === 'string' &&
+          ((call[1] as string[])[1] as string).includes(
+            'find /workspace/sessions /tmp/fiber-sessions',
+          ),
+      );
+      expect(cleanupCalls.length).toBeGreaterThanOrEqual(2);
+      const lastCleanupScript = ((cleanupCalls.at(-1)?.[1] as string[]) || [])[1] || '';
+      expect(lastCleanupScript).toContain('-mmin +1440');
+
+      server.close();
+      serverPromise.catch(() => {});
+    });
   });
 
   describe('POST /', () => {

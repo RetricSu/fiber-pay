@@ -1929,7 +1929,9 @@ PROXYEOF`,
   );
 
   // Scheduled workspace cleanup with adaptive TTL.
-  let cleanupIntervalMs = 60 * 60 * 1000; // 1 hour
+  const defaultCleanupIntervalMs = 60 * 60 * 1000; // 1 hour
+  const pressureCleanupIntervalMs = 10 * 60 * 1000; // 10 minutes
+  let cleanupIntervalMs = defaultCleanupIntervalMs;
   let cleanupTimer: ReturnType<typeof setInterval>;
   const scheduleCleanupTimer = () =>
     setInterval(async () => {
@@ -1938,8 +1940,9 @@ PROXYEOF`,
         ? d.usedPercent >= 90 || d.availableBytes < workspaceMinFreeMb * 1024 * 1024
         : false;
       const ttl = pressure ? 1 : workspaceTtlHours;
-      if (pressure && cleanupIntervalMs > 10 * 60 * 1000) {
-        cleanupIntervalMs = 10 * 60 * 1000; // speed up to 10 min under pressure
+      const nextCleanupIntervalMs = pressure ? pressureCleanupIntervalMs : defaultCleanupIntervalMs;
+      if (cleanupIntervalMs !== nextCleanupIntervalMs) {
+        cleanupIntervalMs = nextCleanupIntervalMs;
         clearInterval(cleanupTimer);
         cleanupTimer = scheduleCleanupTimer();
       }
