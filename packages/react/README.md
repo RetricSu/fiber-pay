@@ -11,7 +11,7 @@ pnpm add @fiber-pay/react react
 ## One-line import
 
 ```tsx
-import { FiberPayQuickCard, useFiberNode, useFiberPayment } from '@fiber-pay/react';
+import { ConnectButton, FiberPayQuickCard, useFiberNode, useFiberPayment } from '@fiber-pay/react';
 ```
 
 ## Quick start
@@ -32,6 +32,42 @@ export function App() {
 - `onInvoiceCreated(invoice)`
 - `onPaymentResult(result)`
 - `onError({ scope, message })`
+
+## ConnectButton
+
+Use `ConnectButton` with an existing `useFiberNode` result for drop-in integration.
+
+```tsx
+import { ConnectButton, useFiberNode } from '@fiber-pay/react';
+import { Fiber } from '@nervosnetwork/fiber-js';
+
+export function HeaderWallet() {
+  const fiber = useFiberNode({ network: 'testnet', wasmFactory: () => new Fiber() });
+  return <ConnectButton fiber={fiber} />;
+}
+```
+
+For custom connected-state panels (for example peer/channel controls), use `renderConnectedDropdown`:
+
+```tsx
+<ConnectButton
+  fiber={fiber}
+  dropdownStyle={{ width: 320 }}
+  renderConnectedDropdown={({ fiber, disconnect }) => (
+    <div>
+      <div>State: {fiber.state}</div>
+      <button
+        type="button"
+        onClick={() => {
+          void disconnect();
+        }}
+      >
+        Disconnect
+      </button>
+    </div>
+  )}
+/>
+```
 
 ## Hooks
 
