@@ -233,6 +233,113 @@ describe('runAgentServeCommand', () => {
 
       expect(mockCheckBoxExists).not.toHaveBeenCalled();
     });
+
+    it('uses hour-based TTL for stale workspace cleanup', async () => {
+      const scheduledTimers: Array<{
+        id: number;
+        timeout: number;
+        handler: Parameters<typeof setInterval>[0];
+      }> = [];
+      let nextTimerId = 1;
+
+      vi.spyOn(global, 'setInterval').mockImplementation(((handler, timeout) => {
+        const id = nextTimerId++;
+        scheduledTimers.push({
+          id,
+          timeout: Number(timeout ?? 0),
+          handler,
+        });
+        return id as unknown as ReturnType<typeof setInterval>;
+      }) as typeof setInterval);
+
+      vi.spyOn(global, 'clearInterval').mockImplementation((() => {}) as typeof clearInterval);
+
+      queueSuccessfulIsolationPreflight();
+      const { server, serverPromise } = await startTestServer({ workspaceTtl: '24' });
+
+      expect(scheduledTimers).toHaveLength(1);
+      expect(scheduledTimers[0]?.timeout).toBe(60 * 60 * 1000);
+
+      const cleanupHandler = scheduledTimers[0]?.handler;
+      if (typeof cleanupHandler !== 'function') {
+        throw new Error('expected cleanup handler to be a function');
+      }
+      await cleanupHandler();
+
+      const cleanupCall = mockExec.mock.calls.find(
+        (call) =>
+          call[0] === 'sh' &&
+          Array.isArray(call[1]) &&
+          typeof (call[1] as string[])[1] === 'string' &&
+          ((call[1] as string[])[1] as string).includes(
+            'find /workspace/sessions /tmp/fiber-sessions',
+          ),
+      );
+      expect(cleanupCall).toBeDefined();
+      const cleanupScript = ((cleanupCall?.[1] as string[]) || [])[1] || '';
+      expect(cleanupScript).toContain('-mmin +1440');
+
+      server.close();
+      serverPromise.catch(() => {});
+    });
+
+    it('re-arms cleanup interval to 10 minutes under disk pressure', async () => {
+      const scheduledTimers: Array<{
+        id: number;
+        timeout: number;
+        handler: Parameters<typeof setInterval>[0];
+      }> = [];
+      const clearedTimers: number[] = [];
+      let nextTimerId = 1;
+
+      vi.spyOn(global, 'setInterval').mockImplementation(((handler, timeout) => {
+        const id = nextTimerId++;
+        scheduledTimers.push({
+          id,
+          timeout: Number(timeout ?? 0),
+          handler,
+        });
+        return id as unknown as ReturnType<typeof setInterval>;
+      }) as typeof setInterval);
+
+      vi.spyOn(global, 'clearInterval').mockImplementation(((timer) => {
+        clearedTimers.push(Number(timer));
+      }) as typeof clearInterval);
+
+      queueSuccessfulIsolationPreflight();
+      mockExec.mockResolvedValueOnce({ stdout: '100000 92%', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+
+      const { server, serverPromise } = await startTestServer({ workspaceTtl: '24' });
+
+      const firstTimer = scheduledTimers[0];
+      expect(firstTimer?.timeout).toBe(60 * 60 * 1000);
+
+      if (!firstTimer || typeof firstTimer.handler !== 'function') {
+        throw new Error('expected first cleanup timer handler to be a function');
+      }
+      await firstTimer.handler();
+
+      expect(clearedTimers).toContain(firstTimer.id);
+      expect(scheduledTimers).toHaveLength(2);
+      expect(scheduledTimers[1]?.timeout).toBe(10 * 60 * 1000);
+
+      const cleanupCall = mockExec.mock.calls.find(
+        (call) =>
+          call[0] === 'sh' &&
+          Array.isArray(call[1]) &&
+          typeof (call[1] as string[])[1] === 'string' &&
+          ((call[1] as string[])[1] as string).includes(
+            'find /workspace/sessions /tmp/fiber-sessions',
+          ),
+      );
+      expect(cleanupCall).toBeDefined();
+      const cleanupScript = ((cleanupCall?.[1] as string[]) || [])[1] || '';
+      expect(cleanupScript).toContain('-mmin +60');
+
+      server.close();
+      serverPromise.catch(() => {});
+    });
   });
 
   describe('POST /', () => {
