@@ -53,14 +53,13 @@ For custom connected-state panels (for example peer/channel controls), use `rend
 <ConnectButton
   fiber={fiber}
   dropdownStyle={{ width: 320 }}
-  renderConnectedDropdown={({ fiber, disconnect, closeDropdown }) => (
+  renderConnectedDropdown={({ fiber, disconnect }) => (
     <div>
       <div>State: {fiber.state}</div>
       <button
         type="button"
         onClick={() => {
           void disconnect();
-          closeDropdown();
         }}
       >
         Disconnect

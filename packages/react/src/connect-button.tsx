@@ -83,8 +83,10 @@ export interface ConnectButtonProps {
 
   /**
    * Optional custom renderer for the connected dropdown content.
-   * Use this to inject project-specific controls (for example peer/channel actions)
-   * while reusing the SDK's connect/disconnect lifecycle button.
+   * Use this to render project-specific controls (for example peer/channel actions)
+   * while reusing the SDK's connect/disconnect lifecycle logic via the provided context.
+   * When set, this replaces the default dropdown content, so custom renderers must
+   * render their own disconnect UI if they want to expose disconnect actions.
    */
   renderConnectedDropdown?: (context: ConnectButtonConnectedDropdownContext) => ReactNode;
 
