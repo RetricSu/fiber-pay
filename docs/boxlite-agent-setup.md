@@ -100,6 +100,18 @@ The server runs in the foreground. Leave this terminal open, or run it inside a 
 
 Create a Box using the `node:22-alpine` image with a **persistent disk**. The default ephemeral rootfs is only ~223 MB, which is not enough to install `acpx`, `opencode-ai`, and their dependencies.
 
+Security recommendation:
+
+- Prefer **not** mounting host directories into the Box. Rely on the Box persistent disk instead.
+- Host bind mounts significantly increase blast radius if the sandbox is misconfigured or compromised.
+- Never mount repository root, user home, or sensitive system paths.
+
+Forbidden mount sources (examples):
+
+- `.` / project root (for example `~/code/fiber-pay`)
+- `$HOME` / user home (for example `/Users/alice`)
+- system and secret paths (for example `/etc`, `/var/lib`, `~/.ssh`, cloud credentials dirs)
+
 ```bash
 curl -X POST http://localhost:8100/v1/default/boxes \
   -H 'Content-Type: application/json' \
@@ -142,19 +154,31 @@ curl -X POST http://localhost:8100/v1/default/boxes \
         "dev.to"
       ]
     },
-    "volumes": [
-      {
-        "source": "./agent-workspace",
-        "destination": "/workspace",
-        "mode": "rw"
-      }
-    ],
     "env": {
       "NODE_ENV": "production"
     },
     "memory_mib": 1024,
     "disk_size_gb": 10
   }'
+```
+
+If you must mount a host directory (for explicit file exchange), enforce minimum privilege:
+
+1. Use a dedicated empty directory only for agent exchange (for example `/var/lib/fiber-pay/agent-workspace`).
+2. Do not reuse repository, home, or shared developer directories.
+3. Restrict host permissions to the service user.
+4. Mount read-only when possible.
+
+Example (only when required):
+
+```json
+"volumes": [
+  {
+    "source": "/var/lib/fiber-pay/agent-workspace",
+    "destination": "/workspace",
+    "mode": "rw"
+  }
+]
 ```
 
 Example response:

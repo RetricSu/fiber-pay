@@ -7,7 +7,8 @@ This guide provides a comprehensive overview of how to set up the backend enviro
 Use this checklist when installing on a new server:
 
 1. Install and run BoxLite REST server (`boxlite serve`).
-2. Create a persistent Box (`node:22-alpine`, disk >= 10 GB, strict `allowNet`).
+2. Create a persistent Box (`node:22-alpine`, disk >= 10 GB, strict `allowNet`) and prefer no host bind mount.
+   - If a mount is unavoidable, use a dedicated least-privilege directory only (never repo root, `$HOME`, or sensitive paths).
 3. Install required tools in Box:
     - `acpx@0.5.3`
     - `opencode-ai@latest`
@@ -47,6 +48,7 @@ When you run `fiber-pay agent serve`, the process involves several layers of iso
    - Executes the actual AI agent via `acpx`.
    - Never sees the real API keys (receives `fp-shim-placeholder` instead).
    - All network traffic is forced through the Host-side Proxy via `HTTP_PROXY` and `HTTPS_PROXY`.
+   - For filesystem safety, prefer container-local persistent disk and avoid host bind mounts unless strictly required.
 
 3. **Per-Session Linux Namespaces**:
    - Every request is wrapped in a Linux namespace using `unshare`.
