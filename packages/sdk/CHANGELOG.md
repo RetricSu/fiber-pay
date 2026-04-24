@@ -1,5 +1,27 @@
 # @fiber-pay/sdk
 
+## 0.2.4
+
+### Patch Changes
+
+- b049830: Add shared `IFiberClient` interface for browser/RPC API parity (issue #95)
+
+  - New `IFiberClient` interface type enabling polymorphic usage of `FiberRpcClient` and `FiberBrowserNode`
+  - `FiberBrowserNode.nodeInfo()` added (canonical); `getNodeInfo()` deprecated
+  - `FiberBrowserNode.settleInvoice()` added (was missing)
+  - `FiberRpcClient` mutation methods now return `void` instead of `null`
+  - Both classes declare `implements IFiberClient`
+
+- 0f6ead3: Add `TransportType` and `addr_type` param to `ConnectPeerParams` for Fiber v0.8.1 (issue #110)
+
+  - New `TransportType` union type: `'tcp' | 'ws' | 'wss'`
+  - `ConnectPeerParams.addr_type` optional field for filtering peer addresses by transport protocol
+  - CLI `peer connect` now accepts `--addr-type <tcp|ws|wss>` when connecting by pubkey
+  - Especially useful in WASM/browser environments that only support WSS
+  - Updated RPC type version comments to v0.8.1
+
+- 713aa2d: feat(sdk,react): re-export common browser types and utilities
+
 ## 0.2.3
 
 ## 0.2.2

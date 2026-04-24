@@ -1,5 +1,67 @@
 # @fiber-pay/cli
 
+## 0.2.4
+
+### Patch Changes
+
+- eb644bb: Harden `agent serve` runtime behavior and docs for safer proxy usage and more stable session handling in local/BoxLite deployments.
+- 7f61cae: Fix `agent serve` workspace cleanup behavior so TTL is enforced in hours (not days), and ensure cleanup scheduling is correctly re-armed to a 10-minute interval under disk pressure.
+- de33cb8: feat(cli): sandbox agent serve with BoxLite
+
+  - Add `BoxliteClient` to run `acpx` inside a BoxLite micro-VM via REST API
+  - Replace bare `spawn('acpx')` in `agent-serve.ts` with sandboxed `BoxliteClient.exec()`
+  - Add `--boxlite-url` and `--boxlite-box-id` CLI options to `agent serve`
+  - Whitelist only safe environment variables (agent API keys) and block `FIBER_*`, `L402_*`, and `CKB_*` secrets
+  - Fail fast with `process.exit(1)` if BoxLite is unreachable or the box is missing (no silent fallback)
+  - Support BoxLite 0.8.2 async `/exec` API (execution_id → polling `/executions/{id}/output` with SSE base64 stream parsing)
+  - Add `docs/boxlite-agent-setup.md` with manual BoxLite configuration guide
+
+- 0927945: Filter non-actionable `acpx` reconnect stderr noise in `agent serve` SSE handling to reduce misleading log output while preserving actionable errors.
+- bad399e: fix: persist target fiber version in profile to prevent auto-downgrade during node start
+- 0f6ead3: Add `TransportType` and `addr_type` param to `ConnectPeerParams` for Fiber v0.8.1 (issue #110)
+
+  - New `TransportType` union type: `'tcp' | 'ws' | 'wss'`
+  - `ConnectPeerParams.addr_type` optional field for filtering peer addresses by transport protocol
+  - CLI `peer connect` now accepts `--addr-type <tcp|ws|wss>` when connecting by pubkey
+  - Especially useful in WASM/browser environments that only support WSS
+  - Updated RPC type version comments to v0.8.1
+
+- b8a3d4e: fix(cli): support pubkey in peer connect and unify pubkey terminology for v0.8.0
+
+  - `peer connect` now accepts both pubkey and multiaddr
+  - removed peerId display from peer connect output
+  - renamed peerId -> pubkey in formatChannel JSON fields
+  - removed peerId from node-status output, show Pubkey instead
+  - updated rebalance error messages/details to use pubkey terminology
+
+- 7c92eff: fix(cli): auto-build multiaddr from pubkey + address in peer connect
+
+  - `peer connect <pubkey> --address <bare-multiaddr>` now automatically computes the peerId from the pubkey and appends `/p2p/<peerId>` to the address before sending the RPC call
+  - `peer connect <pubkey>` still sends `{ pubkey }` and relies on graph resolution
+  - `peer connect <multiaddr-with-p2p>` still sends `{ address }` directly
+  - improved error message when a bare multiaddr is passed as the sole positional argument
+
+- 53e5f03: Fix `channel open` to accept peer pubkeys without the `0x` prefix by auto-prepending it.
+- 55d86bf: # Agent Serve Isolation
+
+  feat(cli): require namespace isolation for `agent serve`
+
+  - Remove `--no-isolation` from `agent serve`
+  - Make Linux namespace isolation mandatory at startup
+  - Fail fast with `AGENT_SERVE_ISOLATION_REQUIRED` when `unshare` probe fails
+  - Remove directory-only fallback execution path
+  - Breaking API contract: `agent serve` now issues signed session tokens; resuming a session requires both `sessionId` and `sessionToken`
+  - Update setup and security docs to reflect strict isolation requirements
+
+- 867a83b: Implement host-side HTTP proxy to secure agent API keys and enforce outbound network deny-list in BoxLite environments
+- ece4316: Switch `agent serve` workspace static and directory list session auth to header-only (`x-session-id` and `x-session-token`), and remove URL-based session token/sessionId usage for these endpoints.
+- Updated dependencies [b049830]
+- Updated dependencies [0f6ead3]
+- Updated dependencies [713aa2d]
+  - @fiber-pay/sdk@0.2.4
+  - @fiber-pay/node@0.2.4
+  - @fiber-pay/runtime@0.2.4
+
 ## 0.2.3
 
 ### Patch Changes
