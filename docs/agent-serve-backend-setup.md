@@ -187,20 +187,29 @@ The server routinely checks the container's `/workspace` disk space.
 `agent serve` now supports a simple static endpoint for session workspace files:
 
 ```http
-GET /workspace/static/:sessionId/<path>
+GET /workspace/static/<path>
 ```
 
 Auth:
 
-- `x-session-token: <token>` header (preferred), or
-- `?sessionToken=<token>` query.
+- `x-session-id: <sessionId>` header.
+- `x-session-token: <token>` header.
 
 Security behavior:
 
-- Token must verify and match the requested `sessionId`.
+- Token must verify and match `x-session-id`.
 - File access is constrained to `/workspace/sessions/<sessionId>/`.
 - Path traversal and path escape are rejected.
 - Directory path requests fallback to `index.html`.
+
+Directory listing endpoint:
+
+```http
+GET /workspace/static/list?path=<relative-directory>
+```
+
+Response includes `entries` (`file` / `dir` / `symlink`), current relative path,
+and whether the result was truncated by server-side limit.
 
 Token validity uses the same session token TTL rule as chat session resume.
 By default (no `--workspace-ttl` override), effective token window is 24 hours.

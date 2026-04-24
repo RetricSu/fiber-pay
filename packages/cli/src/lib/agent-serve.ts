@@ -88,6 +88,20 @@ interface WorkspaceStaticFile {
   mtimeEpochSeconds: number;
 }
 
+interface WorkspaceDirectoryEntry {
+  name: string;
+  path: string;
+  type: 'file' | 'dir' | 'symlink';
+  sizeBytes: number;
+  mtimeEpochSeconds: number;
+}
+
+interface WorkspaceDirectoryListing {
+  path: string;
+  entries: WorkspaceDirectoryEntry[];
+  truncated: boolean;
+}
+
 type WorkspaceStaticReadResult =
   | { ok: true; file: WorkspaceStaticFile }
   | {
@@ -102,9 +116,23 @@ type WorkspaceStaticReadResult =
       message?: string;
     };
 
+type WorkspaceDirectoryListResult =
+  | { ok: true; listing: WorkspaceDirectoryListing }
+  | {
+      ok: false;
+      code:
+        | 'SESSION_NOT_FOUND'
+        | 'NOT_FOUND'
+        | 'NOT_DIRECTORY'
+        | 'PATH_OUTSIDE_SESSION'
+        | 'EXEC_FAILED';
+      message?: string;
+    };
+
 const SESSION_TOKEN_PREFIX = 'fpst';
 const MIN_SESSION_TOKEN_TTL_SECONDS = 300;
 const MAX_STATIC_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_DIRECTORY_LIST_ENTRIES = 500;
 const RECONNECT_PATTERN = /agent needs reconnect/i;
 const SECCOMP_NOT_AVAILABLE_PATTERN = /\bseccomp\b.*\bnot available\b/i;
 
@@ -473,13 +501,65 @@ function getStaticRequestSessionToken(req: express.Request): string | undefined 
     return headerToken.trim();
   }
 
-  const queryToken = req.query?.sessionToken;
-  const token = Array.isArray(queryToken) ? queryToken[0] : queryToken;
-  if (typeof token === 'string' && token.trim().length > 0) {
-    return token.trim();
+  return undefined;
+}
+
+function getStaticRequestSessionId(req: express.Request): string | undefined {
+  const fromHeader = req.headers['x-session-id'];
+  const headerSessionId = Array.isArray(fromHeader) ? fromHeader[0] : fromHeader;
+  if (typeof headerSessionId === 'string' && headerSessionId.trim().length > 0) {
+    return headerSessionId.trim();
   }
 
   return undefined;
+}
+
+function resolveWorkspaceSessionAccess(
+  rawSessionId: string | string[] | undefined,
+  sessionToken: string | undefined,
+  secret: Buffer,
+): { ok: true; sessionId: string } | { ok: false; status: number; code: string; message: string } {
+  const rawSessionIdValue = Array.isArray(rawSessionId) ? rawSessionId[0] : rawSessionId;
+  const sessionId = typeof rawSessionIdValue === 'string' ? rawSessionIdValue.trim() : '';
+
+  if (sessionId.length === 0) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'SESSION_MISSING_ID',
+      message: 'Missing session id. Provide x-session-id header.',
+    };
+  }
+
+  if (!isValidSessionId(sessionId)) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'SESSION_INVALID_ID',
+      message: 'Invalid "sessionId" format.',
+    };
+  }
+
+  if (!sessionToken) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'SESSION_MISSING_TOKEN',
+      message: 'Missing session token. Provide x-session-token header.',
+    };
+  }
+
+  const tokenVerifyResult = verifySessionToken(sessionId, sessionToken, secret);
+  if (!tokenVerifyResult.valid) {
+    return {
+      ok: false,
+      status: 403,
+      code: 'SESSION_INVALID_TOKEN',
+      message: tokenVerifyResult.reason,
+    };
+  }
+
+  return { ok: true, sessionId };
 }
 
 function normalizeWorkspaceStaticPath(rawPath: string | undefined): string | undefined {
@@ -494,6 +574,32 @@ function normalizeWorkspaceStaticPath(rawPath: string | undefined): string | und
 
   const normalized = pathPosix.normalize(candidate);
   if (normalized.length === 0 || normalized === '.' || normalized === '..') {
+    return undefined;
+  }
+
+  if (
+    pathPosix.isAbsolute(normalized) ||
+    normalized.startsWith('../') ||
+    normalized.includes('/../')
+  ) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function normalizeWorkspaceDirectoryPath(rawPath: string | undefined): string | undefined {
+  if (rawPath?.includes('\0')) {
+    return undefined;
+  }
+
+  const candidate = (rawPath || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+  if (candidate.length === 0) {
+    return '';
+  }
+
+  const normalized = pathPosix.normalize(candidate);
+  if (normalized === '.' || normalized === '..') {
     return undefined;
   }
 
@@ -619,6 +725,132 @@ async function readWorkspaceStaticFile(
       content,
       sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : content.length,
       mtimeEpochSeconds: Number.isFinite(mtimeEpochSeconds) ? mtimeEpochSeconds : 0,
+    },
+  };
+}
+
+async function listWorkspaceDirectory(
+  client: BoxliteClient,
+  sessionId: string,
+  relativeDirPath: string,
+  maxEntries: number,
+): Promise<WorkspaceDirectoryListResult> {
+  const safeSessionId = sanitizeSessionId(sessionId);
+  const sessionDir = `/workspace/sessions/${safeSessionId}`;
+  const sessionDirQuoted = shellQuote(sessionDir).trimEnd();
+  const relativeDirQuoted = shellQuote(relativeDirPath).trimEnd();
+
+  const result = await client.exec(
+    'sh',
+    [
+      '-c',
+      [
+        'set -eu',
+        `SESSION_DIR=${sessionDirQuoted}`,
+        `REL_DIR=${relativeDirQuoted}`,
+        `MAX_ENTRIES=${Math.floor(maxEntries)}`,
+        'BASE="$(readlink -f "$SESSION_DIR" 2>/dev/null || true)"',
+        'if [ -z "$BASE" ]; then echo "__ERR__:SESSION_NOT_FOUND"; exit 0; fi',
+        'TARGET="$BASE"',
+        'if [ -n "$REL_DIR" ]; then TARGET="$BASE/$REL_DIR"; fi',
+        'REAL_DIR="$(readlink -f "$TARGET" 2>/dev/null || true)"',
+        'if [ -z "$REAL_DIR" ]; then echo "__ERR__:NOT_FOUND"; exit 0; fi',
+        'case "$REAL_DIR" in "$BASE"|"$BASE"/*) ;; *) echo "__ERR__:PATH_OUTSIDE_SESSION"; exit 0 ;; esac',
+        'if [ ! -d "$REAL_DIR" ]; then echo "__ERR__:NOT_DIRECTORY"; exit 0; fi',
+        'TRUNCATED=0',
+        'COUNT=0',
+        'for ENTRY in "$REAL_DIR"/* "$REAL_DIR"/.*; do',
+        '  [ -e "$ENTRY" ] || continue',
+        '  NAME="$(basename "$ENTRY")"',
+        '  [ "$NAME" = "." ] && continue',
+        '  [ "$NAME" = ".." ] && continue',
+        '  if [ "$COUNT" -ge "$MAX_ENTRIES" ]; then TRUNCATED=1; break; fi',
+        '  COUNT=$((COUNT + 1))',
+        '  if [ -L "$ENTRY" ]; then TYPE="symlink"; SIZE=0;',
+        '  elif [ -d "$ENTRY" ]; then TYPE="dir"; SIZE=0;',
+        '  else TYPE="file"; SIZE="$(wc -c < "$ENTRY" | tr -d "[:space:]")"; fi',
+        '  [ -z "$SIZE" ] && SIZE=0',
+        '  MTIME="$(stat -c %Y "$ENTRY" 2>/dev/null || stat -f %m "$ENTRY" 2>/dev/null || echo 0)"',
+        '  NAME_B64="$(printf %s "$NAME" | base64 | tr -d "\\n")"',
+        '  printf "__ENTRY__:%s:%s:%s:%s\\n" "$NAME_B64" "$TYPE" "$SIZE" "$MTIME"',
+        'done',
+        'printf "__TRUNCATED__:%s\\n" "$TRUNCATED"',
+      ].join('\n'),
+    ],
+    { timeout: 30 },
+  );
+
+  if (result.exit_code !== 0) {
+    return {
+      ok: false,
+      code: 'EXEC_FAILED',
+      message: result.stderr.trim().slice(0, 300),
+    };
+  }
+
+  const lines = result.stdout
+    .replace(/\r/g, '')
+    .split('\n')
+    .filter((line) => line.length > 0);
+  const firstLine = lines[0] || '';
+
+  if (firstLine.startsWith('__ERR__:')) {
+    const detail = firstLine.slice('__ERR__:'.length);
+    if (detail === 'SESSION_NOT_FOUND') return { ok: false, code: 'SESSION_NOT_FOUND' };
+    if (detail === 'NOT_FOUND') return { ok: false, code: 'NOT_FOUND' };
+    if (detail === 'NOT_DIRECTORY') return { ok: false, code: 'NOT_DIRECTORY' };
+    if (detail === 'PATH_OUTSIDE_SESSION') return { ok: false, code: 'PATH_OUTSIDE_SESSION' };
+    return { ok: false, code: 'EXEC_FAILED', message: detail };
+  }
+
+  const entries: WorkspaceDirectoryEntry[] = [];
+  let truncated = false;
+
+  for (const line of lines) {
+    if (line.startsWith('__ENTRY__:')) {
+      const payload = line.slice('__ENTRY__:'.length);
+      const [nameB64 = '', type = 'file', sizePart = '0', mtimePart = '0'] = payload.split(':');
+
+      let name = '';
+      try {
+        name = Buffer.from(nameB64, 'base64').toString('utf-8');
+      } catch {
+        name = '';
+      }
+
+      if (name.length === 0) {
+        continue;
+      }
+
+      const sizeBytes = Number.parseInt(sizePart, 10);
+      const mtimeEpochSeconds = Number.parseInt(mtimePart, 10);
+      const normalizedType: WorkspaceDirectoryEntry['type'] =
+        type === 'dir' || type === 'symlink' ? type : 'file';
+      const relativePath = relativeDirPath.length > 0 ? `${relativeDirPath}/${name}` : name;
+
+      entries.push({
+        name,
+        path: relativePath,
+        type: normalizedType,
+        sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : 0,
+        mtimeEpochSeconds: Number.isFinite(mtimeEpochSeconds) ? mtimeEpochSeconds : 0,
+      });
+      continue;
+    }
+
+    if (line === '__TRUNCATED__:1') {
+      truncated = true;
+    }
+  }
+
+  entries.sort((left, right) => left.name.localeCompare(right.name));
+
+  return {
+    ok: true,
+    listing: {
+      path: relativeDirPath,
+      entries,
+      truncated,
     },
   };
 }
@@ -1474,33 +1706,122 @@ PROXYEOF`,
   });
 
   // L402 payment gate on all routes
+  const serveWorkspaceDirectoryList = async (req: AgentServeRequest, res: express.Response) => {
+    const requestId = getRequestId(req);
+    const sessionId = getStaticRequestSessionId(req);
+    const sessionToken = getStaticRequestSessionToken(req);
+    const sessionAccess = resolveWorkspaceSessionAccess(
+      sessionId,
+      sessionToken,
+      sessionSigningSecret,
+    );
+
+    if (!sessionAccess.ok) {
+      res.status(sessionAccess.status).json({
+        error: sessionAccess.message,
+        code: sessionAccess.code,
+      });
+      return;
+    }
+
+    const rawPathParam = req.query.path;
+    const rawPath = Array.isArray(rawPathParam) ? rawPathParam[0] : rawPathParam;
+    const relativeDirPath = normalizeWorkspaceDirectoryPath(
+      typeof rawPath === 'string' ? rawPath : undefined,
+    );
+
+    if (relativeDirPath === undefined) {
+      res.status(400).json({
+        error: 'Invalid workspace directory path.',
+        code: 'WORKSPACE_LIST_INVALID_PATH',
+      });
+      return;
+    }
+
+    try {
+      const listingResult = await listWorkspaceDirectory(
+        client,
+        sessionAccess.sessionId,
+        relativeDirPath,
+        MAX_DIRECTORY_LIST_ENTRIES,
+      );
+
+      if (!listingResult.ok) {
+        if (!asJson) {
+          console.log(
+            `[REQ ${requestId}] workspace list failed session=${sessionAccess.sessionId} path=${relativeDirPath} code=${listingResult.code}`,
+          );
+        }
+
+        if (listingResult.code === 'SESSION_NOT_FOUND' || listingResult.code === 'NOT_FOUND') {
+          res.status(404).json({
+            error: 'Workspace directory not found.',
+            code: 'WORKSPACE_LIST_NOT_FOUND',
+          });
+          return;
+        }
+
+        if (listingResult.code === 'NOT_DIRECTORY') {
+          res.status(400).json({
+            error: 'Requested path is not a directory.',
+            code: 'WORKSPACE_LIST_NOT_DIRECTORY',
+          });
+          return;
+        }
+
+        if (listingResult.code === 'PATH_OUTSIDE_SESSION') {
+          res.status(403).json({
+            error: 'Path escapes session workspace.',
+            code: 'WORKSPACE_LIST_FORBIDDEN',
+          });
+          return;
+        }
+
+        res.status(502).json({
+          error: 'Failed to list workspace directory from BoxLite.',
+          code: 'WORKSPACE_LIST_FAILED',
+          details: listingResult.message,
+        });
+        return;
+      }
+
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.json({
+        sessionId: sessionAccess.sessionId,
+        path: listingResult.listing.path,
+        entries: listingResult.listing.entries,
+        truncated: listingResult.listing.truncated,
+        limit: MAX_DIRECTORY_LIST_ENTRIES,
+      });
+    } catch (error) {
+      if (!asJson) {
+        console.log(
+          `[REQ ${requestId}] workspace list error session=${sessionAccess.sessionId} path=${relativeDirPath}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+
+      res.status(502).json({
+        error: 'Failed to list workspace directory from BoxLite.',
+        code: 'WORKSPACE_LIST_FAILED',
+      });
+    }
+  };
+
   const serveWorkspaceStatic = async (req: AgentServeRequest, res: express.Response) => {
     const requestId = getRequestId(req);
-    const rawSessionId = req.params.sessionId;
-    const sessionId = typeof rawSessionId === 'string' ? rawSessionId.trim() : '';
+    const sessionId = getStaticRequestSessionId(req);
     const sessionToken = getStaticRequestSessionToken(req);
+    const sessionAccess = resolveWorkspaceSessionAccess(
+      sessionId,
+      sessionToken,
+      sessionSigningSecret,
+    );
 
-    if (!isValidSessionId(sessionId)) {
-      res.status(400).json({
-        error: 'Invalid "sessionId" format.',
-        code: 'SESSION_INVALID_ID',
-      });
-      return;
-    }
-
-    if (!sessionToken) {
-      res.status(400).json({
-        error: 'Missing session token. Provide x-session-token header or sessionToken query param.',
-        code: 'SESSION_MISSING_TOKEN',
-      });
-      return;
-    }
-
-    const tokenVerifyResult = verifySessionToken(sessionId, sessionToken, sessionSigningSecret);
-    if (!tokenVerifyResult.valid) {
-      res.status(403).json({
-        error: tokenVerifyResult.reason,
-        code: 'SESSION_INVALID_TOKEN',
+    if (!sessionAccess.ok) {
+      res.status(sessionAccess.status).json({
+        error: sessionAccess.message,
+        code: sessionAccess.code,
       });
       return;
     }
@@ -1523,7 +1844,7 @@ PROXYEOF`,
     try {
       const fileReadResult = await readWorkspaceStaticFile(
         client,
-        sessionId,
+        sessionAccess.sessionId,
         relativePath,
         MAX_STATIC_FILE_BYTES,
       );
@@ -1531,7 +1852,7 @@ PROXYEOF`,
       if (!fileReadResult.ok) {
         if (!asJson) {
           console.log(
-            `[REQ ${requestId}] workspace static read failed session=${sessionId} path=${relativePath} code=${fileReadResult.code}`,
+            `[REQ ${requestId}] workspace static read failed session=${sessionAccess.sessionId} path=${relativePath} code=${fileReadResult.code}`,
           );
         }
 
@@ -1579,7 +1900,7 @@ PROXYEOF`,
     } catch (error) {
       if (!asJson) {
         console.log(
-          `[REQ ${requestId}] workspace static read error session=${sessionId} path=${relativePath}: ${error instanceof Error ? error.message : String(error)}`,
+          `[REQ ${requestId}] workspace static read error session=${sessionAccess.sessionId} path=${relativePath}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
       res.status(502).json({
@@ -1589,8 +1910,9 @@ PROXYEOF`,
     }
   };
 
-  app.get('/workspace/static/:sessionId', serveWorkspaceStatic);
-  app.get('/workspace/static/:sessionId/*filePath', serveWorkspaceStatic);
+  app.get('/workspace/static/list', serveWorkspaceDirectoryList);
+  app.get('/workspace/static', serveWorkspaceStatic);
+  app.get('/workspace/static/*filePath', serveWorkspaceStatic);
 
   // L402 payment gate on all paid routes
   app.use(
