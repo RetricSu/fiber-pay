@@ -16,7 +16,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "pnpm --filter @fiber-pay/sdk build && tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --config vitest.config.ts"

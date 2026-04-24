@@ -23,7 +23,11 @@ export {
   shannonsToCkb,
   toHex,
 } from '@fiber-pay/sdk/browser';
-export type { ConnectButtonProps, ConnectStrategy } from './connect-button.js';
+export type {
+  ConnectButtonConnectedDropdownContext,
+  ConnectButtonProps,
+  ConnectStrategy,
+} from './connect-button.js';
 export { ConnectButton } from './connect-button.js';
 export type { FiberPayQuickCardProps } from './fiber-pay-quick-card.js';
 export { FiberPayQuickCard } from './fiber-pay-quick-card.js';

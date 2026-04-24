@@ -78,6 +78,16 @@ export interface ConnectButtonProps {
   /** Inline styles for the root container. */
   style?: CSSProperties;
 
+  /** Inline styles for the connected dropdown container. */
+  dropdownStyle?: CSSProperties;
+
+  /**
+   * Optional custom renderer for the connected dropdown content.
+   * Use this to inject project-specific controls (for example peer/channel actions)
+   * while reusing the SDK's connect/disconnect lifecycle button.
+   */
+  renderConnectedDropdown?: (context: ConnectButtonConnectedDropdownContext) => ReactNode;
+
   /**
    * Called when the node reaches the "running" state.
    * Receives the `FiberBrowserNode` instance and its `NodeInfoResult`.
@@ -89,6 +99,12 @@ export interface ConnectButtonProps {
 
   /** Called when an error occurs. */
   onError?: (error: string) => void;
+}
+
+export interface ConnectButtonConnectedDropdownContext {
+  fiber: UseFiberNodeResult;
+  closeDropdown: () => void;
+  disconnect: () => Promise<void>;
 }
 
 // =============================================================================
@@ -290,6 +306,8 @@ export function ConnectButton(props: ConnectButtonProps) {
     nodeConfig,
     className,
     style,
+    dropdownStyle,
+    renderConnectedDropdown,
     onConnect,
     onDisconnect,
     onError,
@@ -430,6 +448,10 @@ export function ConnectButton(props: ConnectButtonProps) {
     }
   }, [stop, onError]);
 
+  const closeDropdown = useCallback(() => {
+    setShowDropdown(false);
+  }, []);
+
   // --- Render ---------------------------------------------------------------
 
   const hasError = !!(error || localError);
@@ -501,44 +523,54 @@ export function ConnectButton(props: ConnectButtonProps) {
           </button>
 
           {showDropdown && (
-            <div style={styles.dropdown}>
-              {/* Node info */}
-              {nodeInfo && (
+            <div style={{ ...styles.dropdown, ...dropdownStyle }}>
+              {renderConnectedDropdown ? (
+                renderConnectedDropdown({
+                  fiber,
+                  closeDropdown,
+                  disconnect: handleDisconnect,
+                })
+              ) : (
                 <>
-                  <div style={styles.infoRow}>
-                    <span style={styles.infoLabel}>Pubkey</span>
-                    <span style={styles.infoValue}>{truncateNodeId(nodeInfo.pubkey)}</span>
-                  </div>
-                  <div style={styles.infoRow}>
-                    <span style={styles.infoLabel}>State</span>
-                    <span style={styles.infoValue}>{state}</span>
-                  </div>
+                  {/* Node info */}
+                  {nodeInfo && (
+                    <>
+                      <div style={styles.infoRow}>
+                        <span style={styles.infoLabel}>Pubkey</span>
+                        <span style={styles.infoValue}>{truncateNodeId(nodeInfo.pubkey)}</span>
+                      </div>
+                      <div style={styles.infoRow}>
+                        <span style={styles.infoLabel}>State</span>
+                        <span style={styles.infoValue}>{state}</span>
+                      </div>
+                    </>
+                  )}
+
+                  <div style={styles.separator} />
+
+                  {/* Disconnect */}
+                  <button
+                    type="button"
+                    onClick={() => void handleDisconnect()}
+                    style={styles.disconnectButton}
+                  >
+                    <span>Disconnect</span>
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                  </button>
                 </>
               )}
-
-              <div style={styles.separator} />
-
-              {/* Disconnect */}
-              <button
-                type="button"
-                onClick={() => void handleDisconnect()}
-                style={styles.disconnectButton}
-              >
-                <span>Disconnect</span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M9 18l6-6-6-6" />
-                </svg>
-              </button>
             </div>
           )}
         </div>
