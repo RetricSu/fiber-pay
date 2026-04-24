@@ -7,7 +7,8 @@ This guide provides a comprehensive overview of how to set up the backend enviro
 Use this checklist when installing on a new server:
 
 1. Install and run BoxLite REST server (`boxlite serve`).
-2. Create a persistent Box (`node:22-alpine`, disk >= 10 GB, strict `allowNet`).
+2. Create a persistent Box (`node:22-alpine`, disk >= 10 GB, strict `allowNet`) and prefer no host bind mount.
+   - If a mount is unavoidable, use a dedicated least-privilege directory only (never repo root, `$HOME`, or sensitive paths).
 3. Install required tools in Box:
     - `acpx@0.5.3`
     - `opencode-ai@latest`
@@ -47,6 +48,7 @@ When you run `fiber-pay agent serve`, the process involves several layers of iso
    - Executes the actual AI agent via `acpx`.
    - Never sees the real API keys (receives `fp-shim-placeholder` instead).
    - All network traffic is forced through the Host-side Proxy via `HTTP_PROXY` and `HTTPS_PROXY`.
+   - For filesystem safety, prefer container-local persistent disk and avoid host bind mounts unless strictly required.
 
 3. **Per-Session Linux Namespaces**:
    - Every request is wrapped in a Linux namespace using `unshare`.
@@ -181,6 +183,38 @@ The server routinely checks the container's `/workspace` disk space.
 - You can configure the `workspaceTtl` (default: 24 hours).
 - If disk usage exceeds 90%, the service automatically drops the TTL to 1 hour and accelerates the cleanup interval.
 - If disk usage exceeds 95%, the service will crash proactively to prevent corruption. Use `--workspace-min-free-mb` to enforce a buffer.
+
+### Session-scoped static workspace serving
+
+`agent serve` now supports a simple static endpoint for session workspace files:
+
+```http
+GET /workspace/static/<path>
+```
+
+Auth:
+
+- `x-session-id: <sessionId>` header.
+- `x-session-token: <token>` header.
+
+Security behavior:
+
+- Token must verify and match `x-session-id`.
+- File access is constrained to `/workspace/sessions/<sessionId>/`.
+- Path traversal and path escape are rejected.
+- Directory path requests fallback to `index.html`.
+
+Directory listing endpoint:
+
+```http
+GET /workspace/static/list?path=<relative-directory>
+```
+
+Response includes `entries` (`file` / `dir` / `symlink`), current relative path,
+and whether the result was truncated by server-side limit.
+
+Token validity uses the same session token TTL rule as chat session resume.
+By default (no `--workspace-ttl` override), effective token window is 24 hours.
 
 ## 6. Real-World Pitfalls And Fixes
 

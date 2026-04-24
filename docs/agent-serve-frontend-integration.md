@@ -101,10 +101,79 @@ When using SSE, `done` and `error` events include `session` as well.
 
 This lets streaming clients keep session state in sync.
 
+### 4) Workspace static file access
+
+The service exposes session-scoped static files from the Box workspace:
+
+```http
+GET /workspace/static/<path>
+```
+
+Auth requirement:
+
+- Provide `x-session-id` header.
+- Provide `x-session-token` header.
+
+Example:
+
+```http
+GET /workspace/static/index.html
+x-session-id: sess-...
+x-session-token: fpst....
+```
+
+Behavior:
+
+- Access is allowed only when `x-session-token` matches `x-session-id`.
+- Files are resolved under `/workspace/sessions/<sessionId>/` only.
+- Path traversal is rejected.
+- Directory path falls back to `index.html`.
+
+### 5) Workspace directory listing
+
+To discover available files before loading static assets:
+
+```http
+GET /workspace/static/list
+```
+
+Optional query:
+
+- `path=<relative-directory>` for listing a sub-directory
+
+Example:
+
+```http
+GET /workspace/static/list?path=src
+x-session-id: sess-...
+x-session-token: fpst....
+```
+
+Response shape:
+
+```json
+{
+  "sessionId": "sess-...",
+  "path": "src",
+  "entries": [
+    {
+      "name": "main.ts",
+      "path": "src/main.ts",
+      "type": "file",
+      "sizeBytes": 128,
+      "mtimeEpochSeconds": 1710000003
+    }
+  ],
+  "truncated": false,
+  "limit": 500
+}
+```
+
 ## Error codes you must handle
 
 Session contract failures:
 
+- `400 SESSION_MISSING_ID`
 - `400 SESSION_MISSING_TOKEN`
 - `400 SESSION_INVALID_INPUT`
 - `400 SESSION_INVALID_ID`

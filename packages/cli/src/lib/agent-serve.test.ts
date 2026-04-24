@@ -933,6 +933,362 @@ describe('runAgentServeCommand', () => {
     });
   });
 
+  describe('GET /workspace/static', () => {
+    beforeEach(() => {
+      queueSuccessfulIsolationPreflight();
+    });
+
+    it('serves a workspace file when session token is valid', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+      const html = '<!doctype html><h1>ok</h1>';
+      const base64 = Buffer.from(html, 'utf-8').toString('base64');
+      mockExec.mockResolvedValueOnce({
+        stdout: `__META__:${Buffer.byteLength(html, 'utf-8')}:1710000000\n${base64}\n`,
+        stderr: '',
+        exit_code: 0,
+      });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      expect(sessionResponse.status).toBe(200);
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(`${url}/workspace/static/index.html`, {
+        headers: {
+          'x-session-id': session.id,
+          'x-session-token': session.token,
+        },
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      expect(response.headers.get('cache-control')).toContain('no-store');
+      expect(await response.text()).toBe(html);
+
+      server?.close();
+    });
+
+    it('rejects workspace static request without session token', async () => {
+      const { server, url } = await startTestServer();
+
+      const response = await fetch(`${url}/workspace/static/index.html`, {
+        headers: {
+          'x-session-id': 'sess-test',
+        },
+      });
+
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as { code?: string };
+      expect(body.code).toBe('SESSION_MISSING_TOKEN');
+
+      server?.close();
+    });
+
+    it('rejects workspace static request with tampered session token', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      expect(sessionResponse.status).toBe(200);
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(`${url}/workspace/static/index.html`, {
+        headers: {
+          'x-session-id': session.id,
+          'x-session-token': `${session.token}tampered`,
+        },
+      });
+
+      expect(response.status).toBe(403);
+      const body = (await response.json()) as { code?: string };
+      expect(body.code).toBe('SESSION_INVALID_TOKEN');
+
+      server?.close();
+    });
+
+    it('rejects path traversal for workspace static request', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      expect(sessionResponse.status).toBe(200);
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(`${url}/workspace/static/..%2F..%2Fetc%2Fpasswd`, {
+        headers: {
+          'x-session-id': session.id,
+          'x-session-token': session.token,
+        },
+      });
+
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as { code?: string };
+      expect(body.code).toBe('WORKSPACE_STATIC_INVALID_PATH');
+
+      server?.close();
+    });
+
+    it('returns 413 when workspace static file exceeds size limit', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({
+        stdout: '__ERR__:TOO_LARGE:7340032\n',
+        stderr: '',
+        exit_code: 0,
+      });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      expect(sessionResponse.status).toBe(200);
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(`${url}/workspace/static/big.bin`, {
+        headers: {
+          'x-session-id': session.id,
+          'x-session-token': session.token,
+        },
+      });
+
+      expect(response.status).toBe(413);
+      const body = (await response.json()) as { code?: string };
+      expect(body.code).toBe('WORKSPACE_STATIC_TOO_LARGE');
+
+      server?.close();
+    });
+
+    it('falls back to index.html for workspace static directory path', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+      const html = '<html>index</html>';
+      const base64 = Buffer.from(html, 'utf-8').toString('base64');
+      mockExec.mockResolvedValueOnce({
+        stdout: `__META__:${Buffer.byteLength(html, 'utf-8')}:1710000000\n${base64}\n`,
+        stderr: '',
+        exit_code: 0,
+      });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      expect(sessionResponse.status).toBe(200);
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(`${url}/workspace/static`, {
+        headers: {
+          'x-session-id': session.id,
+          'x-session-token': session.token,
+        },
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe(html);
+
+      server?.close();
+    });
+  });
+
+  describe('GET /workspace/static/list', () => {
+    beforeEach(() => {
+      queueSuccessfulIsolationPreflight();
+    });
+
+    it('lists root workspace directory entries when session token is valid', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+      const dirName = Buffer.from('assets', 'utf-8').toString('base64');
+      const fileName = Buffer.from('index.html', 'utf-8').toString('base64');
+      mockExec.mockResolvedValueOnce({
+        stdout:
+          `__ENTRY__:${dirName}:dir:0:1710000001\n` +
+          `__ENTRY__:${fileName}:file:512:1710000002\n` +
+          '__TRUNCATED__:0\n',
+        stderr: '',
+        exit_code: 0,
+      });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      expect(sessionResponse.status).toBe(200);
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(`${url}/workspace/static/list`, {
+        headers: {
+          'x-session-id': session.id,
+          'x-session-token': session.token,
+        },
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toContain('no-store');
+      const body = (await response.json()) as {
+        entries: Array<{ name: string; path: string; type: string }>;
+        truncated: boolean;
+      };
+      expect(body.truncated).toBe(false);
+      expect(body.entries.map((entry) => entry.name)).toEqual(['assets', 'index.html']);
+      expect(body.entries[0]?.type).toBe('dir');
+      expect(body.entries[1]?.path).toBe('index.html');
+
+      const listCall = mockExec.mock.calls.find(
+        (call) =>
+          call[0] === 'sh' &&
+          Array.isArray(call[1]) &&
+          (call[1] as string[])[0] === '-c' &&
+          typeof (call[1] as string[])[1] === 'string' &&
+          ((call[1] as string[])[1] as string).includes('__ENTRY__'),
+      );
+      expect(listCall).toBeDefined();
+      const listScript = ((listCall?.[1] as string[]) || [])[1] || '';
+      expect(listScript).toContain('find "$REAL_DIR" -mindepth 1 -maxdepth 1 -print');
+      expect(listScript).toContain('while IFS= read -r ENTRY; do');
+
+      server?.close();
+    });
+
+    it('lists sub-directory when path query is provided', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+      const fileName = Buffer.from('main.ts', 'utf-8').toString('base64');
+      mockExec.mockResolvedValueOnce({
+        stdout: `__ENTRY__:${fileName}:file:128:1710000003\n__TRUNCATED__:0\n`,
+        stderr: '',
+        exit_code: 0,
+      });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(
+        `${url}/workspace/static/list?path=${encodeURIComponent('src')}`,
+        {
+          headers: {
+            'x-session-id': session.id,
+            'x-session-token': session.token,
+          },
+        },
+      );
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { path: string; entries: Array<{ path: string }> };
+      expect(body.path).toBe('src');
+      expect(body.entries[0]?.path).toBe('src/main.ts');
+
+      server?.close();
+    });
+
+    it('rejects directory listing with invalid path traversal query', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(
+        `${url}/workspace/static/list?path=${encodeURIComponent('../etc')}`,
+        {
+          headers: {
+            'x-session-id': session.id,
+            'x-session-token': session.token,
+          },
+        },
+      );
+
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as { code?: string };
+      expect(body.code).toBe('WORKSPACE_LIST_INVALID_PATH');
+
+      server?.close();
+    });
+
+    it('returns 400 when listing path points to a file', async () => {
+      mockExec.mockResolvedValueOnce({ stdout: '', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({ stdout: 'bootstrap', stderr: '', exit_code: 0 });
+      mockExec.mockResolvedValueOnce({
+        stdout: '__ERR__:NOT_DIRECTORY\n',
+        stderr: '',
+        exit_code: 0,
+      });
+
+      const { server, url } = await startTestServer();
+
+      const sessionResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'bootstrap' }),
+      });
+      const sessionBody = (await sessionResponse.json()) as { session: unknown };
+      const session = readSession(sessionBody);
+
+      const response = await fetch(
+        `${url}/workspace/static/list?path=${encodeURIComponent('index.html')}`,
+        {
+          headers: {
+            'x-session-id': session.id,
+            'x-session-token': session.token,
+          },
+        },
+      );
+
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as { code?: string };
+      expect(body.code).toBe('WORKSPACE_LIST_NOT_DIRECTORY');
+
+      server?.close();
+    });
+  });
+
   // ---------------------------------------------------------------------------
   // Isolation-specific behaviour
   // ---------------------------------------------------------------------------
