@@ -885,12 +885,13 @@ async function checkDiskSpace(
  * Runs inside the BoxLite container so it has access to the actual paths.
  */
 async function cleanupStaleWorkspaces(client: BoxliteClient, ttlHours: number): Promise<void> {
+  const ttlMinutes = Math.max(1, Math.floor(ttlHours * 60));
   try {
     await client.exec(
       'sh',
       [
         '-c',
-        `find /workspace/sessions /tmp/fiber-sessions -mindepth 1 -maxdepth 1 -type d -mtime +${Math.floor(ttlHours)} -exec rm -rf {} + 2>/dev/null || true`,
+        `find /workspace/sessions /tmp/fiber-sessions -mindepth 1 -maxdepth 1 -type d -mmin +${ttlMinutes} -exec rm -rf {} + 2>/dev/null || true`,
       ],
       { timeout: 60 },
     );
@@ -1928,20 +1929,26 @@ PROXYEOF`,
   );
 
   // Scheduled workspace cleanup with adaptive TTL.
-  let cleanupIntervalMs = 60 * 60 * 1000; // 1 hour
-  const cleanupTimer = setInterval(async () => {
-    const d = await checkDiskSpace(client);
-    const pressure = d
-      ? d.usedPercent >= 90 || d.availableBytes < workspaceMinFreeMb * 1024 * 1024
-      : false;
-    const ttl = pressure ? Math.min(1, workspaceTtlHours) : workspaceTtlHours;
-    if (pressure && cleanupIntervalMs > 10 * 60 * 1000) {
-      cleanupIntervalMs = 10 * 60 * 1000; // speed up to 10 min under pressure
-      clearInterval(cleanupTimer);
-      // restart with shorter interval (handled by outer scope, just clear here)
-    }
-    await cleanupStaleWorkspaces(client, ttl);
-  }, cleanupIntervalMs);
+  const defaultCleanupIntervalMs = 60 * 60 * 1000; // 1 hour
+  const pressureCleanupIntervalMs = 10 * 60 * 1000; // 10 minutes
+  let cleanupIntervalMs = defaultCleanupIntervalMs;
+  let cleanupTimer: ReturnType<typeof setInterval>;
+  const scheduleCleanupTimer = () =>
+    setInterval(async () => {
+      const d = await checkDiskSpace(client);
+      const pressure = d
+        ? d.usedPercent >= 90 || d.availableBytes < workspaceMinFreeMb * 1024 * 1024
+        : false;
+      const ttl = pressure ? 1 : workspaceTtlHours;
+      const nextCleanupIntervalMs = pressure ? pressureCleanupIntervalMs : defaultCleanupIntervalMs;
+      if (cleanupIntervalMs !== nextCleanupIntervalMs) {
+        cleanupIntervalMs = nextCleanupIntervalMs;
+        clearInterval(cleanupTimer);
+        cleanupTimer = scheduleCleanupTimer();
+      }
+      await cleanupStaleWorkspaces(client, ttl);
+    }, cleanupIntervalMs);
+  cleanupTimer = scheduleCleanupTimer();
 
   // Agent endpoint
   app.post('/', async (req: AgentServeRequest, res) => {
