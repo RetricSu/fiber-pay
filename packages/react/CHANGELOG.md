@@ -1,5 +1,25 @@
 # @fiber-pay/react
 
+## 0.2.4
+
+### Patch Changes
+
+- d8f763b: feat(react): add ConnectButton, NodeInfoPanel components and enhance useFiberNode
+
+  - Add `<ConnectButton>` component with standalone and external-hook modes, supporting passkey/password/rawKey/auto strategies
+  - Add `renderConnectedDropdown` and `dropdownStyle` to `<ConnectButton>` so apps can inject project-specific connected menus while reusing SDK lifecycle logic
+  - Add `<NodeInfoPanel>` component for displaying node stats, QR code, and copy-to-clipboard
+  - Add `startWithRawKey()` to `useFiberNode` hook for `RawKeyCredentialProvider` support
+  - Add `isStarting` and `isRunning` computed convenience booleans to `useFiberNode`
+  - Export `RawKeyCredentialProvider` and `scriptToAddress` from `@fiber-pay/react`
+  - Add `qrcode.react` as optional peer dependency for QR code rendering
+
+- 713aa2d: feat(sdk,react): re-export common browser types and utilities
+- Updated dependencies [b049830]
+- Updated dependencies [0f6ead3]
+- Updated dependencies [713aa2d]
+  - @fiber-pay/sdk@0.2.4
+
 ## 0.2.3
 
 ### Patch Changes
