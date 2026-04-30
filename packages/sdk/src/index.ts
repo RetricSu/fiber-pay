@@ -13,6 +13,7 @@ export type { LiquidityReport } from './funds/liquidity-analyzer.js';
 export { LiquidityAnalyzer } from './funds/liquidity-analyzer.js';
 // RPC client
 export { FiberRpcClient, FiberRpcError } from './rpc/index.js';
+export { normalizeChannel, normalizeChannelStateName } from './rpc/normalize-channel.js';
 export type {
   BiscuitAction,
   BiscuitMethodRule,

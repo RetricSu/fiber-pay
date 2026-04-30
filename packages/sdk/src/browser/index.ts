@@ -67,6 +67,7 @@ export {
   FiberRpcClient as BrowserRpcClient,
   FiberRpcError,
 } from '../rpc/client.js';
+export { normalizeChannel, normalizeChannelStateName } from '../rpc/normalize-channel.js';
 export { ckbHash, derivePublicKey } from '../security/crypto.js';
 export type { IFiberClient } from '../types/fiber-client.js';
 export type {
