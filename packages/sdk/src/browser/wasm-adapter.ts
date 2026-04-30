@@ -12,6 +12,7 @@
  */
 
 import { FiberRpcError } from '../rpc/client.js';
+import { normalizeChannel } from '../rpc/normalize-channel.js';
 import type {
   AbandonChannelParams,
   AcceptChannelParams,
@@ -220,7 +221,11 @@ export class FiberWasmAdapter {
   }
 
   async listChannels(params?: ListChannelsParams): Promise<ListChannelsResult> {
-    return this.invoke<ListChannelsResult>('list_channels', [params ?? {}]);
+    const result = await this.invoke<ListChannelsResult>('list_channels', [params ?? {}]);
+    return {
+      ...result,
+      channels: result.channels.map((channel) => normalizeChannel(channel)),
+    };
   }
 
   async shutdownChannel(params: ShutdownChannelParams): Promise<void> {
