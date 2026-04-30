@@ -113,7 +113,7 @@ export async function* runChannelJob(
         });
 
         const readyMatch = candidates.find(
-          (channel) => String(channel.state.state_name).toUpperCase() === 'CHANNEL_READY',
+          (channel) => channel.state.state_name === ChannelState.ChannelReady,
         );
 
         const activeMatch = candidates.find((channel) => !isClosed(channel.state.state_name));
@@ -198,7 +198,7 @@ export async function* runChannelJob(
           (channel) => channel.channel_id === shutdownParams.channel_id,
         );
 
-        if (!match || isTerminalClosed(String(match.state.state_name))) {
+        if (!match || isTerminalClosed(match.state.state_name)) {
           current = transitionJobState(current, channelStateMachine, 'channel_closed', {
             patch: {
               result: {
@@ -337,17 +337,12 @@ async function findTargetChannel(rpc: FiberRpcClient, pubkey: string, channelId?
   });
 }
 
-function isClosed(stateName: string): boolean {
-  return (
-    stateName === ChannelState.Closed ||
-    stateName === 'CLOSED' ||
-    stateName === ChannelState.ShuttingDown ||
-    stateName === 'SHUTTING_DOWN'
-  );
+function isClosed(stateName: ChannelState): boolean {
+  return stateName === ChannelState.Closed || stateName === ChannelState.ShuttingDown;
 }
 
-function isTerminalClosed(stateName: string): boolean {
-  return stateName === ChannelState.Closed || stateName === 'CLOSED';
+function isTerminalClosed(stateName: ChannelState): boolean {
+  return stateName === ChannelState.Closed;
 }
 
 function normalizePubkey(value: string): `0x${string}` {
