@@ -55,6 +55,7 @@ import type {
   UpdateChannelParams,
 } from '../types/index.js';
 import { ChannelState } from '../types/index.js';
+import { normalizeChannel } from './normalize-channel.js';
 
 // =============================================================================
 // RPC Client Configuration
@@ -102,17 +103,6 @@ export class FiberRpcError extends Error {
 export class FiberRpcClient implements IFiberClient {
   private requestId = 0;
   private config: Required<Pick<RpcClientConfig, 'url' | 'timeout'>> & RpcClientConfig;
-
-  private readonly channelStateAliases: Record<string, ChannelState> = {
-    NEGOTIATING_FUNDING: ChannelState.NegotiatingFunding,
-    COLLABORATING_FUNDING_TX: ChannelState.CollaboratingFundingTx,
-    SIGNING_COMMITMENT: ChannelState.SigningCommitment,
-    AWAITING_TX_SIGNATURES: ChannelState.AwaitingTxSignatures,
-    AWAITING_CHANNEL_READY: ChannelState.AwaitingChannelReady,
-    CHANNEL_READY: ChannelState.ChannelReady,
-    SHUTTING_DOWN: ChannelState.ShuttingDown,
-    CLOSED: ChannelState.Closed,
-  };
 
   constructor(config: RpcClientConfig) {
     this.config = {
@@ -240,32 +230,7 @@ export class FiberRpcClient implements IFiberClient {
     const result = await this.call<ListChannelsResult>('list_channels', params ? [params] : [{}]);
     return {
       ...result,
-      channels: result.channels.map((channel) => this.normalizeChannel(channel)),
-    };
-  }
-
-  private normalizeChannelStateName(stateName: string): ChannelState {
-    const alias = this.channelStateAliases[stateName];
-    if (alias) return alias;
-
-    const normalizedInput = stateName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    for (const value of Object.values(ChannelState)) {
-      const normalizedValue = value.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-      if (normalizedValue === normalizedInput) {
-        return value;
-      }
-    }
-
-    return stateName as ChannelState;
-  }
-
-  private normalizeChannel(channel: Channel): Channel {
-    return {
-      ...channel,
-      state: {
-        ...channel.state,
-        state_name: this.normalizeChannelStateName(channel.state.state_name),
-      },
+      channels: result.channels.map((channel) => normalizeChannel(channel)),
     };
   }
 
