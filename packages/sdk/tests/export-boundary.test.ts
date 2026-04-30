@@ -29,7 +29,7 @@ describe('SDK export boundaries', () => {
     expect(browserEntry).toHaveProperty('FiberRpcClient');
   });
 
-  it('exposes channel state normalization helpers from root and browser entries', () => {
+  it('exposes channel state normalization helpers from root, browser, and node entries', () => {
     for (const entry of [rootEntry, browserEntry, nodeEntry]) {
       expect(entry).toHaveProperty('normalizeChannel');
       expect(entry).toHaveProperty('normalizeChannelStateName');

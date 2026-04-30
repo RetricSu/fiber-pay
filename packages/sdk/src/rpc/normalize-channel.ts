@@ -10,21 +10,12 @@
 
 import { type Channel, ChannelState } from '../types/index.js';
 
-const CHANNEL_STATE_ALIASES: Record<string, ChannelState> = {
-  NEGOTIATING_FUNDING: ChannelState.NegotiatingFunding,
-  COLLABORATING_FUNDING_TX: ChannelState.CollaboratingFundingTx,
-  SIGNING_COMMITMENT: ChannelState.SigningCommitment,
-  AWAITING_TX_SIGNATURES: ChannelState.AwaitingTxSignatures,
-  AWAITING_CHANNEL_READY: ChannelState.AwaitingChannelReady,
-  CHANNEL_READY: ChannelState.ChannelReady,
-  SHUTTING_DOWN: ChannelState.ShuttingDown,
-  CLOSED: ChannelState.Closed,
-};
-
 /**
  * Pre-computed lookup of normalized (alphanumeric, lowercased) `ChannelState`
- * values to their canonical enum value. Used as the fallback path when an
- * input does not match the alias table directly.
+ * values to their canonical enum value.
+ *
+ * Generated dynamically from `ChannelState` so new enum values are picked up
+ * automatically without manual maintenance.
  */
 const CHANNEL_STATE_LOOKUP: Record<string, ChannelState> = Object.fromEntries(
   Object.values(ChannelState).map((value) => [
@@ -44,9 +35,6 @@ const CHANNEL_STATE_LOOKUP: Record<string, ChannelState> = Object.fromEntries(
  * match is found, so unknown future states do not throw.
  */
 export function normalizeChannelStateName(stateName: string): ChannelState {
-  const alias = CHANNEL_STATE_ALIASES[stateName];
-  if (alias) return alias;
-
   const normalizedInput = stateName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
   return CHANNEL_STATE_LOOKUP[normalizedInput] ?? (stateName as ChannelState);
 }
