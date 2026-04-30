@@ -22,6 +22,18 @@ const CHANNEL_STATE_ALIASES: Record<string, ChannelState> = {
 };
 
 /**
+ * Pre-computed lookup of normalized (alphanumeric, lowercased) `ChannelState`
+ * values to their canonical enum value. Used as the fallback path when an
+ * input does not match the alias table directly.
+ */
+const CHANNEL_STATE_LOOKUP: Record<string, ChannelState> = Object.fromEntries(
+  Object.values(ChannelState).map((value) => [
+    value.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(),
+    value,
+  ]),
+);
+
+/**
  * Normalize a channel state name to the canonical `ChannelState` enum value.
  *
  * Accepts SCREAMING_SNAKE_CASE (e.g. `"CHANNEL_READY"`), PascalCase
@@ -36,14 +48,7 @@ export function normalizeChannelStateName(stateName: string): ChannelState {
   if (alias) return alias;
 
   const normalizedInput = stateName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-  for (const value of Object.values(ChannelState)) {
-    const normalizedValue = value.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    if (normalizedValue === normalizedInput) {
-      return value;
-    }
-  }
-
-  return stateName as ChannelState;
+  return CHANNEL_STATE_LOOKUP[normalizedInput] ?? (stateName as ChannelState);
 }
 
 /**

@@ -13,7 +13,7 @@ describe('normalizeChannelStateName', () => {
     expect(normalizeChannelStateName('CLOSED')).toBe(ChannelState.Closed);
   });
 
-  it('passes through canonical PascalCase values', () => {
+  it('converts PascalCase to canonical SCREAMING_SNAKE_CASE enum values', () => {
     expect(normalizeChannelStateName('ChannelReady')).toBe(ChannelState.ChannelReady);
     expect(normalizeChannelStateName('NegotiatingFunding')).toBe(ChannelState.NegotiatingFunding);
   });

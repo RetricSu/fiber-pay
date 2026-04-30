@@ -203,6 +203,32 @@ describe('FiberWasmAdapter', () => {
 			expect(result.channels).toEqual([]);
 		});
 
+		it('should normalize PascalCase channel state_name returned by WASM', async () => {
+			(mockInstance.invokeCommand as ReturnType<typeof vi.fn>).mockImplementationOnce(
+				(method: string) => {
+					expect(method).toBe('list_channels');
+					return Promise.resolve({
+						channels: [
+							{
+								channel_id: '0xabc',
+								state: { state_name: 'ChannelReady', state_flags: [] },
+							},
+							{
+								channel_id: '0xdef',
+								state: { state_name: 'NegotiatingFunding', state_flags: [] },
+							},
+						],
+					});
+				},
+			);
+
+			const result = await adapter.listChannels();
+			expect(result.channels.map((c) => c.state.state_name)).toEqual([
+				'CHANNEL_READY',
+				'NEGOTIATING_FUNDING',
+			]);
+		});
+
 		it('should throw when node is not running', async () => {
 			await adapter.stop();
 			await expect(adapter.nodeInfo()).rejects.toThrow('not running');
