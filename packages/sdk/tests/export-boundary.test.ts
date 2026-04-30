@@ -28,4 +28,13 @@ describe('SDK export boundaries', () => {
     expect(nodeEntry).toHaveProperty('FiberRpcClient');
     expect(browserEntry).toHaveProperty('FiberRpcClient');
   });
+
+  it('exposes channel state normalization helpers from root and browser entries', () => {
+    for (const entry of [rootEntry, browserEntry, nodeEntry]) {
+      expect(entry).toHaveProperty('normalizeChannel');
+      expect(entry).toHaveProperty('normalizeChannelStateName');
+      expect(typeof (entry as Record<string, unknown>).normalizeChannel).toBe('function');
+      expect(typeof (entry as Record<string, unknown>).normalizeChannelStateName).toBe('function');
+    }
+  });
 });
