@@ -1,5 +1,33 @@
 # @fiber-pay/cli
 
+## 0.2.5
+
+### Patch Changes
+
+- 0d3955b: feat(cli): make `node upgrade` migration-first for custom binary paths.
+
+  - Keep profile-managed binaries on download + migrate flow.
+  - Run custom binary mode as migrate-only (skip binary download).
+  - Improve migration guidance for custom binary setups and validate that custom `binaryPath` includes an explicit directory path for migration tooling.
+
+- 272e77c: fix(sdk): normalize channel `state.state_name` on the browser/WASM path so it
+  matches the `ChannelState` enum (SCREAMING_SNAKE_CASE) returned by the RPC
+  client. This fixes `FiberBrowserNode.waitForChannelReady` and any consumer that
+  compares `channel.state.state_name === ChannelState.ChannelReady` on the
+  browser path.
+
+  Internal: extracted `normalizeChannel` / `normalizeChannelStateName` from
+  `FiberRpcClient` into a shared `rpc/normalize-channel` module used by both the
+  RPC client and the WASM adapter.
+
+- Updated dependencies [eb4b9c3]
+- Updated dependencies [a0e3c78]
+- Updated dependencies [272e77c]
+- Updated dependencies [32c6228]
+  - @fiber-pay/sdk@0.2.5
+  - @fiber-pay/node@0.2.5
+  - @fiber-pay/runtime@0.2.5
+
 ## 0.2.4
 
 ### Patch Changes

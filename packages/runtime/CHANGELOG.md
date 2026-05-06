@@ -1,5 +1,30 @@
 # @fiber-pay/runtime
 
+## 0.2.5
+
+### Patch Changes
+
+- 272e77c: fix(sdk): normalize channel `state.state_name` on the browser/WASM path so it
+  matches the `ChannelState` enum (SCREAMING_SNAKE_CASE) returned by the RPC
+  client. This fixes `FiberBrowserNode.waitForChannelReady` and any consumer that
+  compares `channel.state.state_name === ChannelState.ChannelReady` on the
+  browser path.
+
+  Internal: extracted `normalizeChannel` / `normalizeChannelStateName` from
+  `FiberRpcClient` into a shared `rpc/normalize-channel` module used by both the
+  RPC client and the WASM adapter.
+
+- 32c6228: chore(runtime): remove legacy string-literal channel state fallbacks in
+  `channel-executor`. `state_name` is always a canonical `ChannelState` enum
+  value after normalization at the SDK boundary, so the redundant
+  `String(...).toUpperCase()` coercions and `=== 'CLOSED'` /
+  `=== 'SHUTTING_DOWN'` branches are dead. Tightens helper parameter types
+  from `string` to `ChannelState`.
+- Updated dependencies [eb4b9c3]
+- Updated dependencies [a0e3c78]
+- Updated dependencies [272e77c]
+  - @fiber-pay/sdk@0.2.5
+
 ## 0.2.4
 
 ### Patch Changes

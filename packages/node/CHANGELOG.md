@@ -1,5 +1,30 @@
 # @fiber-pay/node
 
+## 0.2.5
+
+### Patch Changes
+
+- a0e3c78: chore: bump Fiber default target to v0.8.1.
+
+  - update `DEFAULT_FIBER_VERSION` to `v0.8.1` for managed binary download defaults
+  - align `@nervosnetwork/fiber-js` baseline to `~0.8.1` in SDK/react-facing package dependencies
+  - update dual-node e2e script default `FIBER_BINARY_VERSION` to `v0.8.1`
+
+- 272e77c: fix(sdk): normalize channel `state.state_name` on the browser/WASM path so it
+  matches the `ChannelState` enum (SCREAMING_SNAKE_CASE) returned by the RPC
+  client. This fixes `FiberBrowserNode.waitForChannelReady` and any consumer that
+  compares `channel.state.state_name === ChannelState.ChannelReady` on the
+  browser path.
+
+  Internal: extracted `normalizeChannel` / `normalizeChannelStateName` from
+  `FiberRpcClient` into a shared `rpc/normalize-channel` module used by both the
+  RPC client and the WASM adapter.
+
+- Updated dependencies [eb4b9c3]
+- Updated dependencies [a0e3c78]
+- Updated dependencies [272e77c]
+  - @fiber-pay/sdk@0.2.5
+
 ## 0.2.4
 
 ### Patch Changes
