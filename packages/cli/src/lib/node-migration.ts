@@ -2,9 +2,9 @@
  * Shared migration-guard logic used by both `node start` and `node upgrade`.
  */
 
-import { dirname } from 'node:path';
-import { BinaryManager, type MigrationCheckResult, MigrationManager } from '@fiber-pay/node';
+import { type MigrationCheckResult, MigrationManager } from '@fiber-pay/node';
 import { printJsonError } from './format.js';
+import { resolveGuardMigrateBinary } from './migrate-binary-policy.js';
 import { replaceRawMigrateHint } from './migration-utils.js';
 
 // =============================================================================
@@ -57,9 +57,12 @@ export async function runMigrationGuard(
   }
 
   const storePath = MigrationManager.resolveStorePath(dataDir);
-  const binaryDir = dirname(binaryPath);
-  const bm = new BinaryManager(binaryDir);
-  const migrateBinPath = bm.getMigrateBinaryPath();
+  const migrateBinary = resolveGuardMigrateBinary(binaryPath);
+  if (!migrateBinary.ok) {
+    return { checked: false, skippedReason: migrateBinary.skippedReason };
+  }
+
+  const migrateBinPath = migrateBinary.migrateBinaryPath;
 
   let migrationCheck: MigrationCheckResult;
   try {
