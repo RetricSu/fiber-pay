@@ -6,6 +6,11 @@ Covers upgrading the Fiber node binary and migrating the on-disk database betwee
 
 Fiber's database schema may change between versions. The `fnn-migrate` binary (shipped alongside `fnn` in release archives) handles schema migration. fiber-pay automates the full upgrade flow via `fiber-pay node upgrade`.
 
+`fiber-pay node upgrade` is migration-first:
+
+- Managed binary mode (default profile-managed path): download/replace `fnn` when needed, then run migration checks.
+- Custom binary mode (`--binary-path` or profile `binaryPath`): skip binary download and run migration flow only.
+
 ## Upgrade flow
 
 ```bash
@@ -16,6 +21,9 @@ fiber-pay node stop
 fiber-pay node upgrade                    # latest version
 fiber-pay node upgrade --version v0.8.0   # specific version
 fiber-pay node upgrade --force-migrate    # force migration check/attempt
+
+# custom binary path: migration-only (no auto-download)
+fiber-pay --binary-path /opt/fiber/custom/fnn node upgrade --force-migrate
 
 # 3. Restart
 fiber-pay node start
@@ -34,6 +42,15 @@ fiber-pay node start
 ## Startup guard
 
 `fiber-pay node start` automatically checks store compatibility before launching fnn. If migration is needed, it exits with `MIGRATION_REQUIRED` and directs the user to run `fiber-pay node upgrade --force-migrate`.
+
+If `fnn-migrate` is unavailable, startup guard pre-check can be skipped for that start attempt. In that case, the node may still fail later if the on-disk store is incompatible.
+
+## Custom binary behavior
+
+- `node upgrade` does not overwrite custom binaries.
+- Migration still runs against the current store when present.
+- `binaryPath` must be an explicit file path (absolute like `/opt/fiber/fnn` or relative like `./fnn`), not a bare command name like `fnn`.
+- `fnn-migrate` is resolved from the configured binary directory. If missing, the command exits with an actionable error.
 
 ## When auto-migration fails
 

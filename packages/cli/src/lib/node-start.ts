@@ -19,6 +19,7 @@ import {
   startRuntimeDaemonFromNode,
   stopRuntimeDaemonFromNode,
 } from './node-runtime-daemon.js';
+import { resolveManagedStartVersion } from './node-version-policy.js';
 import { isProcessRunning, readPidFile, removePidFile, writePidFile } from './pid.js';
 import { createRpcClient } from './rpc.js';
 import { removeRuntimeFiles, writeRuntimeMeta, writeRuntimePid } from './runtime-meta.js';
@@ -169,7 +170,8 @@ export async function runNodeStartCommand(
   if (resolvedBinary.source === 'profile-managed') {
     const installDir = getBinaryManagerInstallDirOrThrow(resolvedBinary);
     const profile = loadProfileConfig(config.dataDir);
-    await ensureFiberBinary({ installDir, version: profile?.fiberVersion });
+    const managedStartVersion = resolveManagedStartVersion(profile);
+    await ensureFiberBinary({ installDir, version: managedStartVersion.version });
   }
   const binaryVersion = getBinaryVersion(binaryPath);
   const configFilePath = ensureNodeConfigFile(config.dataDir, config.network);

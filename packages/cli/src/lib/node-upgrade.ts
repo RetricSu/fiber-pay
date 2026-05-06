@@ -2,12 +2,22 @@
  * Implementation of `fiber-pay node upgrade`.
  */
 
+import { dirname } from 'node:path';
 import { BinaryManager, type DownloadProgress, MigrationManager } from '@fiber-pay/node';
+import type { ResolvedBinaryPath } from './binary-path.js';
 import { getBinaryManagerInstallDirOrThrow, resolveBinaryPath } from './binary-path.js';
 import type { CliConfig } from './config.js';
 import { loadProfileConfig, saveProfileConfig } from './config.js';
 import { printJsonError, printJsonSuccess } from './format.js';
+import {
+  getMigrateBinaryPathForBinary,
+  getMissingMigrateVerifySuggestion,
+  type NodeBinaryMode,
+  resolveUpgradeMigrateBinary,
+} from './migrate-binary-policy.js';
 import { normalizeMigrationCheck, replaceRawMigrateHint } from './migration-utils.js';
+import { getCustomBinaryState } from './node-runtime-daemon.js';
+import { normalizeTargetVersion, resolveManagedUpgradeVersion } from './node-version-policy.js';
 import { isProcessRunning, readPidFile } from './pid.js';
 
 export interface NodeUpgradeOptions {
@@ -18,12 +28,120 @@ export interface NodeUpgradeOptions {
   json?: boolean;
 }
 
+export type NodeUpgradeMode = NodeBinaryMode;
+
+export function getNodeUpgradeMode(resolvedBinary: ResolvedBinaryPath): NodeUpgradeMode {
+  return resolvedBinary.source === 'profile-managed' ? 'managed-download' : 'custom-migrate-only';
+}
+
+export { getMigrateBinaryPathForBinary };
+
 export async function runNodeUpgradeCommand(
   config: CliConfig,
   options: NodeUpgradeOptions,
 ): Promise<void> {
   const json = Boolean(options.json);
   const resolvedBinary = resolveBinaryPath(config);
+  const mode = getNodeUpgradeMode(resolvedBinary);
+
+  // Pre-flight: node must be stopped before upgrade
+  const pid = readPidFile(config.dataDir);
+  if (pid && isProcessRunning(pid)) {
+    const msg = 'The Fiber node is currently running. Stop it before upgrading.';
+    if (json) {
+      printJsonError({
+        code: 'NODE_RUNNING',
+        message: msg,
+        recoverable: true,
+        suggestion: 'Run `fiber-pay node stop` first, then retry the upgrade.',
+      });
+    } else {
+      console.error(`❌ ${msg}`);
+      console.log('   Run: fiber-pay node stop');
+    }
+    process.exit(1);
+  }
+
+  // Prepare migration-related paths
+  const storePath = MigrationManager.resolveStorePath(config.dataDir);
+  const storeExists = MigrationManager.storeExists(config.dataDir);
+  const migrateBinaryResolution = resolveUpgradeMigrateBinary(
+    resolvedBinary.binaryPath,
+    mode,
+    storeExists,
+  );
+  if (!migrateBinaryResolution.ok) {
+    const { error } = migrateBinaryResolution;
+    if (json) {
+      printJsonError(error);
+    } else {
+      console.error(`❌ ${error.message}`);
+      console.log(`   ${error.suggestion}`);
+    }
+    process.exit(1);
+  }
+
+  const migrateBinaryPath = migrateBinaryResolution.migrateBinaryPath;
+  let migrationCheck: Awaited<ReturnType<MigrationManager['check']>> | null = null;
+
+  if (mode === 'custom-migrate-only') {
+    const currentInfo = getCustomBinaryState(resolvedBinary.binaryPath);
+    const customBinaryManager = new BinaryManager(dirname(resolvedBinary.binaryPath));
+    const normalizedTarget = options.version
+      ? normalizeTargetVersion(customBinaryManager, options.version)
+      : undefined;
+    const targetTag = normalizedTarget?.targetTag;
+    const targetVersion = normalizedTarget?.targetVersion;
+
+    if (!json) {
+      console.log('🧭 Upgrade mode: custom binary (migration-only).');
+      console.log(`🧩 Binary: ${resolvedBinary.binaryPath}`);
+      if (currentInfo.ready) {
+        console.log(`🧩 Current version: ${currentInfo.version}`);
+      }
+      if (targetTag) {
+        console.log(
+          `📦 Target version requested: ${targetTag} (download skipped for custom binary)`,
+        );
+      }
+    }
+
+    if (storeExists) {
+      migrationCheck = await runMigrationAndReport({
+        migrateBinaryPath,
+        storePath,
+        json,
+        checkOnly: Boolean(options.checkOnly),
+        targetVersion: targetVersion ?? currentInfo.version,
+        backup: options.backup !== false,
+        forceMigrateAttempt: Boolean(options.forceMigrate),
+        mode,
+        binaryPath: resolvedBinary.binaryPath,
+      });
+    } else if (!json) {
+      console.log('📂 No existing store detected; migration check skipped.');
+    }
+
+    if (json) {
+      printJsonSuccess({
+        action: 'migrate-only',
+        mode,
+        source: resolvedBinary.source,
+        currentVersion: currentInfo.version,
+        targetVersion: targetVersion ?? null,
+        binaryPath: resolvedBinary.binaryPath,
+        migrateBinaryPath,
+        migration: migrationCheck,
+      });
+    } else {
+      console.log('\n✅ Upgrade flow complete (custom binary mode).');
+      console.log('   Binary download was skipped by design.');
+      console.log('   Migration checks were performed when a store was found.');
+    }
+
+    return;
+  }
+
   let installDir: string;
   try {
     installDir = getBinaryManagerInstallDirOrThrow(resolvedBinary);
@@ -45,45 +163,18 @@ export async function runNodeUpgradeCommand(
 
   const binaryManager = new BinaryManager(installDir);
 
-  // Step 1: Check if node is running — must be stopped before upgrade
-  const pid = readPidFile(config.dataDir);
-  if (pid && isProcessRunning(pid)) {
-    const msg = 'The Fiber node is currently running. Stop it before upgrading.';
-    if (json) {
-      printJsonError({
-        code: 'NODE_RUNNING',
-        message: msg,
-        recoverable: true,
-        suggestion: 'Run `fiber-pay node stop` first, then retry the upgrade.',
-      });
-    } else {
-      console.error(`❌ ${msg}`);
-      console.log('   Run: fiber-pay node stop');
-    }
-    process.exit(1);
-  }
-
-  // Step 2: Resolve target version
-  let targetTag: string;
-  if (options.version) {
-    targetTag = binaryManager.normalizeTag(options.version);
-  } else {
-    if (!json) console.log('🔍 Resolving latest Fiber release...');
-    targetTag = await binaryManager.getLatestTag();
+  // Resolve target version
+  const upgradeVersion = await resolveManagedUpgradeVersion(binaryManager, options.version);
+  const targetTag = upgradeVersion.targetTag;
+  const targetVersion = upgradeVersion.targetVersion;
+  if (upgradeVersion.source === 'latest' && !json) {
+    console.log('🔍 Resolving latest Fiber release...');
   }
 
   if (!json) console.log(`📦 Target version: ${targetTag}`);
 
-  // Step 3: Check current version
+  // Check current version
   const currentInfo = await binaryManager.getBinaryInfo();
-  const targetVersion = targetTag.startsWith('v') ? targetTag.slice(1) : targetTag;
-
-  // Step 4: Prepare migration-related paths
-  const storePath = MigrationManager.resolveStorePath(config.dataDir);
-  const migrateBinaryPath = binaryManager.getMigrateBinaryPath();
-  let migrationCheck: Awaited<ReturnType<MigrationManager['check']>> | null = null;
-
-  const storeExists = MigrationManager.storeExists(config.dataDir);
 
   if (!json && storeExists) {
     console.log('📂 Existing store detected.');
@@ -99,6 +190,8 @@ export async function runNodeUpgradeCommand(
         targetVersion,
         backup: options.backup !== false,
         forceMigrateAttempt: false,
+        mode,
+        binaryPath: resolvedBinary.binaryPath,
       });
     }
 
@@ -131,7 +224,7 @@ export async function runNodeUpgradeCommand(
       console.log('📂 Existing store detected, will check migration after download.');
     }
 
-    // Step 5: Download new binary (this also extracts fnn-migrate)
+    // Download new binary (this also extracts fnn-migrate)
     if (!json) console.log('⬇️  Downloading new binary...');
 
     const showProgress = (progress: DownloadProgress) => {
@@ -152,7 +245,7 @@ export async function runNodeUpgradeCommand(
     console.log('🔁 --force-migrate enabled: attempting migration flow on existing binaries.');
   }
 
-  // Step 6: Check migration if store exists
+  // Check migration if store exists
   if (storeExists) {
     migrationCheck = await runMigrationAndReport({
       migrateBinaryPath,
@@ -162,10 +255,12 @@ export async function runNodeUpgradeCommand(
       targetVersion,
       backup: options.backup !== false,
       forceMigrateAttempt: Boolean(options.forceMigrate),
+      mode,
+      binaryPath: resolvedBinary.binaryPath,
     });
   }
 
-  // Step 7: Final status
+  // Final status
   const newInfo = await binaryManager.getBinaryInfo();
 
   if (resolvedBinary.source === 'profile-managed') {
@@ -177,6 +272,7 @@ export async function runNodeUpgradeCommand(
   if (json) {
     printJsonSuccess({
       action: 'upgraded',
+      mode,
       previousVersion: currentInfo.ready ? currentInfo.version : null,
       currentVersion: newInfo.version,
       binaryPath: newInfo.path,
@@ -203,6 +299,8 @@ interface MigrationRunOptions {
   targetVersion: string;
   backup: boolean;
   forceMigrateAttempt: boolean;
+  mode: NodeUpgradeMode;
+  binaryPath: string;
 }
 
 /**
@@ -223,30 +321,11 @@ async function runMigrationAndReport(
     targetVersion,
     backup,
     forceMigrateAttempt,
+    mode,
+    binaryPath,
   } = opts;
 
-  // Instantiate MigrationManager
-  let migrationManager: MigrationManager;
-  try {
-    migrationManager = new MigrationManager(migrateBinaryPath);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'fnn-migrate binary not available';
-    if (json) {
-      printJsonError({
-        code: 'MIGRATION_TOOL_MISSING',
-        message: msg,
-        recoverable: true,
-        suggestion:
-          'Run `fiber-pay node upgrade` to reinstall binaries, then retry `fiber-pay node upgrade --force-migrate`.',
-      });
-    } else {
-      console.error(`\n⚠️  ${msg}`);
-      console.log(
-        '   Run `fiber-pay node upgrade` to reinstall binaries, then retry `fiber-pay node upgrade --force-migrate`.',
-      );
-    }
-    process.exit(1);
-  }
+  const migrationManager = new MigrationManager(migrateBinaryPath);
 
   // Run check
   if (!json) console.log('🔍 Checking store compatibility...');
@@ -261,14 +340,11 @@ async function runMigrationAndReport(
         code: 'MIGRATION_TOOL_MISSING',
         message: `Migration check failed: ${msg}`,
         recoverable: true,
-        suggestion:
-          'Run `fiber-pay node upgrade` to reinstall binaries, then retry `fiber-pay node upgrade --force-migrate`.',
+        suggestion: getMissingMigrateVerifySuggestion(mode, binaryPath),
       });
     } else {
       console.error(`\n⚠️  Migration check failed: ${msg}`);
-      console.log(
-        '   Run `fiber-pay node upgrade` to reinstall binaries, then retry `fiber-pay node upgrade --force-migrate`.',
-      );
+      console.log(`   ${getMissingMigrateVerifySuggestion(mode, binaryPath)}`);
     }
     process.exit(1);
   }
