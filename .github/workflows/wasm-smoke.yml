@@ -1,0 +1,41 @@
+name: WASM Smoke
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: wasm-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  wasm-smoke:
+    name: wasm-smoke-ubuntu
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter fiber-wasm-smoke-test exec playwright install --with-deps chromium
+
+      - name: Run WASM smoke
+        run: pnpm --filter fiber-wasm-smoke-test smoke:ci

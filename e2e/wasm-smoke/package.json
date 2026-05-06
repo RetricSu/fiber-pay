@@ -4,12 +4,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "smoke:ci": "node ./ci-smoke.mjs"
   },
   "dependencies": {
     "@nervosnetwork/fiber-js": "0.7.1"
   },
   "devDependencies": {
+    "playwright": "^1.55.0",
     "vite": "^6.3.5"
   }
 }
