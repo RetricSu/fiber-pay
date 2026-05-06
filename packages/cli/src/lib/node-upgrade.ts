@@ -28,7 +28,14 @@ export function getNodeUpgradeMode(resolvedBinary: ResolvedBinaryPath): NodeUpgr
 }
 
 export function getMigrateBinaryPathForBinary(binaryPath: string): string {
-  return new BinaryManager(dirname(binaryPath)).getMigrateBinaryPath();
+  const binaryDir = dirname(binaryPath);
+  if (binaryDir === '.' || binaryDir.length === 0) {
+    throw new Error(
+      `Configured binaryPath "${binaryPath}" must include an explicit directory path. ` +
+        'Use an absolute path (for example /opt/fiber/fnn) or a relative path (for example ./fnn).',
+    );
+  }
+  return new BinaryManager(binaryDir).getMigrateBinaryPath();
 }
 
 function stripVersionPrefix(version: string): string {
@@ -43,7 +50,7 @@ export async function runNodeUpgradeCommand(
   const resolvedBinary = resolveBinaryPath(config);
   const mode = getNodeUpgradeMode(resolvedBinary);
 
-  // Step 1: Check if node is running — must be stopped before upgrade
+  // Pre-flight: node must be stopped before upgrade
   const pid = readPidFile(config.dataDir);
   if (pid && isProcessRunning(pid)) {
     const msg = 'The Fiber node is currently running. Stop it before upgrading.';
@@ -61,9 +68,29 @@ export async function runNodeUpgradeCommand(
     process.exit(1);
   }
 
-  // Step 4: Prepare migration-related paths
+  // Prepare migration-related paths
   const storePath = MigrationManager.resolveStorePath(config.dataDir);
-  const migrateBinaryPath = getMigrateBinaryPathForBinary(resolvedBinary.binaryPath);
+  let migrateBinaryPath: string;
+  try {
+    migrateBinaryPath = getMigrateBinaryPathForBinary(resolvedBinary.binaryPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (json) {
+      printJsonError({
+        code: 'BINARY_PATH_INCOMPATIBLE',
+        message,
+        recoverable: true,
+        suggestion:
+          'Set binaryPath to an explicit file path (absolute or relative), or unset binaryPath to use profile-managed binaries.',
+      });
+    } else {
+      console.error(`❌ ${message}`);
+      console.log(
+        '   Set binaryPath to an explicit file path (absolute or relative), or unset binaryPath to use profile-managed binaries.',
+      );
+    }
+    process.exit(1);
+  }
   let migrationCheck: Awaited<ReturnType<MigrationManager['check']>> | null = null;
 
   const storeExists = MigrationManager.storeExists(config.dataDir);
@@ -146,7 +173,7 @@ export async function runNodeUpgradeCommand(
 
   const binaryManager = new BinaryManager(installDir);
 
-  // Step 2: Resolve target version
+  // Resolve target version
   let targetTag: string;
   if (options.version) {
     targetTag = binaryManager.normalizeTag(options.version);
@@ -157,7 +184,7 @@ export async function runNodeUpgradeCommand(
 
   if (!json) console.log(`📦 Target version: ${targetTag}`);
 
-  // Step 3: Check current version
+  // Check current version
   const currentInfo = await binaryManager.getBinaryInfo();
   const targetVersion = stripVersionPrefix(targetTag);
 
@@ -209,7 +236,7 @@ export async function runNodeUpgradeCommand(
       console.log('📂 Existing store detected, will check migration after download.');
     }
 
-    // Step 5: Download new binary (this also extracts fnn-migrate)
+    // Download new binary (this also extracts fnn-migrate)
     if (!json) console.log('⬇️  Downloading new binary...');
 
     const showProgress = (progress: DownloadProgress) => {
@@ -230,7 +257,7 @@ export async function runNodeUpgradeCommand(
     console.log('🔁 --force-migrate enabled: attempting migration flow on existing binaries.');
   }
 
-  // Step 6: Check migration if store exists
+  // Check migration if store exists
   if (storeExists) {
     migrationCheck = await runMigrationAndReport({
       migrateBinaryPath,
@@ -245,7 +272,7 @@ export async function runNodeUpgradeCommand(
     });
   }
 
-  // Step 7: Final status
+  // Final status
   const newInfo = await binaryManager.getBinaryInfo();
 
   if (resolvedBinary.source === 'profile-managed') {
@@ -310,36 +337,7 @@ async function runMigrationAndReport(
     binaryPath,
   } = opts;
 
-  // Instantiate MigrationManager
-  let migrationManager: MigrationManager;
-  try {
-    migrationManager = new MigrationManager(migrateBinaryPath);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'fnn-migrate binary not available';
-    if (json) {
-      printJsonError({
-        code: 'MIGRATION_TOOL_MISSING',
-        message: msg,
-        recoverable: true,
-        suggestion:
-          mode === 'custom-migrate-only'
-            ? `Place fnn-migrate next to configured binary in "${dirname(binaryPath)}", or unset binaryPath to switch back to profile-managed binaries.`
-            : 'Run `fiber-pay node upgrade` to reinstall binaries, then retry `fiber-pay node upgrade --force-migrate`.',
-      });
-    } else {
-      console.error(`\n⚠️  ${msg}`);
-      if (mode === 'custom-migrate-only') {
-        console.log(
-          `   Place fnn-migrate next to configured binary in "${dirname(binaryPath)}", or unset binaryPath to use profile-managed binaries.`,
-        );
-      } else {
-        console.log(
-          '   Run `fiber-pay node upgrade` to reinstall binaries, then retry `fiber-pay node upgrade --force-migrate`.',
-        );
-      }
-    }
-    process.exit(1);
-  }
+  const migrationManager = new MigrationManager(migrateBinaryPath);
 
   // Run check
   if (!json) console.log('🔍 Checking store compatibility...');

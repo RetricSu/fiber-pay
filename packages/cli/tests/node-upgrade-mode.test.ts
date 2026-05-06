@@ -1,3 +1,4 @@
+import { basename, dirname, normalize } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ResolvedBinaryPath } from '../src/lib/binary-path.js';
 import {
@@ -40,11 +41,16 @@ describe('node upgrade mode', () => {
   });
 
   it('resolves fnn-migrate path from configured binary directory', () => {
-    const migratePath = getMigrateBinaryPathForBinary('/opt/fiber/custom/my-fnn');
+    const binaryPath = '/opt/fiber/custom/my-fnn';
+    const migratePath = getMigrateBinaryPathForBinary(binaryPath);
 
-    expect(migratePath).toContain('/opt/fiber/custom/');
-    expect(migratePath.endsWith('/fnn-migrate') || migratePath.endsWith('\\fnn-migrate.exe')).toBe(
-      true,
+    expect(normalize(dirname(migratePath))).toBe(normalize(dirname(binaryPath)));
+    expect(basename(migratePath)).toBe(process.platform === 'win32' ? 'fnn-migrate.exe' : 'fnn-migrate');
+  });
+
+  it('rejects bare command names for migrate path derivation', () => {
+    expect(() => getMigrateBinaryPathForBinary('fnn')).toThrow(
+      /must include an explicit directory path/i,
     );
   });
 });
