@@ -43,15 +43,18 @@ import { Fiber } from '@nervosnetwork/fiber-js';
 
 export function HeaderWallet() {
   const fiber = useFiberNode({ network: 'testnet', wasmFactory: () => new Fiber() });
-  return <ConnectButton fiber={fiber} />;
+  return <ConnectButton fiber={fiber} strategy="passkey" />;
 }
 ```
+
+`ConnectButton` uses explicit strategy selection and supports only `"passkey"` or `"password"`.
 
 For custom connected-state panels (for example peer/channel controls), use `renderConnectedDropdown`:
 
 ```tsx
 <ConnectButton
   fiber={fiber}
+  strategy="passkey"
   dropdownStyle={{ width: 320 }}
   renderConnectedDropdown={({ fiber, disconnect }) => (
     <div>

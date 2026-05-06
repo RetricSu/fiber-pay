@@ -36,7 +36,7 @@ import { useFiberNode } from './use-fiber-node.js';
 // =============================================================================
 
 /** Credential strategy the ConnectButton should use */
-export type ConnectStrategy = 'passkey' | 'password' | 'rawKey' | 'auto';
+export type ConnectStrategy = 'passkey' | 'password';
 
 export interface ConnectButtonProps {
   /** Network to connect to. Required in standalone mode; ignored when `fiber` is provided. */
@@ -48,17 +48,11 @@ export interface ConnectButtonProps {
    */
   fiber?: UseFiberNodeResult;
 
-  /** Credential strategy. Defaults to `"auto"`. */
-  strategy?: ConnectStrategy;
+  /** Credential strategy. Explicitly choose either `"passkey"` or `"password"`. */
+  strategy: ConnectStrategy;
 
   /** Password for the "password" strategy. */
   password?: string;
-
-  /** Raw Fiber key (32 bytes) for the "rawKey" strategy. */
-  rawKey?: Uint8Array;
-
-  /** Raw CKB secret key (32 bytes) for the "rawKey" strategy (optional). */
-  rawCkbKey?: Uint8Array;
 
   /** Wallet identifier for IndexedDB isolation. */
   walletId?: string;
@@ -298,10 +292,8 @@ export function ConnectButton(props: ConnectButtonProps) {
   const {
     network = 'testnet',
     fiber: externalFiber,
-    strategy = 'auto',
+    strategy,
     password,
-    rawKey,
-    rawCkbKey,
     walletId,
     passkeyUsername = 'User',
     wasmFactory,
@@ -339,7 +331,6 @@ export function ConnectButton(props: ConnectButtonProps) {
     createPasskeyAndStart,
     startWithPasskey,
     startWithPassword,
-    startWithRawKey,
     stop,
   } = fiber;
 
@@ -385,29 +376,14 @@ export function ConnectButton(props: ConnectButtonProps) {
 
   // --- Actions --------------------------------------------------------------
 
-  const resolvedStrategy =
-    strategy === 'auto'
-      ? hasPasskeyConfigured && isPasskeySupported
-        ? 'passkey'
-        : password
-          ? 'password'
-          : rawKey
-            ? 'rawKey'
-            : 'passkey'
-      : strategy;
-
   const handleConnect = useCallback(async () => {
     setIsConnecting(true);
     setLocalError(null);
     try {
-      switch (resolvedStrategy) {
+      switch (strategy) {
         case 'password':
           if (!password) throw new Error('Password is required for "password" strategy');
           await startWithPassword(password);
-          break;
-        case 'rawKey':
-          if (!rawKey) throw new Error('rawKey is required for "rawKey" strategy');
-          await startWithRawKey(rawKey, rawCkbKey);
           break;
         case 'passkey':
           if (hasPasskeyConfigured) {
@@ -425,15 +401,12 @@ export function ConnectButton(props: ConnectButtonProps) {
       setIsConnecting(false);
     }
   }, [
-    resolvedStrategy,
+    strategy,
     password,
-    rawKey,
-    rawCkbKey,
     passkeyUsername,
     hasPasskeyConfigured,
     startWithPassword,
     startWithPasskey,
-    startWithRawKey,
     createPasskeyAndStart,
     onError,
   ]);
@@ -487,7 +460,7 @@ export function ConnectButton(props: ConnectButtonProps) {
     buttonStyle = { ...styles.button, ...styles.connectButton, ...styles.disabledButton };
   } else {
     // Idle — label depends on strategy
-    switch (resolvedStrategy) {
+    switch (strategy) {
       case 'passkey':
         buttonLabel = hasPasskeyConfigured ? 'Connect with Passkey' : 'Connect via Passkey';
         if (!isPasskeySupported) {
@@ -496,9 +469,6 @@ export function ConnectButton(props: ConnectButtonProps) {
         }
         break;
       case 'password':
-        buttonLabel = 'Connect';
-        break;
-      case 'rawKey':
         buttonLabel = 'Connect';
         break;
     }
@@ -514,7 +484,7 @@ export function ConnectButton(props: ConnectButtonProps) {
     <div className={className} style={{ ...styles.root, ...style }} data-fpay-connect-button="">
       {/* Error / passkey unavailability message */}
       {(hasError ||
-        (!isPasskeySupported && passkeyUnavailableReason && resolvedStrategy === 'passkey')) && (
+        (!isPasskeySupported && passkeyUnavailableReason && strategy === 'passkey')) && (
         <span style={styles.errorText}>{error || localError || passkeyUnavailableReason}</span>
       )}
 

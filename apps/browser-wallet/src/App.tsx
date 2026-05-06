@@ -6,7 +6,7 @@ import {
   getLockBalanceShannons,
   scriptToAddress,
 } from '@fiber-pay/sdk/browser';
-import { useFiberNode } from '@fiber-pay/react';
+import { ConnectButton, useFiberNode } from '@fiber-pay/react';
 import QRCode from 'qrcode';
 import { useFiberConsole } from './hooks/useFiberConsole';
 import {
@@ -18,14 +18,11 @@ import {
   Database,
   Globe,
   LoaderCircle,
-  Play,
   QrCode,
   RefreshCw,
   Server,
   Square,
   Wallet,
-  Eye,
-  EyeOff,
   XCircle,
 } from 'lucide-react';
 
@@ -69,21 +66,19 @@ function App() {
     return search.get('network') === 'mainnet' ? 'mainnet' : 'testnet';
   }, []);
 
+  const fiber = useFiberNode({
+    network: preferredNetwork,
+    walletId: `wallet-demo-${preferredNetwork}`,
+  });
   const {
-    startWithPassword,
-    startWithPasskey,
-    createPasskeyAndStart,
     stop,
     state,
     nodeInfo,
     node,
     isPasskeySupported,
     passkeyUnavailableReason,
-    hasPasskeyConfigured,
-  } = useFiberNode({
-    network: preferredNetwork,
-    walletId: `wallet-demo-${preferredNetwork}`,
-  });
+    error: nodeHookError,
+  } = fiber;
   const network = preferredNetwork;
   const {
     nodeInfo: latestNodeInfo,
@@ -110,6 +105,7 @@ function App() {
     queryPayment,
   } = useFiberConsole(node, state === 'running', network);
 
+  const [connectStrategy, setConnectStrategy] = useState<'password' | 'passkey'>('password');
   const [password, setPassword] = useState('demo-secret');
   const [connectAddress, setConnectAddress] = useState('');
   const [channelPeerId, setChannelPeerId] = useState('');
@@ -127,7 +123,6 @@ function App() {
   const [fundingBalanceShannons, setFundingBalanceShannons] = useState<bigint | null>(null);
   const [fundingBalanceError, setFundingBalanceError] = useState<string | null>(null);
   const [isFundingBalanceLoading, setIsFundingBalanceLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const autoConnectTriedRef = useRef(false);
 
   const runtimeInfo = latestNodeInfo ?? nodeInfo;
@@ -313,65 +308,93 @@ function App() {
               )}
 
               <div className="auth-methods">
-                {isPasskeySupported && (
-                  <div className="auth-group auth-card">
-                    <p className="field-label">Passkey</p>
-                    <p className="auth-note">WebAuthn PRF derives an independent key pair from your authenticator.</p>
-                    {hasPasskeyConfigured ? (
-                      <button className="btn btn-primary" onClick={() => void startWithPasskey()} disabled={isBooting || isStopping}>
-                        <Play size={16} />
-                        Login with Passkey
-                      </button>
-                    ) : (
-                      <button className="btn btn-primary" onClick={() => void createPasskeyAndStart('DemoUser')} disabled={isBooting || isStopping}>
-                        <Play size={16} />
-                        Register Passkey
-                      </button>
-                    )}
-                  </div>
-                )}
+                <div className="auth-group auth-card">
+                  <p className="field-label">Connect Node</p>
+                  <p className="auth-note">
+                    Use <span className="mono">ConnectButton</span> as the primary auth entry, with custom UI for strategy and credentials.
+                  </p>
 
-                {!isPasskeySupported && (
-                  <div className="auth-group auth-card auth-card-disabled">
-                    <p className="field-label">Passkey</p>
-                    <p className="auth-note">Browser Passkey mode requires secure context, WebAuthn, and PRF support.</p>
-                    <div className="alert alert-warning">
+                  <div className="quick-actions">
+                    <button
+                      type="button"
+                      className={connectStrategy === 'password' ? 'btn' : 'btn btn-ghost'}
+                      onClick={() => setConnectStrategy('password')}
+                      disabled={isBooting || isStopping}
+                    >
+                      Password Strategy
+                    </button>
+                    <button
+                      type="button"
+                      className={connectStrategy === 'passkey' ? 'btn' : 'btn btn-ghost'}
+                      onClick={() => setConnectStrategy('passkey')}
+                      disabled={isBooting || isStopping}
+                    >
+                      Passkey Strategy
+                    </button>
+                  </div>
+
+                  {connectStrategy === 'password' && (
+                    <div className="password-row mt-4">
+                      <input
+                        type="password"
+                        className="input"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="Unlock password"
+                        disabled={isBooting || isStopping}
+                      />
+                    </div>
+                  )}
+
+                  {connectStrategy === 'passkey' && !isPasskeySupported && (
+                    <div className="alert alert-warning mt-4">
                       <XCircle size={16} />
                       <span>{passkeyUnavailableReason ?? 'Passkey is unavailable in this browser/environment.'}</span>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {isPasskeySupported && (
-                  <div className="or-divider" aria-hidden="true">
-                    <span>OR</span>
-                  </div>
-                )}
+                  {nodeHookError && (
+                    <div className="alert alert-warning mt-4">
+                      <XCircle size={16} />
+                      <span>{nodeHookError}</span>
+                    </div>
+                  )}
 
-                <div className="auth-group auth-card">
-                  <p className="field-label">Password</p>
-                  <p className="auth-note">Password + local random salt (IndexedDB) derives another independent key pair.</p>
-                  <div className="password-row">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      className="input"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder="Unlock password"
+                  <div className="mt-4">
+                    <ConnectButton
+                      fiber={fiber}
+                      strategy={connectStrategy}
+                      password={connectStrategy === 'password' ? password : undefined}
+                      renderConnectedDropdown={({ disconnect, closeDropdown }) => (
+                        <div>
+                          <p className="field-label">Quick Actions</p>
+                          <p className="text-secondary mono">{shorten(runtimeInfo?.pubkey ?? '-', 18, 12)}</p>
+                          <div className="inline-actions mt-4">
+                            <button
+                              className="btn btn-ghost"
+                              type="button"
+                              onClick={() => {
+                                closeDropdown();
+                                void refreshSnapshot();
+                                void refreshGraph();
+                              }}
+                            >
+                              Refresh Snapshot
+                            </button>
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={() => {
+                                void disconnect();
+                              }}
+                            >
+                              Disconnect
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     />
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-inline"
-                      onClick={() => setShowPassword((value) => !value)}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
                   </div>
-                  <button className="btn" onClick={() => void startWithPassword(password)} disabled={isBooting || isStopping}>
-                    <Play size={16} />
-                    Start Node with Password
-                  </button>
                 </div>
               </div>
             </div>

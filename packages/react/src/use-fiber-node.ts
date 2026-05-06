@@ -101,8 +101,12 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
     nodeListenersRef.current = null;
   }, []);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // React StrictMode remounts components in development.
+    // Reset the mounted flag on each mount so async state updates are not dropped.
+    isMountedRef.current = true;
+
+    return () => {
       isMountedRef.current = false;
 
       const node = nodeRef.current;
@@ -112,9 +116,8 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
         detachNodeListeners(node);
         void node.stop().catch(() => {});
       }
-    },
-    [detachNodeListeners],
-  );
+    };
+  }, [detachNodeListeners]);
 
   useEffect(() => {
     if (options.enabled === false) return;
