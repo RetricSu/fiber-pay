@@ -12,7 +12,7 @@
   "dependencies": {
     "@fiber-pay/react": "workspace:*",
     "@fiber-pay/sdk": "workspace:*",
-    "@nervosnetwork/fiber-js": "~0.8.0",
+    "@nervosnetwork/fiber-js": "~0.8.1",
     "lucide-react": "^0.364.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.4",

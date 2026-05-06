@@ -42,8 +42,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/sdk
       '@nervosnetwork/fiber-js':
-        specifier: ~0.8.0
-        version: 0.8.0
+        specifier: ~0.8.1
+        version: 0.8.1
       lucide-react:
         specifier: ^0.364.0
         version: 0.364.0(react@19.2.4)
@@ -122,8 +122,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/sdk
       '@nervosnetwork/fiber-js':
-        specifier: ~0.8.0
-        version: 0.8.0
+        specifier: ~0.8.1
+        version: 0.8.1
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -239,8 +239,8 @@ importers:
         specifier: workspace:*
         version: link:../sdk
       '@nervosnetwork/fiber-js':
-        specifier: ~0.8.0
-        version: 0.8.0
+        specifier: ~0.8.1
+        version: 0.8.1
       qrcode.react:
         specifier: ^4.0.0
         version: 4.2.0(react@19.2.4)
@@ -268,8 +268,8 @@ importers:
   packages/sdk:
     dependencies:
       '@nervosnetwork/fiber-js':
-        specifier: ~0.8.0
-        version: 0.8.0
+        specifier: ~0.8.1
+        version: 0.8.1
       '@noble/hashes':
         specifier: ^2.0.1
         version: 2.0.1
@@ -888,8 +888,8 @@ packages:
   '@nervosnetwork/fiber-js@0.7.1':
     resolution: {integrity: sha512-58LHLTirWUvqlWGj0F0xQJNjx60hIol0rHrPmC68L01I5muH5QQF14Tm5UQ3q9qX+yEvV1esWGowtlnLUh6U0A==}
 
-  '@nervosnetwork/fiber-js@0.8.0':
-    resolution: {integrity: sha512-R7gTpsQD1IYOpG4CehHYHdTsvHnoxQ4i7rF9cWLxvKO2PzDeZFfgavcwh7320AZhynR7eg7fm+g+xAmquvWS6w==}
+  '@nervosnetwork/fiber-js@0.8.1':
+    resolution: {integrity: sha512-T37qCsvrcVGeX1fjv6FrgwhfwiWPqvVmJfil5tirdYevvoZCcfigqrknMdl1lDar4l1HypDswD4szbD0b3Nz/w==}
 
   '@noble/hashes@2.0.1':
     resolution: {integrity: sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw==}
@@ -3400,7 +3400,7 @@ snapshots:
       async-mutex: 0.5.0
       stream-browserify: 3.0.0
 
-  '@nervosnetwork/fiber-js@0.8.0':
+  '@nervosnetwork/fiber-js@0.8.1':
     dependencies:
       async-mutex: 0.5.0
       stream-browserify: 3.0.0
