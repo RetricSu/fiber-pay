@@ -180,7 +180,9 @@ await node.newInvoice({ amount: '0x5f5e100', description: 'hello' });
 
 - React package: official hooks and starter component are available in `@fiber-pay/react`.
 - SDK browser API: still available for advanced integrations and custom abstractions.
-- Demo app: `apps/browser-wallet` is dogfooding `@fiber-pay/react`.
+- Demo apps:
+  - `apps/browser-wallet`: full-featured browser wallet console (hook-first, operational flows).
+  - `apps/react-quick-card`: downstream integration demo focused on `ConnectButton` + `FiberPayQuickCard`.
 
 Recommended approach:
 
@@ -190,7 +192,10 @@ Recommended approach:
 
 ## React SDK Tutorial (Dogfood Pattern)
 
-This is the exact integration style currently used by `apps/browser-wallet`:
+These integration patterns are used across the demo apps:
+
+- `apps/browser-wallet`: hook-first integration with custom business UI and richer operational controls.
+- `apps/react-quick-card`: downstream-friendly component integration with quick event wiring.
 
 - Use `useFiberNode` for node lifecycle and passkey diagnostics.
 - Keep business UI in your own component tree.
@@ -300,4 +305,6 @@ Use this path when you want to ship a functional payment panel quickly, then pro
 - SDK browser entry: `packages/sdk/src/browser/index.ts`
 - Browser node API: `packages/sdk/src/browser/fiber-browser-node.ts`
 - Passkey provider: `packages/sdk/src/browser/passkey-credential-provider.ts`
-- Demo app: `apps/browser-wallet/src/App.tsx`
+- Demo apps:
+  - `apps/browser-wallet/src/App.tsx`
+  - `apps/react-quick-card/src/App.tsx`
