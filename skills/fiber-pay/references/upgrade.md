@@ -43,10 +43,13 @@ fiber-pay node start
 
 `fiber-pay node start` automatically checks store compatibility before launching fnn. If migration is needed, it exits with `MIGRATION_REQUIRED` and directs the user to run `fiber-pay node upgrade --force-migrate`.
 
+If `fnn-migrate` is unavailable, startup guard pre-check can be skipped for that start attempt. In that case, the node may still fail later if the on-disk store is incompatible.
+
 ## Custom binary behavior
 
 - `node upgrade` does not overwrite custom binaries.
 - Migration still runs against the current store when present.
+- `binaryPath` must be an explicit file path (absolute like `/opt/fiber/fnn` or relative like `./fnn`), not a bare command name like `fnn`.
 - `fnn-migrate` is resolved from the configured binary directory. If missing, the command exits with an actionable error.
 
 ## When auto-migration fails

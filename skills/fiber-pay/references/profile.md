@@ -77,7 +77,8 @@ fiber-pay --profile b node start
 
 ### What `node start` auto-handles
 
-- Binary: downloads if missing or version mismatch (via `ensureFiberBinary`)
+- Binary (profile-managed mode): ensures `<data-dir>/bin/fnn`; downloads if missing or version mismatch (via `ensureFiberBinary`)
+- Binary (custom `binaryPath` mode): uses the configured binary as-is; does not auto-download or replace it
 - Config: generates default `config.yml` if missing (via `ensureNodeConfigFile`)
 - Keys: generates `fiber/sk` if missing
 - Runtime: starts embedded runtime proxy + job orchestration

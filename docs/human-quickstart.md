@@ -33,6 +33,13 @@ fiber-pay runtime status --json
 
 This initializes binary/config/key/runtime automatically for first-time local bootstrap.
 
+This quickstart assumes the default profile-managed binary path. If you set `--binary-path` (or profile `binaryPath`), `node start` uses your binary as-is and `node upgrade` becomes migration-first (migrate-only for custom binaries).
+
+See details:
+
+- [Profile & Multi-Node Guide](../skills/fiber-pay/references/profile.md)
+- [Upgrade & Migration](../skills/fiber-pay/references/upgrade.md)
+
 ## 3) Connect peer and open a channel
 
 ```bash
