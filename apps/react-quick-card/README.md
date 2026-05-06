@@ -1,6 +1,6 @@
-# React Quick Card Demo
+# React SDK Demo (ConnectButton + QuickCard)
 
-A minimal Vite + React app demonstrating the `FiberPayQuickCard` component from `@fiber-pay/react`.
+A Vite + React app demonstrating both `ConnectButton` and `FiberPayQuickCard` from `@fiber-pay/react`.
 
 ## Run
 
@@ -12,10 +12,10 @@ Then open `http://localhost:5174`.
 
 ## What it demonstrates
 
-- One-line integration: `import { FiberPayQuickCard } from '@fiber-pay/react'`
-- Node startup with password or passkey
-- Create invoice and pay invoice directly in the card UI
-- Event hooks: `onInvoiceCreated`, `onPaymentResult`, `onError`
+- `ConnectButton` integration in external-hook mode via `useFiberNode`
+- Password-based connect/disconnect flow with a custom connected dropdown
+- Event callback wiring for connect/disconnect/error and quick log output
+- `FiberPayQuickCard` one-line integration and payment callbacks
 
 ## Notes
 
