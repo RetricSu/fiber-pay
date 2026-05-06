@@ -18,6 +18,8 @@ pnpm -C apps/browser-wallet build
 
 After node startup, the app exposes common operational flows (similar to CLI workflows):
 
+- Connect entry: `ConnectButton` with explicit `password` / `passkey` strategy and custom dropdown actions
+
 - Node lifecycle: start/stop with password or passkey
 - Runtime snapshot: `node_info`, `list_peers`, `list_channels`
 - Peer operations: `connect_peer`, `disconnect_peer`
