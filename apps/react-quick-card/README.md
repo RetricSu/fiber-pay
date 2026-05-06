@@ -12,10 +12,19 @@ Then open `http://localhost:5174`.
 
 ## What it demonstrates
 
-- `ConnectButton` integration in external-hook mode via `useFiberNode`
-- Password-based connect/disconnect flow with a custom connected dropdown
-- Event callback wiring for connect/disconnect/error and quick log output
-- `FiberPayQuickCard` one-line integration and payment callbacks
+- Step-by-step connection lifecycle with `useFiberNode` + `ConnectButton`
+- Direct source-code links for core SDK/demo files from inside the page
+- Explicit strategy selection (`password` or `passkey`) and live hook status visibility
+- UI customization showcase for `ConnectButton` (`style`, `dropdownStyle`, `renderConnectedDropdown`)
+- Runtime verification actions (`node_info`, `list_peers`, `list_channels`) after connect
+- `FiberPayQuickCard` as a standalone fast-MVP payment UI with callback wiring
+
+## Suggested walkthrough
+
+1. Choose a connection strategy in section 1.
+2. Connect the node and verify status changes to `running`.
+3. Click "Read runtime snapshot" to confirm RPC calls are working.
+4. Try section 2 to validate quick payment UI integration.
 
 ## Notes
 
