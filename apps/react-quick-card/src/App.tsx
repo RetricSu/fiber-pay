@@ -11,6 +11,11 @@ interface RuntimeSnapshot {
   channels: number;
 }
 
+interface EventLogEntry {
+  id: string;
+  text: string;
+}
+
 function shorten(value: string, head = 10, tail = 8): string {
   if (!value || value.length <= head + tail + 3) {
     return value;
@@ -21,15 +26,15 @@ function shorten(value: string, head = 10, tail = 8): string {
 const sourceLinks = [
   {
     label: 'ConnectButton source',
-    href: 'https://github.com/RetricSu/fiber-pay/blob/feat/react-quick-card-connect-demo/packages/react/src/connect-button.tsx',
+    href: 'https://github.com/RetricSu/fiber-pay/blob/main/packages/react/src/connect-button.tsx',
   },
   {
     label: 'useFiberNode source',
-    href: 'https://github.com/RetricSu/fiber-pay/blob/feat/react-quick-card-connect-demo/packages/react/src/use-fiber-node.ts',
+    href: 'https://github.com/RetricSu/fiber-pay/blob/main/packages/react/src/use-fiber-node.ts',
   },
   {
     label: 'This demo page source',
-    href: 'https://github.com/RetricSu/fiber-pay/blob/feat/react-quick-card-connect-demo/apps/react-quick-card/src/App.tsx',
+    href: 'https://github.com/RetricSu/fiber-pay/blob/main/apps/react-quick-card/src/App.tsx',
   },
 ];
 
@@ -51,7 +56,7 @@ const themedDropdownStyle: CSSProperties = {
 export function App() {
   const [strategy, setStrategy] = useState<ConnectStrategy>('password');
   const [password, setPassword] = useState('demo-secret');
-  const [eventLogs, setEventLogs] = useState<string[]>([]);
+  const [eventLogs, setEventLogs] = useState<EventLogEntry[]>([]);
   const [snapshot, setSnapshot] = useState<RuntimeSnapshot | null>(null);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [isSnapshotLoading, setIsSnapshotLoading] = useState(false);
@@ -62,8 +67,13 @@ export function App() {
   });
 
   const addLog = (message: string) => {
-    const ts = new Date().toISOString().slice(11, 19);
-    setEventLogs((prev) => [`[${ts}] ${message}`, ...prev].slice(0, 20));
+    const now = new Date();
+    const ts = now.toISOString().slice(11, 19);
+    const entry = {
+      id: `${now.getTime()}-${crypto.randomUUID()}`,
+      text: `[${ts}] ${message}`,
+    };
+    setEventLogs((prev) => [entry, ...prev].slice(0, 20));
   };
 
   const clearLogs = () => {
@@ -407,7 +417,7 @@ export function App() {
         >
           {eventLogs.length === 0
             ? 'No events yet.'
-            : eventLogs.map((line, index) => <div key={`${index}-${line}`}>{line}</div>)}
+            : eventLogs.map((entry) => <div key={entry.id}>{entry.text}</div>)}
         </div>
       </section>
 
