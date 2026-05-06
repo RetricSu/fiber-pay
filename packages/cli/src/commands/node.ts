@@ -61,7 +61,9 @@ export function createNodeCommand(config: CliConfig): Command {
 
   node
     .command('upgrade')
-    .description('Upgrade the Fiber node binary and migrate the database if needed')
+    .description(
+      'Run migration-aware upgrade flow (managed binaries download+upgrade; custom binaries migrate-only)',
+    )
     .option('--version <version>', 'Target Fiber version (default: latest)')
     .option('--no-backup', 'Skip creating a store backup before migration')
     .option('--check-only', 'Only check if migration is needed, do not migrate')
