@@ -47,6 +47,8 @@ import type {
   NodeInfoResult,
   OpenChannelParams,
   OpenChannelResult,
+  OpenChannelWithExternalFundingParams,
+  OpenChannelWithExternalFundingResult,
   ParseInvoiceParams,
   ParseInvoiceResult,
   PaymentHash,
@@ -55,6 +57,8 @@ import type {
   SendPaymentWithRouterParams,
   SettleInvoiceParams,
   ShutdownChannelParams,
+  SubmitSignedFundingTxParams,
+  SubmitSignedFundingTxResult,
   UpdateChannelParams,
 } from './rpc.js';
 
@@ -92,6 +96,14 @@ export interface IFiberClient {
 
   /** Open a new channel with a peer. */
   openChannel(params: OpenChannelParams): Promise<OpenChannelResult>;
+
+  /** Open a channel where the funding transaction is signed externally by user wallet. */
+  openChannelWithExternalFunding(
+    params: OpenChannelWithExternalFundingParams,
+  ): Promise<OpenChannelWithExternalFundingResult>;
+
+  /** Submit the externally signed funding transaction for an externally funded channel. */
+  submitSignedFundingTx(params: SubmitSignedFundingTxParams): Promise<SubmitSignedFundingTxResult>;
 
   /** Accept a channel opening request. */
   acceptChannel(params: AcceptChannelParams): Promise<AcceptChannelResult>;

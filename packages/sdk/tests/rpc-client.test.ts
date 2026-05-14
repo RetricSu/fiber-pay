@@ -9,8 +9,8 @@ import type {
   SendPaymentParams,
   SendPaymentWithRouterParams,
   SettleInvoiceParams,
-} from '@fiber-pay/sdk';
-import { FiberRpcClient } from '@fiber-pay/sdk';
+} from '../src/index.js';
+import { FiberRpcClient } from '../src/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // =============================================================================
@@ -144,6 +144,84 @@ describe('FiberRpcClient - New Methods', () => {
 
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
       expect(body.method).toBe('build_router');
+      expect(body.params).toEqual([params]);
+    });
+  });
+
+  // ===========================================================================
+  // external funding channel methods
+  // ===========================================================================
+
+  describe('external funding channel methods', () => {
+    it('should call open_channel_with_external_funding RPC method', async () => {
+      const mockResult = {
+        channel_id: '0xfeed' as HexString,
+        unsigned_funding_tx: {
+          version: '0x0',
+          inputs: [],
+          outputs: [],
+          outputs_data: [],
+          cell_deps: [],
+          header_deps: [],
+          witnesses: [],
+        },
+      };
+      const fetchMock = mockFetch(mockResult);
+      globalThis.fetch = fetchMock;
+
+      const params = {
+        pubkey: '0xaabb' as HexString,
+        funding_amount: '0x174876e800' as HexString,
+        shutdown_script: {
+          code_hash: '0x1234' as HexString,
+          hash_type: 'type' as const,
+          args: '0x' as HexString,
+        },
+        funding_lock_script: {
+          code_hash: '0x5678' as HexString,
+          hash_type: 'type' as const,
+          args: '0x90' as HexString,
+        },
+      };
+
+      const result = await client.openChannelWithExternalFunding(params);
+
+      expect(result.channel_id).toBe('0xfeed');
+      expect(result.unsigned_funding_tx).toEqual(mockResult.unsigned_funding_tx);
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.method).toBe('open_channel_with_external_funding');
+      expect(body.params).toEqual([params]);
+    });
+
+    it('should call submit_signed_funding_tx RPC method', async () => {
+      const mockResult = {
+        channel_id: '0xfeed' as HexString,
+        funding_tx_hash: '0xdeadbeef' as HexString,
+      };
+      const fetchMock = mockFetch(mockResult);
+      globalThis.fetch = fetchMock;
+
+      const params = {
+        channel_id: '0xfeed' as HexString,
+        signed_funding_tx: {
+          version: '0x0',
+          inputs: [],
+          outputs: [],
+          outputs_data: [],
+          cell_deps: [],
+          header_deps: [],
+          witnesses: [],
+        },
+      };
+
+      const result = await client.submitSignedFundingTx(params);
+
+      expect(result.channel_id).toBe('0xfeed');
+      expect(result.funding_tx_hash).toBe('0xdeadbeef');
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.method).toBe('submit_signed_funding_tx');
       expect(body.params).toEqual([params]);
     });
   });

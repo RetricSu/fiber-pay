@@ -53,6 +53,20 @@ export interface OutPoint {
   index: HexString;
 }
 
+/** Cell dependency reference for transaction construction. */
+export interface CellDep {
+  out_point: OutPoint;
+  dep_type: 'code' | 'dep_group';
+}
+
+/**
+ * JSON representation of a CKB transaction used by Fiber RPC.
+ *
+ * The upstream uses `ckb_jsonrpc_types::Transaction` here. We keep this type
+ * intentionally structural to preserve compatibility across Fiber releases.
+ */
+export type CkbTransaction = Record<string, unknown>;
+
 /** UDT (User Defined Token) script (UdtScript in the RPC spec). */
 export type UdtScript = Script;
 
@@ -347,6 +361,39 @@ export interface OpenChannelParams {
 
 export interface OpenChannelResult {
   temporary_channel_id: ChannelId;
+}
+
+export interface OpenChannelWithExternalFundingParams {
+  pubkey: Pubkey;
+  funding_amount: HexString;
+  public?: boolean;
+  funding_udt_type_script?: Script;
+  shutdown_script: Script;
+  funding_lock_script: Script;
+  funding_lock_script_cell_deps?: CellDep[];
+  commitment_delay_epoch?: HexString;
+  commitment_fee_rate?: HexString;
+  funding_fee_rate?: HexString;
+  tlc_expiry_delta?: HexString;
+  tlc_min_value?: HexString;
+  tlc_fee_proportional_millionths?: HexString;
+  max_tlc_value_in_flight?: HexString;
+  max_tlc_number_in_flight?: HexString;
+}
+
+export interface OpenChannelWithExternalFundingResult {
+  channel_id: ChannelId;
+  unsigned_funding_tx: CkbTransaction;
+}
+
+export interface SubmitSignedFundingTxParams {
+  channel_id: ChannelId;
+  signed_funding_tx: CkbTransaction;
+}
+
+export interface SubmitSignedFundingTxResult {
+  channel_id: ChannelId;
+  funding_tx_hash: Hash256;
 }
 
 export interface AcceptChannelParams {

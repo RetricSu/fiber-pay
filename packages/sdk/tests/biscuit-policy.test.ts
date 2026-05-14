@@ -63,5 +63,17 @@ describe('biscuit policy helper', () => {
     expect(methods).toContain('send_payment');
     expect(methods).toContain('list_peers');
     expect(methods).toContain('update_revocation');
+    expect(methods).toContain('open_channel_with_external_funding');
+    expect(methods).toContain('submit_signed_funding_tx');
+  });
+
+  it('maps external funding channel methods to channel write permission', () => {
+    const openRule = getBiscuitRuleForMethod('open_channel_with_external_funding');
+    const submitRule = getBiscuitRuleForMethod('submit_signed_funding_tx');
+
+    expect(openRule?.permissions).toEqual([{ action: 'write', resource: 'channels' }]);
+    expect(openRule?.requiresChannelRight).toBe(false);
+    expect(submitRule?.permissions).toEqual([{ action: 'write', resource: 'channels' }]);
+    expect(submitRule?.requiresChannelRight).toBe(false);
   });
 });

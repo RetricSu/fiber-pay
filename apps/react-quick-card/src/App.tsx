@@ -55,6 +55,7 @@ const themedDropdownStyle: CSSProperties = {
 
 export function App() {
   const [strategy, setStrategy] = useState<ConnectStrategy>('password');
+  const [externalWallet, setExternalWallet] = useState(false);
   const [password, setPassword] = useState('demo-secret');
   const [eventLogs, setEventLogs] = useState<EventLogEntry[]>([]);
   const [snapshot, setSnapshot] = useState<RuntimeSnapshot | null>(null);
@@ -64,6 +65,7 @@ export function App() {
   const fiber = useFiberNode({
     network: 'testnet',
     walletId: 'quick-card-connect-demo',
+    externalWallet,
   });
 
   const addLog = (message: string) => {
@@ -134,8 +136,19 @@ export function App() {
         label: 'Passkey Support',
         value: fiber.isPasskeySupported ? 'Available' : fiber.passkeyUnavailableReason ?? 'Unavailable',
       },
+      {
+        label: 'Funding Mode',
+        value: externalWallet ? 'External wallet (no local CKB key)' : 'Internal wallet (derived CKB key)',
+      },
     ],
-    [fiber.isPasskeySupported, fiber.isRunning, fiber.nodeInfo?.pubkey, fiber.passkeyUnavailableReason, fiber.state],
+    [
+      externalWallet,
+      fiber.isPasskeySupported,
+      fiber.isRunning,
+      fiber.nodeInfo?.pubkey,
+      fiber.passkeyUnavailableReason,
+      fiber.state,
+    ],
   );
 
   return (
@@ -186,6 +199,10 @@ export function App() {
           Use one shared <code>useFiberNode</code> instance and drive connection with explicit strategy.
         </p>
 
+        <p style={{ marginTop: -4, fontSize: 13, color: '#475569' }}>
+          You can combine either strategy with internal or external wallet funding mode.
+        </p>
+
         <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
           <button
             type="button"
@@ -215,6 +232,20 @@ export function App() {
           >
             Passkey Strategy
           </button>
+          <button
+            type="button"
+            onClick={() => setExternalWallet((value) => !value)}
+            style={{
+              border: '1px solid #d1d5db',
+              borderRadius: 8,
+              padding: '6px 10px',
+              background: externalWallet ? '#0f766e' : '#fff',
+              color: externalWallet ? '#fff' : '#111827',
+              cursor: 'pointer',
+            }}
+          >
+            {externalWallet ? 'External Wallet: ON' : 'External Wallet: OFF'}
+          </button>
         </div>
 
         {strategy === 'password' && (
@@ -238,6 +269,7 @@ export function App() {
         <ConnectButton
           fiber={fiber}
           strategy={strategy}
+          externalWallet={externalWallet}
           password={strategy === 'password' ? password : undefined}
           onConnect={(_node, info) => {
             addLog(`ConnectButton connected: ${shorten(info.pubkey, 12, 10)}`);
@@ -269,6 +301,7 @@ export function App() {
               <ConnectButton
                 fiber={fiber}
                 strategy={strategy}
+                externalWallet={externalWallet}
                 password={strategy === 'password' ? password : undefined}
               />
             </div>
@@ -278,6 +311,7 @@ export function App() {
               <ConnectButton
                 fiber={fiber}
                 strategy={strategy}
+                externalWallet={externalWallet}
                 password={strategy === 'password' ? password : undefined}
                 style={themedConnectRootStyle}
                 dropdownStyle={themedDropdownStyle}

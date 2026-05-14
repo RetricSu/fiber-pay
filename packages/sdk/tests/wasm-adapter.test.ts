@@ -248,6 +248,49 @@ describe('FiberWasmAdapter', () => {
 
 			expect(mockInstance.invokeCommand).toHaveBeenCalledWith('connect_peer', [params]);
 		});
+
+		it('should call open_channel_with_external_funding with params', async () => {
+			const params = {
+				pubkey: '0xaabb',
+				funding_amount: '0x174876e800',
+				shutdown_script: {
+					code_hash: '0x1234',
+					hash_type: 'type',
+					args: '0x',
+				},
+				funding_lock_script: {
+					code_hash: '0x5678',
+					hash_type: 'type',
+					args: '0x90',
+				},
+			} as const;
+
+			await adapter.openChannelWithExternalFunding(params);
+
+			expect(mockInstance.invokeCommand).toHaveBeenCalledWith(
+				'open_channel_with_external_funding',
+				[params],
+			);
+		});
+
+		it('should call submit_signed_funding_tx with params', async () => {
+			const params = {
+				channel_id: '0xfeed',
+				signed_funding_tx: {
+					version: '0x0',
+					inputs: [],
+					outputs: [],
+					outputs_data: [],
+					cell_deps: [],
+					header_deps: [],
+					witnesses: [],
+				},
+			} as const;
+
+			await adapter.submitSignedFundingTx(params);
+
+			expect(mockInstance.invokeCommand).toHaveBeenCalledWith('submit_signed_funding_tx', [params]);
+		});
 	});
 
 	describe('invoke (raw)', () => {

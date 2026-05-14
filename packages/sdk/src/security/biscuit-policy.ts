@@ -57,6 +57,14 @@ const RULES: Record<string, BiscuitMethodRule> = {
     permissions: [{ action: 'write', resource: 'channels' }],
     requiresChannelRight: false,
   },
+  open_channel_with_external_funding: {
+    permissions: [{ action: 'write', resource: 'channels' }],
+    requiresChannelRight: false,
+  },
+  submit_signed_funding_tx: {
+    permissions: [{ action: 'write', resource: 'channels' }],
+    requiresChannelRight: false,
+  },
 
   // Dev
   commitment_signed: {
