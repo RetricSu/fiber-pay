@@ -27,8 +27,17 @@ interface ScriptLike {
   args: HexString;
 }
 
+interface CellDepLike {
+  out_point: {
+    tx_hash: HexString;
+    index: HexString;
+  };
+  dep_type: 'code' | 'dep_group';
+}
+
 const SHANNONS_PER_CKB = 100_000_000n;
 const SUGGESTED_FEE_BUFFER_SHANNONS = 100_000n; // 0.001 CKB
+const MAX_CAPACITY_ADJUST_RETRIES = 3;
 
 function shorten(value: string, head = 10, tail = 8): string {
   if (!value || value.length <= head + tail + 3) {
@@ -85,6 +94,24 @@ function shannonsToCkb(shannons: bigint): string {
 function extractRequiredCapacityCkbFromError(message: string): string | null {
   const match = message.match(/value=([0-9]+(?:\.[0-9]+)?)/i);
   return match?.[1] ?? null;
+}
+
+function computeSuggestedFundingAmountCkb(currentCkb: string, requiredCapacityCkb: string): string | null {
+  const currentShannons = ckbToShannons(currentCkb);
+  const requiredShannons = ckbToShannons(requiredCapacityCkb);
+
+  if (requiredShannons <= currentShannons) {
+    return null;
+  }
+
+  const shortfall = requiredShannons - currentShannons;
+  const suggestedShannons = currentShannons - shortfall - SUGGESTED_FEE_BUFFER_SHANNONS;
+
+  if (suggestedShannons <= 0n) {
+    return null;
+  }
+
+  return shannonsToCkb(suggestedShannons);
 }
 
 function parseScriptJson(input: string, fallback: ScriptLike): ScriptLike {
@@ -334,56 +361,89 @@ export function App() {
         throw new Error('Target peer is not connected. Connect/select a peer before opening funding.');
       }
 
-      const fundingAmount = ckbToShannonsHex(externalFundingAmountCkb);
       const defaultScript = fiber.nodeInfo.default_funding_lock_script;
 
-      const result = await fiber.node.openChannelWithExternalFunding({
-        pubkey: targetPubkey,
-        funding_amount: fundingAmount,
-        shutdown_script: parseScriptJson(shutdownScriptJson, defaultScript),
-        funding_lock_script: parseScriptJson(fundingLockScriptJson, defaultScript),
-        funding_lock_script_cell_deps: parseOptionalJson(fundingLockCellDepsJson),
-      });
+      const shutdownScript = parseScriptJson(shutdownScriptJson, defaultScript);
+      const fundingLockScript = parseScriptJson(fundingLockScriptJson, defaultScript);
+      const fundingLockScriptCellDeps = parseOptionalJson<CellDepLike[]>(fundingLockCellDepsJson);
 
-      setExternalFundingSession({
-        channelId: result.channel_id,
-        unsignedFundingTx: result.unsigned_funding_tx,
-      });
+      let amountForAttempt = externalFundingAmountCkb;
+      let lastCapacityMessage: string | null = null;
 
-      const unsignedJson = JSON.stringify(result.unsigned_funding_tx, null, 2);
-      setUnsignedFundingTxJson(unsignedJson);
-      setSignedFundingTxJson('');
+      for (let attempt = 0; attempt <= MAX_CAPACITY_ADJUST_RETRIES; attempt++) {
+        try {
+          const result = await fiber.node.openChannelWithExternalFunding({
+            pubkey: targetPubkey,
+            funding_amount: ckbToShannonsHex(amountForAttempt),
+            shutdown_script: shutdownScript,
+            funding_lock_script: fundingLockScript,
+            funding_lock_script_cell_deps: fundingLockScriptCellDeps,
+          });
 
-      addLog(`External funding request created for channel ${shorten(result.channel_id, 12, 8)}.`);
+          setExternalFundingSession({
+            channelId: result.channel_id,
+            unsignedFundingTx: result.unsigned_funding_tx,
+          });
+
+          const unsignedJson = JSON.stringify(result.unsigned_funding_tx, null, 2);
+          setUnsignedFundingTxJson(unsignedJson);
+          setSignedFundingTxJson('');
+
+          if (amountForAttempt !== externalFundingAmountCkb) {
+            setExternalFundingAmountCkb(amountForAttempt);
+            addLog(`Auto-adjusted funding amount to ${amountForAttempt} CKB due to capacity constraints.`);
+          }
+
+          addLog(
+            `External funding request created for channel ${shorten(result.channel_id, 12, 8)}.`,
+          );
+          return;
+        } catch (attemptError) {
+          const attemptMessage =
+            attemptError instanceof Error ? attemptError.message : String(attemptError);
+          const requiredCapacityCkb = extractRequiredCapacityCkbFromError(attemptMessage);
+
+          if (!requiredCapacityCkb) {
+            throw attemptError;
+          }
+
+          lastCapacityMessage = attemptMessage;
+          const suggested = computeSuggestedFundingAmountCkb(amountForAttempt, requiredCapacityCkb);
+
+          if (!suggested) {
+            throw attemptError;
+          }
+
+          if (attempt === MAX_CAPACITY_ADJUST_RETRIES) {
+            setFundingAmountSuggestionCkb(suggested);
+            setExternalFundingError(
+              `容量不足：自动重试 ${MAX_CAPACITY_ADJUST_RETRIES + 1} 次后仍失败。建议改为 ${suggested} CKB 后再试。原始错误：${attemptMessage}`,
+            );
+            addLog(`External funding open failed: ${attemptMessage}`);
+            return;
+          }
+
+          amountForAttempt = suggested;
+        }
+      }
+
+      if (lastCapacityMessage) {
+        setExternalFundingError(lastCapacityMessage);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const requiredCapacityCkb = extractRequiredCapacityCkbFromError(message);
-
       if (requiredCapacityCkb) {
-        try {
-          const enteredShannons = ckbToShannons(externalFundingAmountCkb);
-          const requiredShannons = ckbToShannons(requiredCapacityCkb);
-
-          if (requiredShannons > enteredShannons) {
-            const shortfall = requiredShannons - enteredShannons;
-            const suggestedShannons = enteredShannons - shortfall - SUGGESTED_FEE_BUFFER_SHANNONS;
-
-            if (suggestedShannons > 0n) {
-              const suggestedCkb = shannonsToCkb(suggestedShannons);
-              setFundingAmountSuggestionCkb(suggestedCkb);
-              setExternalFundingError(
-                `容量不足：当前金额 ${externalFundingAmountCkb} CKB 不能覆盖手续费。建议改为 ${suggestedCkb} CKB（含 0.001 CKB 缓冲）。原始错误：${message}`,
-              );
-            } else {
-              setExternalFundingError(
-                `容量不足：当前余额无法覆盖该通道金额与手续费。请降低金额或给该 lock script 充值。原始错误：${message}`,
-              );
-            }
-          } else {
-            setExternalFundingError(message);
-          }
-        } catch {
-          setExternalFundingError(message);
+        const suggested = computeSuggestedFundingAmountCkb(externalFundingAmountCkb, requiredCapacityCkb);
+        if (suggested) {
+          setFundingAmountSuggestionCkb(suggested);
+          setExternalFundingError(
+            `容量不足：当前金额 ${externalFundingAmountCkb} CKB 不能覆盖手续费。建议改为 ${suggested} CKB（含 0.001 CKB 缓冲）。原始错误：${message}`,
+          );
+        } else {
+          setExternalFundingError(
+            `容量不足：当前余额无法覆盖该通道金额与手续费。请降低金额或给该 lock script 充值。原始错误：${message}`,
+          );
         }
       } else {
         setExternalFundingError(message);
