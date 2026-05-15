@@ -37,7 +37,6 @@ interface CellDepLike {
 
 const SHANNONS_PER_CKB = 100_000_000n;
 const SUGGESTED_FEE_BUFFER_SHANNONS = 100_000n; // 0.001 CKB
-const MAX_CAPACITY_ADJUST_RETRIES = 3;
 
 function shorten(value: string, head = 10, tail = 8): string {
   if (!value || value.length <= head + tail + 3) {
@@ -367,69 +366,24 @@ export function App() {
       const fundingLockScript = parseScriptJson(fundingLockScriptJson, defaultScript);
       const fundingLockScriptCellDeps = parseOptionalJson<CellDepLike[]>(fundingLockCellDepsJson);
 
-      let amountForAttempt = externalFundingAmountCkb;
-      let lastCapacityMessage: string | null = null;
+      const result = await fiber.node.openChannelWithExternalFunding({
+        pubkey: targetPubkey,
+        funding_amount: ckbToShannonsHex(externalFundingAmountCkb),
+        shutdown_script: shutdownScript,
+        funding_lock_script: fundingLockScript,
+        funding_lock_script_cell_deps: fundingLockScriptCellDeps,
+      });
 
-      for (let attempt = 0; attempt <= MAX_CAPACITY_ADJUST_RETRIES; attempt++) {
-        try {
-          const result = await fiber.node.openChannelWithExternalFunding({
-            pubkey: targetPubkey,
-            funding_amount: ckbToShannonsHex(amountForAttempt),
-            shutdown_script: shutdownScript,
-            funding_lock_script: fundingLockScript,
-            funding_lock_script_cell_deps: fundingLockScriptCellDeps,
-          });
+      setExternalFundingSession({
+        channelId: result.channel_id,
+        unsignedFundingTx: result.unsigned_funding_tx,
+      });
 
-          setExternalFundingSession({
-            channelId: result.channel_id,
-            unsignedFundingTx: result.unsigned_funding_tx,
-          });
+      const unsignedJson = JSON.stringify(result.unsigned_funding_tx, null, 2);
+      setUnsignedFundingTxJson(unsignedJson);
+      setSignedFundingTxJson('');
 
-          const unsignedJson = JSON.stringify(result.unsigned_funding_tx, null, 2);
-          setUnsignedFundingTxJson(unsignedJson);
-          setSignedFundingTxJson('');
-
-          if (amountForAttempt !== externalFundingAmountCkb) {
-            setExternalFundingAmountCkb(amountForAttempt);
-            addLog(`Auto-adjusted funding amount to ${amountForAttempt} CKB due to capacity constraints.`);
-          }
-
-          addLog(
-            `External funding request created for channel ${shorten(result.channel_id, 12, 8)}.`,
-          );
-          return;
-        } catch (attemptError) {
-          const attemptMessage =
-            attemptError instanceof Error ? attemptError.message : String(attemptError);
-          const requiredCapacityCkb = extractRequiredCapacityCkbFromError(attemptMessage);
-
-          if (!requiredCapacityCkb) {
-            throw attemptError;
-          }
-
-          lastCapacityMessage = attemptMessage;
-          const suggested = computeSuggestedFundingAmountCkb(amountForAttempt, requiredCapacityCkb);
-
-          if (!suggested) {
-            throw attemptError;
-          }
-
-          if (attempt === MAX_CAPACITY_ADJUST_RETRIES) {
-            setFundingAmountSuggestionCkb(suggested);
-            setExternalFundingError(
-              `容量不足：自动重试 ${MAX_CAPACITY_ADJUST_RETRIES + 1} 次后仍失败。建议改为 ${suggested} CKB 后再试。原始错误：${attemptMessage}`,
-            );
-            addLog(`External funding open failed: ${attemptMessage}`);
-            return;
-          }
-
-          amountForAttempt = suggested;
-        }
-      }
-
-      if (lastCapacityMessage) {
-        setExternalFundingError(lastCapacityMessage);
-      }
+      addLog(`External funding request created for channel ${shorten(result.channel_id, 12, 8)}.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const requiredCapacityCkb = extractRequiredCapacityCkbFromError(message);
