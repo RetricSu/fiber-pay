@@ -140,6 +140,8 @@ export function App() {
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [isSnapshotLoading, setIsSnapshotLoading] = useState(false);
   const [externalFundingPeerPubkey, setExternalFundingPeerPubkey] = useState('');
+  const [connectedPeerPubkeys, setConnectedPeerPubkeys] = useState<string[]>([]);
+  const [peerAddressInput, setPeerAddressInput] = useState('');
   const [externalFundingAmountCkb, setExternalFundingAmountCkb] = useState('1000');
   const [shutdownScriptJson, setShutdownScriptJson] = useState('');
   const [fundingLockScriptJson, setFundingLockScriptJson] = useState('');
@@ -154,6 +156,8 @@ export function App() {
   const [isOpeningExternalFunding, setIsOpeningExternalFunding] = useState(false);
   const [isSigningExternalFunding, setIsSigningExternalFunding] = useState(false);
   const [isSubmittingExternalFunding, setIsSubmittingExternalFunding] = useState(false);
+  const [isRefreshingPeers, setIsRefreshingPeers] = useState(false);
+  const [isConnectingPeer, setIsConnectingPeer] = useState(false);
 
   const fiber = useFiberNode({
     network: 'testnet',
@@ -175,20 +179,88 @@ export function App() {
     setEventLogs([]);
   };
 
+  const normalizePubkey = (value: string): string =>
+    value.trim().toLowerCase().replace(/^0x/, '');
+
+  const refreshConnectedPeers = async () => {
+    if (!fiber.node) {
+      setConnectedPeerPubkeys([]);
+      return;
+    }
+
+    setIsRefreshingPeers(true);
+    try {
+      const peers = await fiber.node.listPeers();
+      const pubkeys = peers.peers.map((peer) => peer.pubkey);
+      setConnectedPeerPubkeys(pubkeys);
+
+      setExternalFundingPeerPubkey((prev) => {
+        const normalizedPrev = normalizePubkey(prev);
+        const hasPrev = pubkeys.some((item) => normalizePubkey(item) === normalizedPrev);
+        if (hasPrev) {
+          return prev;
+        }
+        return pubkeys[0] ?? prev;
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExternalFundingError(message);
+      addLog(`Refresh peers failed: ${message}`);
+    } finally {
+      setIsRefreshingPeers(false);
+    }
+  };
+
+  const connectPeerByAddress = async () => {
+    if (!fiber.node) {
+      setExternalFundingError('Node is not connected.');
+      return;
+    }
+
+    if (!peerAddressInput.trim()) {
+      setExternalFundingError('Peer address is empty.');
+      return;
+    }
+
+    setIsConnectingPeer(true);
+    setExternalFundingError(null);
+
+    try {
+      await fiber.node.connectPeer({
+        address: peerAddressInput.trim(),
+        save: true,
+      });
+      addLog('Peer connected from address input.');
+      await refreshConnectedPeers();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExternalFundingError(message);
+      addLog(`Connect peer failed: ${message}`);
+    } finally {
+      setIsConnectingPeer(false);
+    }
+  };
+
   const applyExternalFundingDefaults = () => {
     if (!fiber.nodeInfo) {
       setExternalFundingError('Connect first so defaults can be loaded from node_info.');
       return;
     }
 
-    const defaultPubkey = fiber.nodeInfo.pubkey;
+    const defaultPubkey = connectedPeerPubkeys[0] ?? '';
     const defaultScript = JSON.stringify(fiber.nodeInfo.default_funding_lock_script, null, 2);
 
-    setExternalFundingPeerPubkey(defaultPubkey);
+    if (defaultPubkey) {
+      setExternalFundingPeerPubkey(defaultPubkey);
+    }
     setShutdownScriptJson(defaultScript);
     setFundingLockScriptJson(defaultScript);
     setExternalFundingError(null);
-    addLog('Applied defaults from current node: pubkey + funding/shutdown scripts.');
+    addLog(
+      defaultPubkey
+        ? 'Applied defaults from node: connected peer pubkey + funding/shutdown scripts.'
+        : 'Applied default scripts from node. Connect a peer to auto-fill target pubkey.',
+    );
   };
 
   useEffect(() => {
@@ -199,10 +271,19 @@ export function App() {
     const nodeInfo = fiber.nodeInfo;
     const defaultScript = JSON.stringify(nodeInfo.default_funding_lock_script, null, 2);
 
-    setExternalFundingPeerPubkey((prev) => (prev.trim() ? prev : nodeInfo.pubkey));
+    setExternalFundingPeerPubkey((prev) => (prev.trim() ? prev : connectedPeerPubkeys[0] ?? prev));
     setShutdownScriptJson((prev) => (prev.trim() ? prev : defaultScript));
     setFundingLockScriptJson((prev) => (prev.trim() ? prev : defaultScript));
-  }, [externalWallet, fiber.nodeInfo]);
+  }, [externalWallet, fiber.nodeInfo, connectedPeerPubkeys]);
+
+  useEffect(() => {
+    if (!externalWallet || !fiber.isRunning || !fiber.node) {
+      setConnectedPeerPubkeys([]);
+      return;
+    }
+
+    void refreshConnectedPeers();
+  }, [externalWallet, fiber.isRunning, fiber.node]);
 
   const startExternalFunding = async () => {
     if (!fiber.node || !fiber.nodeInfo) {
@@ -220,11 +301,21 @@ export function App() {
     setFundingSubmitTxHash(null);
 
     try {
+      const targetPubkey = toHexPrefixed(externalFundingPeerPubkey);
+      const normalizedTarget = normalizePubkey(targetPubkey);
+      const isConnected = connectedPeerPubkeys.some(
+        (peerPubkey) => normalizePubkey(peerPubkey) === normalizedTarget,
+      );
+
+      if (!isConnected) {
+        throw new Error('Target peer is not connected. Connect/select a peer before opening funding.');
+      }
+
       const fundingAmount = ckbToShannonsHex(externalFundingAmountCkb);
       const defaultScript = fiber.nodeInfo.default_funding_lock_script;
 
       const result = await fiber.node.openChannelWithExternalFunding({
-        pubkey: toHexPrefixed(externalFundingPeerPubkey),
+        pubkey: targetPubkey,
         funding_amount: fundingAmount,
         shutdown_script: parseScriptJson(shutdownScriptJson, defaultScript),
         funding_lock_script: parseScriptJson(fundingLockScriptJson, defaultScript),
@@ -628,12 +719,32 @@ export function App() {
 
             <div style={{ display: 'grid', gap: 8 }}>
               <label style={{ fontSize: 13 }}>
-                Target Pubkey (auto-filled with current node pubkey)
+                Target Peer Pubkey (must be connected)
                 <input
                   type="text"
+                  list="connected-peer-pubkeys"
                   value={externalFundingPeerPubkey}
                   onChange={(e) => setExternalFundingPeerPubkey(e.target.value)}
-                  placeholder={fiber.nodeInfo?.pubkey ?? '0x...'}
+                  placeholder={connectedPeerPubkeys[0] ?? '0x...'}
+                  style={{ width: '100%', marginTop: 4, padding: '6px 8px', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                />
+                <datalist id="connected-peer-pubkeys">
+                  {connectedPeerPubkeys.map((peerPubkey) => (
+                    <option key={peerPubkey} value={peerPubkey} />
+                  ))}
+                </datalist>
+                <div style={{ marginTop: 4, fontSize: 12, color: '#64748b' }}>
+                  Connected peers: {connectedPeerPubkeys.length}
+                </div>
+              </label>
+
+              <label style={{ fontSize: 13 }}>
+                Connect Peer by Address (optional, if no peers connected)
+                <input
+                  type="text"
+                  value={peerAddressInput}
+                  onChange={(e) => setPeerAddressInput(e.target.value)}
+                  placeholder="/dns4/.../tcp/.../wss/p2p/..."
                   style={{ width: '100%', marginTop: 4, padding: '6px 8px', borderRadius: 8, border: '1px solid #cbd5e1' }}
                 />
               </label>
@@ -684,6 +795,26 @@ export function App() {
             </div>
 
             <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  void refreshConnectedPeers();
+                }}
+                disabled={!fiber.isRunning || isRefreshingPeers}
+                style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: '7px 10px', background: '#fff', cursor: fiber.isRunning ? 'pointer' : 'not-allowed', opacity: fiber.isRunning ? 1 : 0.65 }}
+              >
+                {isRefreshingPeers ? 'Refreshing Peers...' : 'Refresh Connected Peers'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void connectPeerByAddress();
+                }}
+                disabled={!fiber.isRunning || isConnectingPeer}
+                style={{ border: '1px solid #334155', borderRadius: 8, padding: '7px 10px', background: '#334155', color: '#fff', cursor: fiber.isRunning ? 'pointer' : 'not-allowed', opacity: fiber.isRunning ? 1 : 0.65 }}
+              >
+                {isConnectingPeer ? 'Connecting Peer...' : 'Connect Peer by Address'}
+              </button>
               <button
                 type="button"
                 onClick={applyExternalFundingDefaults}
