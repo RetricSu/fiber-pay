@@ -28,6 +28,7 @@ interface ScriptLike {
 }
 
 const SHANNONS_PER_CKB = 100_000_000n;
+const SUGGESTED_FEE_BUFFER_SHANNONS = 100_000n; // 0.001 CKB
 
 function shorten(value: string, head = 10, tail = 8): string {
   if (!value || value.length <= head + tail + 3) {
@@ -45,7 +46,7 @@ function toHexPrefixed(value: string): HexString {
   return (trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`) as HexString;
 }
 
-function ckbToShannonsHex(amountCkb: string): HexString {
+function ckbToShannons(amountCkb: string): bigint {
   const normalized = amountCkb.trim();
   if (!/^\d+(\.\d+)?$/.test(normalized)) {
     throw new Error('Funding amount must be a valid CKB number.');
@@ -63,7 +64,27 @@ function ckbToShannonsHex(amountCkb: string): HexString {
     throw new Error('Funding amount must be greater than 0.');
   }
 
+  return shannons;
+}
+
+function ckbToShannonsHex(amountCkb: string): HexString {
+  const shannons = ckbToShannons(amountCkb);
   return `0x${shannons.toString(16)}` as HexString;
+}
+
+function shannonsToCkb(shannons: bigint): string {
+  const whole = shannons / SHANNONS_PER_CKB;
+  const frac = shannons % SHANNONS_PER_CKB;
+  if (frac === 0n) {
+    return whole.toString();
+  }
+
+  return `${whole.toString()}.${frac.toString().padStart(8, '0').replace(/0+$/, '')}`;
+}
+
+function extractRequiredCapacityCkbFromError(message: string): string | null {
+  const match = message.match(/value=([0-9]+(?:\.[0-9]+)?)/i);
+  return match?.[1] ?? null;
 }
 
 function parseScriptJson(input: string, fallback: ScriptLike): ScriptLike {
@@ -158,6 +179,7 @@ export function App() {
   const [isSubmittingExternalFunding, setIsSubmittingExternalFunding] = useState(false);
   const [isRefreshingPeers, setIsRefreshingPeers] = useState(false);
   const [isConnectingPeer, setIsConnectingPeer] = useState(false);
+  const [fundingAmountSuggestionCkb, setFundingAmountSuggestionCkb] = useState<string | null>(null);
 
   const fiber = useFiberNode({
     network: 'testnet',
@@ -299,6 +321,7 @@ export function App() {
     setIsOpeningExternalFunding(true);
     setExternalFundingError(null);
     setFundingSubmitTxHash(null);
+    setFundingAmountSuggestionCkb(null);
 
     try {
       const targetPubkey = toHexPrefixed(externalFundingPeerPubkey);
@@ -334,7 +357,38 @@ export function App() {
       addLog(`External funding request created for channel ${shorten(result.channel_id, 12, 8)}.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setExternalFundingError(message);
+      const requiredCapacityCkb = extractRequiredCapacityCkbFromError(message);
+
+      if (requiredCapacityCkb) {
+        try {
+          const enteredShannons = ckbToShannons(externalFundingAmountCkb);
+          const requiredShannons = ckbToShannons(requiredCapacityCkb);
+
+          if (requiredShannons > enteredShannons) {
+            const shortfall = requiredShannons - enteredShannons;
+            const suggestedShannons = enteredShannons - shortfall - SUGGESTED_FEE_BUFFER_SHANNONS;
+
+            if (suggestedShannons > 0n) {
+              const suggestedCkb = shannonsToCkb(suggestedShannons);
+              setFundingAmountSuggestionCkb(suggestedCkb);
+              setExternalFundingError(
+                `容量不足：当前金额 ${externalFundingAmountCkb} CKB 不能覆盖手续费。建议改为 ${suggestedCkb} CKB（含 0.001 CKB 缓冲）。原始错误：${message}`,
+              );
+            } else {
+              setExternalFundingError(
+                `容量不足：当前余额无法覆盖该通道金额与手续费。请降低金额或给该 lock script 充值。原始错误：${message}`,
+              );
+            }
+          } else {
+            setExternalFundingError(message);
+          }
+        } catch {
+          setExternalFundingError(message);
+        }
+      } else {
+        setExternalFundingError(message);
+      }
+
       addLog(`External funding open failed: ${message}`);
     } finally {
       setIsOpeningExternalFunding(false);
@@ -754,11 +808,47 @@ export function App() {
                 <input
                   type="text"
                   value={externalFundingAmountCkb}
-                  onChange={(e) => setExternalFundingAmountCkb(e.target.value)}
+                  onChange={(e) => {
+                    setExternalFundingAmountCkb(e.target.value);
+                    setFundingAmountSuggestionCkb(null);
+                  }}
                   placeholder="1000"
                   style={{ width: '100%', marginTop: 4, padding: '6px 8px', borderRadius: 8, border: '1px solid #cbd5e1' }}
                 />
               </label>
+
+              {fundingAmountSuggestionCkb && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: '#0f766e',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <span>Suggested amount: {fundingAmountSuggestionCkb} CKB</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExternalFundingAmountCkb(fundingAmountSuggestionCkb);
+                      setFundingAmountSuggestionCkb(null);
+                      setExternalFundingError(null);
+                    }}
+                    style={{
+                      border: '1px solid #0f766e',
+                      borderRadius: 6,
+                      padding: '3px 8px',
+                      background: '#ecfdf5',
+                      color: '#0f766e',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Use Suggested Amount
+                  </button>
+                </div>
+              )}
 
               <label style={{ fontSize: 13 }}>
                 Shutdown Script JSON (optional, defaults to node default script)
