@@ -1,6 +1,6 @@
 import type { GetPaymentResult, HexString } from '@fiber-pay/sdk/browser';
 import { ConnectButton, FiberPayQuickCard, useFiberNode } from '@fiber-pay/react';
-import { type CSSProperties, useMemo, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 
 type ConnectStrategy = 'password' | 'passkey';
 
@@ -175,18 +175,34 @@ export function App() {
     setEventLogs([]);
   };
 
-  const applyDefaultScripts = () => {
+  const applyExternalFundingDefaults = () => {
     if (!fiber.nodeInfo) {
-      setExternalFundingError('Connect first so default scripts can be loaded from node_info.');
+      setExternalFundingError('Connect first so defaults can be loaded from node_info.');
       return;
     }
 
+    const defaultPubkey = fiber.nodeInfo.pubkey;
     const defaultScript = JSON.stringify(fiber.nodeInfo.default_funding_lock_script, null, 2);
+
+    setExternalFundingPeerPubkey(defaultPubkey);
     setShutdownScriptJson(defaultScript);
     setFundingLockScriptJson(defaultScript);
     setExternalFundingError(null);
-    addLog('Applied node default funding/shutdown scripts for external funding demo.');
+    addLog('Applied defaults from current node: pubkey + funding/shutdown scripts.');
   };
+
+  useEffect(() => {
+    if (!externalWallet || !fiber.nodeInfo) {
+      return;
+    }
+
+    const nodeInfo = fiber.nodeInfo;
+    const defaultScript = JSON.stringify(nodeInfo.default_funding_lock_script, null, 2);
+
+    setExternalFundingPeerPubkey((prev) => (prev.trim() ? prev : nodeInfo.pubkey));
+    setShutdownScriptJson((prev) => (prev.trim() ? prev : defaultScript));
+    setFundingLockScriptJson((prev) => (prev.trim() ? prev : defaultScript));
+  }, [externalWallet, fiber.nodeInfo]);
 
   const startExternalFunding = async () => {
     if (!fiber.node || !fiber.nodeInfo) {
@@ -612,12 +628,12 @@ export function App() {
 
             <div style={{ display: 'grid', gap: 8 }}>
               <label style={{ fontSize: 13 }}>
-                Peer Pubkey (target node)
+                Target Pubkey (auto-filled with current node pubkey)
                 <input
                   type="text"
                   value={externalFundingPeerPubkey}
                   onChange={(e) => setExternalFundingPeerPubkey(e.target.value)}
-                  placeholder="0x..."
+                  placeholder={fiber.nodeInfo?.pubkey ?? '0x...'}
                   style={{ width: '100%', marginTop: 4, padding: '6px 8px', borderRadius: 8, border: '1px solid #cbd5e1' }}
                 />
               </label>
@@ -670,10 +686,10 @@ export function App() {
             <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button
                 type="button"
-                onClick={applyDefaultScripts}
+                onClick={applyExternalFundingDefaults}
                 style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: '7px 10px', background: '#fff', cursor: 'pointer' }}
               >
-                Use Node Default Scripts
+                Use Node Defaults (Pubkey + Scripts)
               </button>
               <button
                 type="button"
