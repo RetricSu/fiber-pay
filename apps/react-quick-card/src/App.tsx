@@ -1,14 +1,12 @@
 import {
-  formatShannonsAsCkb,
-  getLockBalanceShannons,
-  normalizeCkbTransactionForCcc,
-  normalizeCkbTransactionForRpc,
   type GetPaymentResult,
   type HexString,
 } from '@fiber-pay/sdk/browser';
 import { ccc } from '@ckb-ccc/connector-react';
-import { ConnectButton, FiberPayQuickCard, useFiberNode } from '@fiber-pay/react';
+import { ConnectButton, FiberPayQuickCard, useChannelOpenFlow, useFiberNode } from '@fiber-pay/react';
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
+import { ExternalFundingDebugControls } from './components/external-funding-debug-controls';
+import { useExternalFundingDebugFlow } from './hooks/use-external-funding-debug-flow';
 
 type ConnectStrategy = 'password' | 'passkey';
 
@@ -43,8 +41,6 @@ interface CellDepLike {
   dep_type: 'code' | 'dep_group';
 }
 
-const SHANNONS_PER_CKB = 100_000_000n;
-const SUGGESTED_FEE_BUFFER_SHANNONS = 100_000n; // 0.001 CKB
 const TESTNET_CKB_RPC_URL = 'https://testnet.ckbapp.dev/';
 
 function shorten(value: string, head = 10, tail = 8): string {
@@ -61,88 +57,6 @@ function toHexPrefixed(value: string): HexString {
   }
 
   return (trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`) as HexString;
-}
-
-function ckbToShannons(amountCkb: string): bigint {
-  const normalized = amountCkb.trim();
-  if (!/^\d+(\.\d+)?$/.test(normalized)) {
-    throw new Error('Funding amount must be a valid CKB number.');
-  }
-
-  const [wholePart, fracPart = ''] = normalized.split('.');
-  if (fracPart.length > 8 && /[1-9]/.test(fracPart.slice(8))) {
-    throw new Error('Funding amount supports up to 8 decimal places.');
-  }
-
-  const fracPadded = `${fracPart}00000000`.slice(0, 8);
-  const shannons = BigInt(wholePart) * SHANNONS_PER_CKB + BigInt(fracPadded || '0');
-
-  if (shannons <= 0n) {
-    throw new Error('Funding amount must be greater than 0.');
-  }
-
-  return shannons;
-}
-
-function shannonsToCkb(shannons: bigint): string {
-  const whole = shannons / SHANNONS_PER_CKB;
-  const frac = shannons % SHANNONS_PER_CKB;
-  if (frac === 0n) {
-    return whole.toString();
-  }
-
-  return `${whole.toString()}.${frac.toString().padStart(8, '0').replace(/0+$/, '')}`;
-}
-
-function extractRequiredCapacityCkbFromError(message: string): string | null {
-  const match = message.match(/value=([0-9]+(?:\.[0-9]+)?)/i);
-  return match?.[1] ?? null;
-}
-
-function extractHexHashCandidates(input: string): HexString[] {
-  const matches = input.match(/0x[a-fA-F0-9]{64}/g) ?? [];
-  return Array.from(new Set(matches.map((item) => item.toLowerCase() as HexString)));
-}
-
-function parseHexToBigInt(hex: string | undefined): bigint {
-  if (!hex) {
-    return 0n;
-  }
-
-  const normalized = hex.toLowerCase();
-  if (!/^0x[0-9a-f]+$/.test(normalized)) {
-    return 0n;
-  }
-
-  try {
-    return BigInt(normalized);
-  } catch {
-    return 0n;
-  }
-}
-
-function shouldDiagnoseFundingAbort(message: string): boolean {
-  return /abortfunding|funding transaction aborted|stopped before unsigned external funding tx|channel .* stopped/i.test(
-    message,
-  );
-}
-
-function computeSuggestedFundingAmountCkb(currentCkb: string, requiredCapacityCkb: string): string | null {
-  const currentShannons = ckbToShannons(currentCkb);
-  const requiredShannons = ckbToShannons(requiredCapacityCkb);
-
-  if (requiredShannons <= currentShannons) {
-    return null;
-  }
-
-  const shortfall = requiredShannons - currentShannons;
-  const suggestedShannons = currentShannons - shortfall - SUGGESTED_FEE_BUFFER_SHANNONS;
-
-  if (suggestedShannons <= 0n) {
-    return null;
-  }
-
-  return shannonsToCkb(suggestedShannons);
 }
 
 function parseScriptJson(input: string, fallback: ScriptLike): ScriptLike {
@@ -303,9 +217,6 @@ export function App() {
   const [fundingSubmitTxHash, setFundingSubmitTxHash] = useState<string | null>(null);
   const [externalFundingError, setExternalFundingError] = useState<string | null>(null);
   const [externalFundingDiagnostic, setExternalFundingDiagnostic] = useState<string | null>(null);
-  const [isOpeningExternalFunding, setIsOpeningExternalFunding] = useState(false);
-  const [isSigningExternalFunding, setIsSigningExternalFunding] = useState(false);
-  const [isSubmittingExternalFunding, setIsSubmittingExternalFunding] = useState(false);
   const [isRefreshingPeers, setIsRefreshingPeers] = useState(false);
   const [isConnectingPeer, setIsConnectingPeer] = useState(false);
   const [fundingAmountSuggestionCkb, setFundingAmountSuggestionCkb] = useState<string | null>(null);
@@ -331,6 +242,46 @@ export function App() {
   const clearLogs = () => {
     setEventLogs([]);
   };
+
+  const channelOpenFlow = useChannelOpenFlow({
+    node: fiber.node,
+    onLog: addLog,
+  });
+
+  const isOpeningExternalFunding = channelOpenFlow.isOpening;
+
+  useEffect(() => {
+    if (channelOpenFlow.error) {
+      setExternalFundingError(channelOpenFlow.error);
+    }
+  }, [channelOpenFlow.error]);
+
+  useEffect(() => {
+    if (channelOpenFlow.diagnostic) {
+      setExternalFundingDiagnostic(channelOpenFlow.diagnostic);
+    }
+  }, [channelOpenFlow.diagnostic]);
+
+  useEffect(() => {
+    if (channelOpenFlow.suggestedFundingAmountCkb) {
+      setFundingAmountSuggestionCkb(channelOpenFlow.suggestedFundingAmountCkb);
+    }
+  }, [channelOpenFlow.suggestedFundingAmountCkb]);
+
+  const externalFundingDebugFlow = useExternalFundingDebugFlow({
+    node: fiber.node,
+    cccSigner,
+    resolveExternalSigner,
+    externalFundingSession,
+    externalFundingPeerPubkey,
+    unsignedFundingTxJson,
+    signedFundingTxJson,
+    setSignedFundingTxJson,
+    setExternalFundingError,
+    setExternalFundingDiagnostic,
+    setFundingSubmitTxHash,
+    addLog,
+  });
 
   const normalizePubkey = (value: string): string =>
     value.trim().toLowerCase().replace(/^0x/, '');
@@ -361,93 +312,6 @@ export function App() {
       addLog(`Refresh peers failed: ${message}`);
     } finally {
       setIsRefreshingPeers(false);
-    }
-  };
-
-  const loadExternalFundingFailureDiagnostic = async (params: {
-    rawError: string;
-    targetPubkey?: HexString;
-    channelIdHint?: HexString;
-  }): Promise<string | null> => {
-    if (!fiber.node) {
-      return null;
-    }
-
-    const channelIdCandidates = [
-      ...(params.channelIdHint ? [params.channelIdHint] : []),
-      ...extractHexHashCandidates(params.rawError),
-    ];
-    const listMergedChannels = async (queryBase?: { pubkey?: HexString }) => {
-      const [pendingResult, fullResult] = await Promise.all([
-        fiber.node!.listChannels({
-          ...(queryBase ?? {}),
-          only_pending: true,
-        }),
-        fiber.node!.listChannels({
-          ...(queryBase ?? {}),
-          include_closed: true,
-        }),
-      ]);
-      return [...pendingResult.channels, ...fullResult.channels];
-    };
-
-    let mergedChannels = await listMergedChannels(
-      params.targetPubkey ? { pubkey: params.targetPubkey } : undefined,
-    );
-
-    // Some node builds are strict about pubkey filter format; fallback to full scan for diagnostics.
-    if (mergedChannels.length === 0 && params.targetPubkey) {
-      mergedChannels = await listMergedChannels();
-    }
-
-    const channelById = new Map(mergedChannels.map((channel) => [channel.channel_id.toLowerCase(), channel]));
-
-    let targetChannel = channelIdCandidates
-      .map((id) => channelById.get(id.toLowerCase()))
-      .find((channel): channel is NonNullable<typeof channel> => Boolean(channel));
-
-    if (!targetChannel) {
-      const failedChannels = Array.from(channelById.values()).filter((channel) => channel.failure_detail);
-      if (failedChannels.length > 0) {
-        failedChannels.sort(
-          (a, b) => Number(parseHexToBigInt(b.created_at) - parseHexToBigInt(a.created_at)),
-        );
-        [targetChannel] = failedChannels;
-      }
-    }
-
-    if (!targetChannel) {
-      return null;
-    }
-
-    const failureDetail = targetChannel.failure_detail ?? 'No failure_detail returned by list_channels.';
-    const stateFlags = targetChannel.state.state_flags ? ` (${targetChannel.state.state_flags})` : '';
-    return `诊断信息：channel=${targetChannel.channel_id}, state=${targetChannel.state.state_name}${stateFlags}, failure_detail=${failureDetail}`;
-  };
-
-  const loadFundingLockBalanceDiagnostic = async (params: {
-    fundingLockScript?: ScriptLike;
-    requestedFundingShannons?: bigint;
-  }): Promise<string | null> => {
-    const { fundingLockScript, requestedFundingShannons } = params;
-    if (!fundingLockScript || requestedFundingShannons === undefined) {
-      return null;
-    }
-
-    try {
-      const balanceShannons = await getLockBalanceShannons(TESTNET_CKB_RPC_URL, fundingLockScript);
-      const balanceCkb = formatShannonsAsCkb(balanceShannons);
-      const requestedCkb = formatShannonsAsCkb(requestedFundingShannons);
-
-      if (balanceShannons < requestedFundingShannons) {
-        return `资金诊断：funding lock 余额约 ${balanceCkb} CKB，小于请求金额 ${requestedCkb} CKB。`;
-      }
-
-      return `资金诊断：funding lock 余额约 ${balanceCkb} CKB（请求 ${requestedCkb} CKB）。若仍 AbortFunding，通常是手续费或可用 live cell 结构导致，建议先将金额下调 1-5 CKB 再试。`;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      addLog(`Funding lock balance diagnostic failed: ${message}`);
-      return null;
     }
   };
 
@@ -611,27 +475,17 @@ export function App() {
       return;
     }
 
-    if (!externalWallet) {
-      setExternalFundingError('Turn on External Wallet mode first.');
-      return;
-    }
-
     if (!externalFundingPeerPubkey.trim()) {
       setExternalFundingError('Target peer pubkey is empty. Select or input a connected peer first.');
       return;
     }
 
-    setIsOpeningExternalFunding(true);
     setExternalFundingError(null);
     setExternalFundingDiagnostic(null);
     setFundingSubmitTxHash(null);
     setFundingAmountSuggestionCkb(null);
 
-    let fundingLockScriptForDiagnostic: ScriptLike | undefined;
-    let requestedFundingShannons: bigint | undefined;
-
     try {
-      requestedFundingShannons = ckbToShannons(externalFundingAmountCkb);
       const targetPubkey = toHexPrefixed(externalFundingPeerPubkey);
       const normalizedTarget = normalizePubkey(targetPubkey);
       const isConnected = connectedPeerPubkeys.some(
@@ -643,10 +497,8 @@ export function App() {
       }
 
       const defaultScript = fiber.nodeInfo.default_funding_lock_script;
-
       const shutdownScript = parseScriptJson(shutdownScriptJson, defaultScript);
       const fundingLockScript = parseScriptJson(fundingLockScriptJson, defaultScript);
-      fundingLockScriptForDiagnostic = fundingLockScript;
       let fundingLockScriptCellDeps = parseOptionalJson<CellDepLike[]>(fundingLockCellDepsJson);
 
       if (externalWallet && cccSigner && (!fundingLockScriptCellDeps || fundingLockScriptCellDeps.length === 0)) {
@@ -658,200 +510,57 @@ export function App() {
         }
       }
 
-      const result = await fiber.node.openChannelWithExternalFunding({
-        pubkey: targetPubkey,
-        funding_amount: `0x${requestedFundingShannons.toString(16)}` as HexString,
-        shutdown_script: shutdownScript,
-        funding_lock_script: fundingLockScript,
-        funding_lock_script_cell_deps: fundingLockScriptCellDeps,
-      });
-
-      setExternalFundingSession({
-        channelId: result.channel_id,
-        unsignedFundingTx: result.unsigned_funding_tx,
-      });
-
-      const unsignedJson = JSON.stringify(result.unsigned_funding_tx, null, 2);
-      setUnsignedFundingTxJson(unsignedJson);
-      setSignedFundingTxJson('');
-
-      addLog(`External funding request created for channel ${shorten(result.channel_id, 12, 8)}.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      let uiMessage = message;
-      const requiredCapacityCkb = extractRequiredCapacityCkbFromError(message);
-      if (requiredCapacityCkb) {
-        const suggested = computeSuggestedFundingAmountCkb(externalFundingAmountCkb, requiredCapacityCkb);
-        if (suggested) {
-          setFundingAmountSuggestionCkb(suggested);
-          uiMessage = `容量不足：当前金额 ${externalFundingAmountCkb} CKB 不能覆盖手续费。建议改为 ${suggested} CKB（含 0.001 CKB 缓冲）。原始错误：${message}`;
-        } else {
-          uiMessage = `容量不足：当前余额无法覆盖该通道金额与手续费。请降低金额或给该 lock script 充值。原始错误：${message}`;
+      const signFundingTx = async (txForSigner: unknown): Promise<unknown> => {
+        if (cccSigner) {
+          const cccSignedTx = await cccSigner.signTransaction(txForSigner as ccc.TransactionLike);
+          return JSON.parse(JSON.stringify(cccSignedTx)) as unknown;
         }
-      }
 
-      setExternalFundingError(uiMessage);
-
-      if (shouldDiagnoseFundingAbort(message)) {
-        try {
-          const diagnostics: string[] = [];
-
-          const diagnostic = await loadExternalFundingFailureDiagnostic({
-            rawError: message,
-            targetPubkey: toHexPrefixed(externalFundingPeerPubkey),
-          });
-          if (diagnostic) {
-            diagnostics.push(diagnostic);
-            addLog(`External funding diagnostic: ${diagnostic}`);
-          }
-
-          const balanceDiagnostic = await loadFundingLockBalanceDiagnostic({
-            fundingLockScript: fundingLockScriptForDiagnostic,
-            requestedFundingShannons,
-          });
-          if (balanceDiagnostic) {
-            diagnostics.push(balanceDiagnostic);
-            addLog(`External funding balance diagnostic: ${balanceDiagnostic}`);
-          }
-
-          if (diagnostics.length > 0) {
-            setExternalFundingDiagnostic(diagnostics.join(' | '));
-          }
-        } catch (diagnosticError) {
-          const diagnosticMessage =
-            diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError);
-          addLog(`External funding diagnostic lookup failed: ${diagnosticMessage}`);
-        }
-      }
-
-      addLog(`External funding open failed: ${message}`);
-    } finally {
-      setIsOpeningExternalFunding(false);
-    }
-  };
-
-  const signWithExternalWallet = async () => {
-    if (!unsignedFundingTxJson.trim()) {
-      setExternalFundingError('No unsigned funding tx found. Start funding request first.');
-      return;
-    }
-
-    setIsSigningExternalFunding(true);
-    setExternalFundingError(null);
-
-    try {
-      const unsignedTx = JSON.parse(unsignedFundingTxJson) as unknown;
-      let signedTx: unknown;
-
-      if (cccSigner) {
-        try {
-          const txForCcc = normalizeCkbTransactionForCcc(unsignedTx);
-          const cccSignedTx = await cccSigner.signTransaction(txForCcc as ccc.TransactionLike);
-          const cccSignedPlain = JSON.parse(JSON.stringify(cccSignedTx)) as unknown;
-          signedTx = normalizeCkbTransactionForRpc(cccSignedPlain);
-          addLog('External wallet signing completed via CCC signer. Ready to submit signed funding tx.');
-        } catch (cccSignError) {
-          const cccSignMessage =
-            cccSignError instanceof Error ? cccSignError.message : String(cccSignError);
-          addLog(`CCC signer failed, fallback to window signer: ${cccSignMessage}`);
-        }
-      }
-
-      if (!signedTx) {
         const sign = resolveExternalSigner();
         if (!sign) {
-          throw new Error(
-            'No external wallet signer found. Connect wallet via CCC first, or expose window.ckbExternalWallet.signTransaction(tx).',
-          );
+          throw new Error('No external wallet signer found. Connect wallet via CCC first.');
         }
 
-        signedTx = await sign(unsignedTx);
-      }
+        return sign(txForSigner);
+      };
 
-      const normalizedSignedTx = normalizeCkbTransactionForRpc(signedTx);
-      setSignedFundingTxJson(JSON.stringify(normalizedSignedTx, null, 2));
-      addLog('Signed funding tx is prepared. Ready to submit signed funding tx.');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setExternalFundingError(message);
-      addLog(`External wallet signing failed: ${message}`);
-    } finally {
-      setIsSigningExternalFunding(false);
-    }
-  };
-
-  const submitSignedFunding = async () => {
-    if (!fiber.node) {
-      setExternalFundingError('Node is not connected.');
-      return;
-    }
-
-    if (!externalFundingSession) {
-      setExternalFundingError('No pending channel funding session. Start funding request first.');
-      return;
-    }
-
-    if (!signedFundingTxJson.trim()) {
-      setExternalFundingError('Signed funding tx is empty.');
-      return;
-    }
-
-    setIsSubmittingExternalFunding(true);
-    setExternalFundingError(null);
-    setExternalFundingDiagnostic(null);
-
-    try {
-      const signedTx = JSON.parse(signedFundingTxJson) as unknown;
-      const normalizedSignedTx = normalizeCkbTransactionForRpc(signedTx) as Record<string, unknown>;
-      const result = await fiber.node.submitSignedFundingTx({
-        channel_id: externalFundingSession.channelId,
-        signed_funding_tx: normalizedSignedTx,
+      const result = await channelOpenFlow.openChannel({
+        pubkey: targetPubkey,
+        fundingAmountCkb: externalFundingAmountCkb,
+        externalWallet,
+        shutdownScript,
+        fundingLockScript,
+        fundingLockScriptCellDeps,
+        signFundingTx,
+        ckbRpcUrl: TESTNET_CKB_RPC_URL,
       });
 
-      setFundingSubmitTxHash(result.funding_tx_hash);
-      addLog(`Submitted signed funding tx: ${shorten(result.funding_tx_hash, 12, 8)}.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setExternalFundingError(message);
-
-      if (shouldDiagnoseFundingAbort(message)) {
-        try {
-          const diagnostic = await loadExternalFundingFailureDiagnostic({
-            rawError: message,
-            targetPubkey: toHexPrefixed(externalFundingPeerPubkey),
-            channelIdHint: externalFundingSession.channelId,
-          });
-          if (diagnostic) {
-            setExternalFundingDiagnostic(diagnostic);
-            addLog(`Submit funding diagnostic: ${diagnostic}`);
-          }
-        } catch (diagnosticError) {
-          const diagnosticMessage =
-            diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError);
-          addLog(`Submit funding diagnostic lookup failed: ${diagnosticMessage}`);
-        }
+      if (!result) {
+        return;
       }
 
-      addLog(`Submit signed funding tx failed: ${message}`);
-    } finally {
-      setIsSubmittingExternalFunding(false);
-    }
-  };
+      setExternalFundingSession({
+        channelId: result.channelId,
+        unsignedFundingTx: result.unsignedFundingTx ?? null,
+      });
 
-  const copyUnsignedFundingTx = async () => {
-    if (!unsignedFundingTxJson.trim()) {
-      setExternalFundingError('No unsigned funding tx to copy.');
-      return;
-    }
+      if (result.unsignedFundingTx) {
+        setUnsignedFundingTxJson(JSON.stringify(result.unsignedFundingTx, null, 2));
+      } else {
+        setUnsignedFundingTxJson('');
+      }
 
-    try {
-      await navigator.clipboard.writeText(unsignedFundingTxJson);
-      setExternalFundingError(null);
-      addLog('Unsigned funding tx copied to clipboard.');
+      if (result.signedFundingTx) {
+        setSignedFundingTxJson(JSON.stringify(result.signedFundingTx, null, 2));
+      } else {
+        setSignedFundingTxJson('');
+      }
+
+      setFundingSubmitTxHash(result.fundingTxHash ?? null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setExternalFundingError(message);
-      addLog(`Copy unsigned tx failed: ${message}`);
+      addLog(`External funding flow failed: ${message}`);
     }
   };
 
@@ -1129,108 +838,114 @@ export function App() {
           ))}
         </div>
 
-        {externalWallet && (
-          <div
-            style={{
-              marginTop: 12,
-              border: '1px solid #cbd5e1',
-              borderRadius: 10,
-              padding: 12,
-              background: '#f8fafc',
-            }}
-          >
+        <div
+          style={{
+            marginTop: 12,
+            border: '1px solid #cbd5e1',
+            borderRadius: 10,
+            padding: 12,
+            background: '#f8fafc',
+          }}
+        >
             <h3 style={{ marginTop: 0, marginBottom: 8, fontSize: 16 }}>
-              External Wallet Funding Flow (Open + Sign + Submit)
+              {externalWallet ? 'External Wallet Funding (One Click)' : 'Internal Funding (One Click)'}
             </h3>
             <p style={{ marginTop: 0, fontSize: 13, color: '#475569' }}>
-              This is the missing end-to-end path for external wallet mode. Create an unsigned funding
-              tx, ask external wallet to sign it, then submit the signed tx.
+              SDK now provides a high-level flow API. With external wallet on, it will open + sign +
+              submit automatically. With external wallet off, it performs a standard internal-funding
+              open request.
             </p>
 
-            <div
-              style={{
-                border: '1px solid #cbd5e1',
-                borderRadius: 8,
-                padding: 10,
-                background: '#ffffff',
-                marginBottom: 10,
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>External Wallet (CCC)</div>
-              <div style={{ fontSize: 12, color: '#475569', marginBottom: 8 }}>
-                Connect external wallet first, then load its funding lock script into request params.
+            {externalWallet ? (
+              <div
+                style={{
+                  border: '1px solid #cbd5e1',
+                  borderRadius: 8,
+                  padding: 10,
+                  background: '#ffffff',
+                  marginBottom: 10,
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>External Wallet (CCC)</div>
+                <div style={{ fontSize: 12, color: '#475569', marginBottom: 8 }}>
+                  Connect external wallet first, then load its funding lock script into request params.
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void openExternalWalletConnectModal();
+                    }}
+                    style={{
+                      border: '1px solid #1d4ed8',
+                      borderRadius: 8,
+                      padding: '6px 10px',
+                      background: '#2563eb',
+                      color: '#fff',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {connectedExternalWallet ? 'Switch External Wallet' : 'Connect External Wallet'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void disconnectExternalWallet();
+                    }}
+                    disabled={!connectedExternalWallet}
+                    style={{
+                      border: '1px solid #cbd5e1',
+                      borderRadius: 8,
+                      padding: '6px 10px',
+                      background: '#fff',
+                      color: '#111827',
+                      cursor: connectedExternalWallet ? 'pointer' : 'not-allowed',
+                      opacity: connectedExternalWallet ? 1 : 0.65,
+                    }}
+                  >
+                    Disconnect External Wallet
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSyncingExternalWalletScript(true);
+                      void syncFundingScriptsFromConnectedExternalWallet(true)
+                        .catch((error) => {
+                          const message = error instanceof Error ? error.message : String(error);
+                          setExternalFundingError(message);
+                          addLog(`Load wallet script failed: ${message}`);
+                        })
+                        .finally(() => {
+                          setIsSyncingExternalWalletScript(false);
+                        });
+                    }}
+                    disabled={!connectedExternalWallet || isSyncingExternalWalletScript}
+                    style={{
+                      border: '1px solid #0f766e',
+                      borderRadius: 8,
+                      padding: '6px 10px',
+                      background: '#ecfeff',
+                      color: '#0f766e',
+                      cursor:
+                        connectedExternalWallet && !isSyncingExternalWalletScript ? 'pointer' : 'not-allowed',
+                      opacity: connectedExternalWallet ? 1 : 0.65,
+                    }}
+                  >
+                    {isSyncingExternalWalletScript
+                      ? 'Loading Wallet Script...'
+                      : 'Load Wallet Script to Params'}
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: '#334155' }}>
+                  CCC wallet: {connectedExternalWallet?.name ?? 'Not connected'}
+                  {externalWalletAddress ? ` | address: ${shorten(externalWalletAddress, 20, 10)}` : ''}
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void openExternalWalletConnectModal();
-                  }}
-                  style={{
-                    border: '1px solid #1d4ed8',
-                    borderRadius: 8,
-                    padding: '6px 10px',
-                    background: '#2563eb',
-                    color: '#fff',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {connectedExternalWallet ? 'Switch External Wallet' : 'Connect External Wallet'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void disconnectExternalWallet();
-                  }}
-                  disabled={!connectedExternalWallet}
-                  style={{
-                    border: '1px solid #cbd5e1',
-                    borderRadius: 8,
-                    padding: '6px 10px',
-                    background: '#fff',
-                    color: '#111827',
-                    cursor: connectedExternalWallet ? 'pointer' : 'not-allowed',
-                    opacity: connectedExternalWallet ? 1 : 0.65,
-                  }}
-                >
-                  Disconnect External Wallet
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSyncingExternalWalletScript(true);
-                    void syncFundingScriptsFromConnectedExternalWallet(true)
-                      .catch((error) => {
-                        const message = error instanceof Error ? error.message : String(error);
-                        setExternalFundingError(message);
-                        addLog(`Load wallet script failed: ${message}`);
-                      })
-                      .finally(() => {
-                        setIsSyncingExternalWalletScript(false);
-                      });
-                  }}
-                  disabled={!connectedExternalWallet || isSyncingExternalWalletScript}
-                  style={{
-                    border: '1px solid #0f766e',
-                    borderRadius: 8,
-                    padding: '6px 10px',
-                    background: '#ecfeff',
-                    color: '#0f766e',
-                    cursor:
-                      connectedExternalWallet && !isSyncingExternalWalletScript ? 'pointer' : 'not-allowed',
-                    opacity: connectedExternalWallet ? 1 : 0.65,
-                  }}
-                >
-                  {isSyncingExternalWalletScript
-                    ? 'Loading Wallet Script...'
-                    : 'Load Wallet Script to Params'}
-                </button>
+            ) : (
+              <div style={{ marginBottom: 10, fontSize: 12, color: '#475569' }}>
+                Internal wallet mode uses node-managed CKB key and performs standard channel open.
               </div>
-              <div style={{ fontSize: 12, color: '#334155' }}>
-                CCC wallet: {connectedExternalWallet?.name ?? 'Not connected'}
-                {externalWalletAddress ? ` | address: ${shorten(externalWalletAddress, 20, 10)}` : ''}
-              </div>
-            </div>
+            )}
 
             <div style={{ display: 'grid', gap: 8 }}>
               <label style={{ fontSize: 13 }}>
@@ -1311,38 +1026,6 @@ export function App() {
                 </div>
               )}
 
-              <label style={{ fontSize: 13 }}>
-                Shutdown Script JSON (optional, defaults to node default script)
-                <textarea
-                  value={shutdownScriptJson}
-                  onChange={(e) => setShutdownScriptJson(e.target.value)}
-                  rows={4}
-                  placeholder='{"code_hash":"0x...","hash_type":"type","args":"0x..."}'
-                  style={{ width: '100%', marginTop: 4, padding: '8px', borderRadius: 8, border: '1px solid #cbd5e1', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 }}
-                />
-              </label>
-
-              <label style={{ fontSize: 13 }}>
-                Funding Lock Script JSON (optional, defaults to node default script)
-                <textarea
-                  value={fundingLockScriptJson}
-                  onChange={(e) => setFundingLockScriptJson(e.target.value)}
-                  rows={4}
-                  placeholder='{"code_hash":"0x...","hash_type":"type","args":"0x..."}'
-                  style={{ width: '100%', marginTop: 4, padding: '8px', borderRadius: 8, border: '1px solid #cbd5e1', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 }}
-                />
-              </label>
-
-              <label style={{ fontSize: 13 }}>
-                Funding Lock Script CellDeps JSON (optional)
-                <textarea
-                  value={fundingLockCellDepsJson}
-                  onChange={(e) => setFundingLockCellDepsJson(e.target.value)}
-                  rows={3}
-                  placeholder='[{"out_point":{"tx_hash":"0x...","index":"0x0"},"dep_type":"code"}]'
-                  style={{ width: '100%', marginTop: 4, padding: '8px', borderRadius: 8, border: '1px solid #cbd5e1', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 }}
-                />
-              </label>
             </div>
 
             <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1383,7 +1066,13 @@ export function App() {
                 disabled={!fiber.isRunning || isOpeningExternalFunding || !externalFundingPeerPubkey.trim()}
                 style={{ border: '1px solid #0f766e', borderRadius: 8, padding: '7px 10px', background: '#14b8a6', color: '#fff', cursor: fiber.isRunning ? 'pointer' : 'not-allowed', opacity: fiber.isRunning ? 1 : 0.65 }}
               >
-                {isOpeningExternalFunding ? 'Opening Funding...' : 'Open External Funding Request'}
+                {isOpeningExternalFunding
+                  ? externalWallet
+                    ? 'Running External Funding Flow...'
+                    : 'Opening Internal Channel...'
+                  : externalWallet
+                    ? 'Open Channel (Auto Sign + Submit)'
+                    : 'Open Channel (Internal Funding)'}
               </button>
             </div>
 
@@ -1393,60 +1082,30 @@ export function App() {
               </p>
             )}
 
-            <label style={{ display: 'block', marginTop: 10, fontSize: 13 }}>
-              Unsigned Funding Tx JSON
-              <textarea
-                value={unsignedFundingTxJson}
-                onChange={(e) => setUnsignedFundingTxJson(e.target.value)}
-                rows={6}
-                style={{ width: '100%', marginTop: 4, padding: '8px', borderRadius: 8, border: '1px solid #cbd5e1', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 }}
-              />
-            </label>
-
-            <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  void copyUnsignedFundingTx();
-                }}
-                style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: '7px 10px', background: '#fff', cursor: 'pointer' }}
-              >
-                Copy Unsigned Tx
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void signWithExternalWallet();
-                }}
-                disabled={isSigningExternalFunding}
-                style={{ border: '1px solid #2563eb', borderRadius: 8, padding: '7px 10px', background: '#3b82f6', color: '#fff', cursor: 'pointer', opacity: isSigningExternalFunding ? 0.7 : 1 }}
-              >
-                {isSigningExternalFunding ? 'Signing...' : 'Sign with External Wallet'}
-              </button>
-            </div>
-
-            <label style={{ display: 'block', marginTop: 10, fontSize: 13 }}>
-              Signed Funding Tx JSON
-              <textarea
-                value={signedFundingTxJson}
-                onChange={(e) => setSignedFundingTxJson(e.target.value)}
-                rows={6}
-                style={{ width: '100%', marginTop: 4, padding: '8px', borderRadius: 8, border: '1px solid #cbd5e1', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 }}
-              />
-            </label>
-
-            <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  void submitSignedFunding();
-                }}
-                disabled={!externalFundingSession || isSubmittingExternalFunding}
-                style={{ border: '1px solid #0f766e', borderRadius: 8, padding: '7px 10px', background: '#0f766e', color: '#fff', cursor: externalFundingSession ? 'pointer' : 'not-allowed', opacity: externalFundingSession ? 1 : 0.65 }}
-              >
-                {isSubmittingExternalFunding ? 'Submitting...' : 'Submit Signed Funding Tx'}
-              </button>
-            </div>
+            <ExternalFundingDebugControls
+              shutdownScriptJson={shutdownScriptJson}
+              setShutdownScriptJson={setShutdownScriptJson}
+              fundingLockScriptJson={fundingLockScriptJson}
+              setFundingLockScriptJson={setFundingLockScriptJson}
+              fundingLockCellDepsJson={fundingLockCellDepsJson}
+              setFundingLockCellDepsJson={setFundingLockCellDepsJson}
+              unsignedFundingTxJson={unsignedFundingTxJson}
+              setUnsignedFundingTxJson={setUnsignedFundingTxJson}
+              signedFundingTxJson={signedFundingTxJson}
+              setSignedFundingTxJson={setSignedFundingTxJson}
+              onCopyUnsignedTx={() => {
+                void externalFundingDebugFlow.copyUnsignedFundingTx();
+              }}
+              onSignWithExternalWallet={() => {
+                void externalFundingDebugFlow.signWithExternalWallet();
+              }}
+              isSigningExternalFunding={externalFundingDebugFlow.isSigningExternalFunding}
+              onSubmitSignedFunding={() => {
+                void externalFundingDebugFlow.submitSignedFunding();
+              }}
+              isSubmittingExternalFunding={externalFundingDebugFlow.isSubmittingExternalFunding}
+              hasPendingExternalFundingSession={Boolean(externalFundingSession)}
+            />
 
             {fundingSubmitTxHash && (
               <p style={{ marginTop: 10, fontSize: 13 }}>
@@ -1462,7 +1121,6 @@ export function App() {
               <p style={{ marginTop: 10, color: '#0f172a', fontSize: 13 }}>{externalFundingDiagnostic}</p>
             )}
           </div>
-        )}
 
         {fiber.error && (
           <div

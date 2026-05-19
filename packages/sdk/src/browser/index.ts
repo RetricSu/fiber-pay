@@ -111,6 +111,7 @@ export type {
   PaymentHash,
   PeerId,
   Pubkey,
+  Script,
   SendPaymentParams,
   SendPaymentResult,
   SendPaymentWithRouterParams,
@@ -128,3 +129,16 @@ export {
   normalizeCkbTransactionForCcc,
   normalizeCkbTransactionForRpc,
 } from './ckb-transaction-normalizer.js';
+export {
+  computeSuggestedFundingAmountCkb,
+  type DiagnoseExternalFundingFailureOptions,
+  type DiagnoseExternalFundingFailureResult,
+  diagnoseExternalFundingFailure,
+  extractRequiredCapacityCkbFromFundingError,
+  shouldDiagnoseFundingAbortError,
+} from './external-funding-diagnostics.js';
+export {
+  type OpenChannelWithExternalFundingFlowOptions,
+  type OpenChannelWithExternalFundingFlowResult,
+  openChannelWithExternalFundingFlow,
+} from './external-funding-flow.js';
