@@ -423,20 +423,6 @@ export function App() {
           >
             Passkey
           </button>
-          <button
-            type="button"
-            onClick={() => setExternalWallet((value) => !value)}
-            style={{
-              border: '1px solid #d1d5db',
-              borderRadius: 8,
-              padding: '6px 10px',
-              background: externalWallet ? '#0f766e' : '#fff',
-              color: externalWallet ? '#fff' : '#111827',
-              cursor: 'pointer',
-            }}
-          >
-            {externalWallet ? 'External Wallet: ON' : 'External Wallet: OFF'}
-          </button>
         </div>
 
         {strategy === 'password' && (
@@ -467,58 +453,85 @@ export function App() {
           }}
         />
 
-        {externalWallet && (
-          <div
+        <div
+          style={{
+            marginTop: 12,
+            border: '1px solid #cbd5e1',
+            borderRadius: 8,
+            padding: 10,
+            background: '#fff',
+          }}
+        >
+          <label
             style={{
-              marginTop: 12,
-              border: '1px solid #cbd5e1',
-              borderRadius: 8,
-              padding: 10,
-              background: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontWeight: 600,
+              color: '#0f172a',
+              cursor: 'pointer',
             }}
           >
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  void openExternalWalletConnectModal();
-                }}
-                style={{
-                  border: '1px solid #1d4ed8',
-                  borderRadius: 8,
-                  padding: '6px 10px',
-                  background: '#2563eb',
-                  color: '#fff',
-                  cursor: 'pointer',
-                }}
-              >
-                {connectedExternalWallet ? 'Switch External Wallet' : 'Connect External Wallet'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void disconnectExternalWallet();
-                }}
-                disabled={!connectedExternalWallet}
-                style={{
-                  border: '1px solid #cbd5e1',
-                  borderRadius: 8,
-                  padding: '6px 10px',
-                  background: '#fff',
-                  color: '#111827',
-                  cursor: connectedExternalWallet ? 'pointer' : 'not-allowed',
-                  opacity: connectedExternalWallet ? 1 : 0.65,
-                }}
-              >
-                Disconnect External Wallet
-              </button>
-            </div>
-            <div style={{ marginTop: 8, fontSize: 12, color: '#475569' }}>
-              CCC wallet: {connectedExternalWallet?.name ?? 'Not connected'}
-              {externalWalletAddress ? ` | address: ${shorten(externalWalletAddress, 20, 10)}` : ''}
-            </div>
-          </div>
-        )}
+            <input
+              type="checkbox"
+              checked={externalWallet}
+              onChange={(e) => setExternalWallet(e.target.checked)}
+              style={{ width: 16, height: 16 }}
+            />
+            Use External Wallet (CCC Signer)
+          </label>
+
+          <p style={{ marginTop: 6, marginBottom: 0, fontSize: 12, color: '#64748b' }}>
+            {externalWallet
+              ? 'External mode is on. Channel opening will use CCC wallet signing.'
+              : 'External mode is off. Channel opening uses internal node-managed funding.'}
+          </p>
+
+          {externalWallet && (
+            <>
+              <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void openExternalWalletConnectModal();
+                  }}
+                  style={{
+                    border: '1px solid #1d4ed8',
+                    borderRadius: 8,
+                    padding: '6px 10px',
+                    background: '#2563eb',
+                    color: '#fff',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {connectedExternalWallet ? 'Switch External Wallet' : 'Connect External Wallet'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void disconnectExternalWallet();
+                  }}
+                  disabled={!connectedExternalWallet}
+                  style={{
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 8,
+                    padding: '6px 10px',
+                    background: '#fff',
+                    color: '#111827',
+                    cursor: connectedExternalWallet ? 'pointer' : 'not-allowed',
+                    opacity: connectedExternalWallet ? 1 : 0.65,
+                  }}
+                >
+                  Disconnect External Wallet
+                </button>
+              </div>
+              <div style={{ marginTop: 8, fontSize: 12, color: '#475569' }}>
+                CCC wallet: <strong>{connectedExternalWallet?.name ?? 'Not connected'}</strong>
+                {externalWalletAddress ? ` | address: ${shorten(externalWalletAddress, 20, 10)}` : ''}
+              </div>
+            </>
+          )}
+        </div>
 
         <div style={{ marginTop: 12, fontSize: 13, display: 'grid', gap: 6 }}>
           {statusSummary.map((item) => (
