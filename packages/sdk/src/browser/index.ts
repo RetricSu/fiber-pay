@@ -124,3 +124,7 @@ export type {
 export { ChannelState } from '../types/rpc.js';
 export { ckbToShannons, fromHex, shannonsToCkb, toHex } from '../utils.js';
 export { callJsonRpc, formatShannonsAsCkb, getLockBalanceShannons } from './ckb-balance.js';
+export {
+  normalizeCkbTransactionForCcc,
+  normalizeCkbTransactionForRpc,
+} from './ckb-transaction-normalizer.js';
