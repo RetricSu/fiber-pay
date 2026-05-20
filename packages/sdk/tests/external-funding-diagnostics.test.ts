@@ -36,9 +36,19 @@ describe('external funding diagnostics', () => {
 					{
 						channel_id:
 							'0x69cb10774f3ce30c45c9c65df3602ce3df0d4639e81479f52c9acb9d10e0fd49',
-						created_at: '0x10',
+						created_at: '0x100000000000000000',
 						failure_detail: 'mocked failure detail',
 						state: { state_name: 'NegotiatingFunding', state_flags: [] },
+					},
+					{
+						channel_id:
+							'0x9dcb10774f3ce30c45c9c65df3602ce3df0d4639e81479f52c9acb9d10e0fd41',
+						created_at: '0x20',
+						failure_detail: 'older failure detail',
+						state: {
+							state_name: 'NegotiatingFunding',
+							state_flags: ['AWAITING_TX_SIGNATURES', 'LOCAL_PENDING'],
+						},
 					},
 				],
 			})
@@ -49,9 +59,45 @@ describe('external funding diagnostics', () => {
 			rawError:
 				'Channel 0x69cb10774f3ce30c45c9c65df3602ce3df0d4639e81479f52c9acb9d10e0fd49 stopped before unsigned external funding tx was returned: AbortFunding',
 			targetPubkey: '0x1234',
+			fundingLockScript: {
+				code_hash: '0x1',
+				hash_type: 'type',
+				args: '0x',
+			},
+			requestedFundingShannons: 100_000_000n,
 		});
 
 		expect(result.channelDiagnostic).toContain('mocked failure detail');
+		expect(result.channelDiagnostic).not.toContain('()');
 		expect(result.summary).toContain('failure_detail=mocked failure detail');
+		expect(result.summary).toContain('balance diagnostic skipped: ckbRpcUrl not provided');
+	});
+
+	it('formats state flags when present as array', async () => {
+		const listChannels = vi
+			.fn()
+			.mockResolvedValueOnce({ channels: [] })
+			.mockResolvedValueOnce({
+				channels: [
+					{
+						channel_id:
+							'0x69cb10774f3ce30c45c9c65df3602ce3df0d4639e81479f52c9acb9d10e0fd40',
+						created_at: '0x10',
+						failure_detail: 'flag detail',
+						state: {
+							state_name: 'NegotiatingFunding',
+							state_flags: ['FLAG_A', 'FLAG_B'],
+						},
+					},
+				],
+			});
+
+		const result = await diagnoseExternalFundingFailure({
+			node: { listChannels },
+			rawError: 'abort funding',
+			targetPubkey: '0x1234',
+		});
+
+		expect(result.channelDiagnostic).toContain('state=NegotiatingFunding (FLAG_A | FLAG_B)');
 	});
 });

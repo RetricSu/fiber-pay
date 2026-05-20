@@ -4,7 +4,10 @@ import { formatShannonsAsCkb, getLockBalanceShannons } from './ckb-balance.js';
 
 const SHANNONS_PER_CKB = 100_000_000n;
 const SUGGESTED_FEE_BUFFER_SHANNONS = 100_000n; // 0.001 CKB
-const DEFAULT_TESTNET_CKB_RPC_URL = 'https://testnet.ckbapp.dev/';
+// These patterns match Fiber v0.8.1 error strings. Keep them isolated for easier updates.
+const FUNDING_ABORT_ERROR_PATTERN =
+  /abortfunding|funding transaction aborted|stopped before unsigned external funding tx|channel .* stopped/i;
+const REQUIRED_CAPACITY_ERROR_PATTERN = /value=([0-9]+(?:\.[0-9]+)?)/i;
 
 function parseCkbToShannons(ckbAmount: string): bigint {
   const normalized = ckbAmount.trim();
@@ -57,14 +60,41 @@ function extractHexHashCandidates(input: string): HexString[] {
 }
 
 export function shouldDiagnoseFundingAbortError(message: string): boolean {
-  return /abortfunding|funding transaction aborted|stopped before unsigned external funding tx|channel .* stopped/i.test(
-    message,
-  );
+  return FUNDING_ABORT_ERROR_PATTERN.test(message);
 }
 
 export function extractRequiredCapacityCkbFromFundingError(message: string): string | null {
-  const match = message.match(/value=([0-9]+(?:\.[0-9]+)?)/i);
+  const match = message.match(REQUIRED_CAPACITY_ERROR_PATTERN);
   return match?.[1] ?? null;
+}
+
+function compareHexBigIntDesc(aHex: string | undefined, bHex: string | undefined): number {
+  const a = parseHexToBigInt(aHex);
+  const b = parseHexToBigInt(bHex);
+  if (a === b) {
+    return 0;
+  }
+  return a > b ? -1 : 1;
+}
+
+function normalizeStateFlagsForDisplay(stateFlags: unknown): string {
+  if (Array.isArray(stateFlags)) {
+    const normalized = stateFlags
+      .map((item) => String(item).trim())
+      .filter((item) => item.length > 0)
+      .join(' | ');
+    return normalized;
+  }
+
+  if (typeof stateFlags === 'string') {
+    return stateFlags.trim();
+  }
+
+  if (stateFlags == null) {
+    return '';
+  }
+
+  return String(stateFlags).trim();
 }
 
 export function computeSuggestedFundingAmountCkb(
@@ -113,7 +143,7 @@ export async function diagnoseExternalFundingFailure(
     channelIdHint,
     fundingLockScript,
     requestedFundingShannons,
-    ckbRpcUrl = DEFAULT_TESTNET_CKB_RPC_URL,
+    ckbRpcUrl,
   } = options;
 
   const listMergedChannels = async (queryBase?: { pubkey?: HexString }) => {
@@ -149,9 +179,7 @@ export async function diagnoseExternalFundingFailure(
       (channel) => channel.failure_detail,
     );
     if (failedChannels.length > 0) {
-      failedChannels.sort((a, b) =>
-        Number(parseHexToBigInt(b.created_at) - parseHexToBigInt(a.created_at)),
-      );
+      failedChannels.sort((a, b) => compareHexBigIntDesc(a.created_at, b.created_at));
       [targetChannel] = failedChannels;
     }
   }
@@ -160,15 +188,14 @@ export async function diagnoseExternalFundingFailure(
     ? (() => {
         const failureDetail =
           targetChannel.failure_detail ?? 'No failure_detail returned by list_channels.';
-        const stateFlags = targetChannel.state.state_flags
-          ? ` (${targetChannel.state.state_flags})`
-          : '';
+        const normalizedStateFlags = normalizeStateFlagsForDisplay(targetChannel.state.state_flags);
+        const stateFlags = normalizedStateFlags ? ` (${normalizedStateFlags})` : '';
         return `channel=${targetChannel.channel_id}, state=${targetChannel.state.state_name}${stateFlags}, failure_detail=${failureDetail}`;
       })()
     : null;
 
   let balanceDiagnostic: string | null = null;
-  if (fundingLockScript && requestedFundingShannons !== undefined) {
+  if (fundingLockScript && requestedFundingShannons !== undefined && ckbRpcUrl) {
     try {
       const balanceShannons = await getLockBalanceShannons(ckbRpcUrl, fundingLockScript);
       const balanceCkb = formatShannonsAsCkb(balanceShannons);
@@ -182,6 +209,8 @@ export async function diagnoseExternalFundingFailure(
     } catch {
       // Ignore balance diagnostic failure; channel diagnostic is still actionable.
     }
+  } else if (fundingLockScript && requestedFundingShannons !== undefined && !ckbRpcUrl) {
+    balanceDiagnostic = 'balance diagnostic skipped: ckbRpcUrl not provided';
   }
 
   const summary = [channelDiagnostic, balanceDiagnostic].filter(Boolean).join(' | ') || null;

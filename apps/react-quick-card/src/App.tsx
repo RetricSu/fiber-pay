@@ -1,6 +1,13 @@
 import { ccc } from '@ckb-ccc/connector-react';
 import { ConnectButton, FiberPayQuickCard, useChannelOpenFlow, useFiberNode } from '@fiber-pay/react';
-import { type GetPaymentResult, type HexString } from '@fiber-pay/sdk/browser';
+import {
+  cccScriptToFiberScript,
+  createCccSignFundingTx,
+  resolveFundingLockCellDepsByKnownScript,
+  type GetPaymentResult,
+  type HexString,
+  type Script,
+} from '@fiber-pay/sdk/browser';
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 
 type ConnectStrategy = 'password' | 'passkey';
@@ -8,20 +15,6 @@ type ConnectStrategy = 'password' | 'passkey';
 interface EventLogEntry {
   id: string;
   text: string;
-}
-
-interface ScriptLike {
-  code_hash: HexString;
-  hash_type: 'type' | 'data' | 'data1' | 'data2';
-  args: HexString;
-}
-
-interface CellDepLike {
-  out_point: {
-    tx_hash: HexString;
-    index: HexString;
-  };
-  dep_type: 'code' | 'dep_group';
 }
 
 const TESTNET_CKB_RPC_URL = 'https://testnet.ckbapp.dev/';
@@ -44,69 +37,6 @@ function toHexPrefixed(value: string): HexString {
 
 function normalizePubkey(value: string): string {
   return value.trim().toLowerCase().replace(/^0x/, '');
-}
-
-function cccScriptToFiberScript(script: {
-  codeHash: string;
-  hashType: 'type' | 'data' | 'data1' | 'data2';
-  args: string;
-}): ScriptLike {
-  return {
-    code_hash: toHexPrefixed(script.codeHash),
-    hash_type: script.hashType,
-    args: toHexPrefixed(script.args),
-  };
-}
-
-function cccOutPointIndexToHex(index: unknown): HexString {
-  const bigintValue = typeof index === 'bigint' ? index : BigInt(String(index));
-  return `0x${bigintValue.toString(16)}` as HexString;
-}
-
-function cccCellDepToFiberCellDep(dep: {
-  outPoint: {
-    txHash: string;
-    index: unknown;
-  };
-  depType: 'code' | 'depGroup';
-}): CellDepLike {
-  return {
-    out_point: {
-      tx_hash: toHexPrefixed(dep.outPoint.txHash),
-      index: cccOutPointIndexToHex(dep.outPoint.index),
-    },
-    dep_type: dep.depType === 'depGroup' ? 'dep_group' : 'code',
-  };
-}
-
-async function resolveFundingLockCellDepsByKnownScript(
-  signer: ccc.Signer,
-  script: ScriptLike,
-): Promise<{ knownScript: string; cellDeps: CellDepLike[] } | null> {
-  const scriptCodeHash = script.code_hash.toLowerCase();
-  const scriptHashType = script.hash_type;
-
-  for (const knownScript of Object.values(ccc.KnownScript)) {
-    try {
-      const scriptInfo = await signer.client.getKnownScript(knownScript);
-      if (
-        scriptInfo.codeHash.toLowerCase() !== scriptCodeHash ||
-        scriptInfo.hashType !== scriptHashType
-      ) {
-        continue;
-      }
-
-      const cellDeps = scriptInfo.cellDeps.map((depInfo) => cccCellDepToFiberCellDep(depInfo.cellDep));
-      return {
-        knownScript,
-        cellDeps,
-      };
-    } catch {
-      // Ignore unresolved scripts and continue matching by code hash/hash type.
-    }
-  }
-
-  return null;
 }
 
 const cardStyle: CSSProperties = {
@@ -261,12 +191,13 @@ export function App() {
       }
 
       const addressObj = await cccSigner.getRecommendedAddressObj();
-      const walletScript = cccScriptToFiberScript(addressObj.script);
-      const resolvedDeps = await resolveFundingLockCellDepsByKnownScript(cccSigner, walletScript);
-      const signFundingTx = async (txForSigner: unknown): Promise<unknown> => {
-        const cccSignedTx = await cccSigner.signTransaction(txForSigner as ccc.TransactionLike);
-        return JSON.parse(JSON.stringify(cccSignedTx)) as unknown;
-      };
+      const walletScript: Script = cccScriptToFiberScript(addressObj.script);
+      const resolvedDeps = await resolveFundingLockCellDepsByKnownScript(
+        cccSigner,
+        walletScript,
+        Object.values(ccc.KnownScript),
+      );
+      const signFundingTx = createCccSignFundingTx(cccSigner);
 
       await channelOpenFlow.openChannel({
         pubkey: targetPubkey,

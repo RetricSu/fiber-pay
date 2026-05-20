@@ -163,7 +163,7 @@ export interface Channel {
   funding_udt_type_script: Script | null;
   state: {
     state_name: ChannelState;
-    state_flags?: ChannelStateFlags;
+    state_flags?: ChannelStateFlags | string[];
   };
   local_balance: HexString;
   offered_tlc_balance: HexString;
@@ -234,10 +234,7 @@ export interface HopHint {
 // Node / UDT Types
 // =============================================================================
 
-export interface UdtCellDep {
-  out_point: OutPoint;
-  dep_type: 'code' | 'dep_group';
-}
+export type UdtCellDep = CellDep;
 
 export interface UdtDep {
   cell_dep?: UdtCellDep | null;
@@ -368,7 +365,7 @@ export interface OpenChannelWithExternalFundingParams {
   funding_amount: HexString;
   public?: boolean;
   funding_udt_type_script?: Script;
-  shutdown_script: Script;
+  shutdown_script?: Script;
   funding_lock_script: Script;
   funding_lock_script_cell_deps?: CellDep[];
   commitment_delay_epoch?: HexString;

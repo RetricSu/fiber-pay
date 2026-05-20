@@ -3,8 +3,8 @@ import {
   computeSuggestedFundingAmountCkb,
   diagnoseExternalFundingFailure,
   extractRequiredCapacityCkbFromFundingError,
-  type FiberBrowserNode,
   type HexString,
+  type IFiberClient,
   type OpenChannelWithExternalFundingFlowResult,
   openChannelWithExternalFundingFlow,
   type Script,
@@ -61,7 +61,7 @@ export interface ChannelOpenFlowResult {
 }
 
 export interface UseChannelOpenFlowOptions {
-  node: FiberBrowserNode | null;
+  node: IFiberClient | null;
   onLog?: (message: string) => void;
 }
 
@@ -168,30 +168,64 @@ export function useChannelOpenFlow(options: UseChannelOpenFlowOptions): UseChann
 
         const requiredCapacity = extractRequiredCapacityCkbFromFundingError(message);
         if (requiredCapacity) {
-          const suggested = computeSuggestedFundingAmountCkb(
-            params.fundingAmountCkb,
-            requiredCapacity,
-          );
-          if (suggested) {
-            setSuggestedFundingAmountCkb(suggested);
-            displayMessage = `容量不足：当前金额 ${params.fundingAmountCkb} CKB 不能覆盖手续费。建议改为 ${suggested} CKB。原始错误：${message}`;
+          try {
+            const suggested = computeSuggestedFundingAmountCkb(
+              params.fundingAmountCkb,
+              requiredCapacity,
+            );
+            if (suggested) {
+              setSuggestedFundingAmountCkb(suggested);
+              displayMessage = `Insufficient capacity: current amount ${params.fundingAmountCkb} CKB may not cover fee. Suggested amount: ${suggested} CKB. Original error: ${message}`;
+            }
+          } catch {
+            // Preserve original flow error when suggestion calculation fails.
           }
         }
 
         setError(displayMessage);
 
-        if (params.externalWallet && shouldDiagnoseFundingAbortError(message)) {
-          const diagnoseResult = await diagnoseExternalFundingFailure({
-            node,
-            rawError: message,
-            targetPubkey: toHexPrefixed(params.pubkey),
-            fundingLockScript: effectiveFundingLockScript,
-            requestedFundingShannons,
-            ckbRpcUrl: params.ckbRpcUrl,
-          });
-          if (diagnoseResult.summary) {
-            setDiagnostic(diagnoseResult.summary);
-            onLog?.(`External funding diagnostic: ${diagnoseResult.summary}`);
+        if (params.externalWallet) {
+          const hasKnownAbortPattern = shouldDiagnoseFundingAbortError(message);
+          if (!hasKnownAbortPattern) {
+            onLog?.(
+              'External funding error did not match known abort patterns; running best-effort diagnostics.',
+            );
+          }
+
+          const targetPubkey = (() => {
+            try {
+              return toHexPrefixed(params.pubkey);
+            } catch {
+              return undefined;
+            }
+          })();
+
+          try {
+            const diagnoseResult = await diagnoseExternalFundingFailure({
+              node,
+              rawError: message,
+              targetPubkey,
+              fundingLockScript: effectiveFundingLockScript,
+              requestedFundingShannons,
+              ckbRpcUrl: params.ckbRpcUrl,
+            });
+
+            if (diagnoseResult.summary) {
+              setDiagnostic(diagnoseResult.summary);
+              onLog?.(`External funding diagnostic: ${diagnoseResult.summary}`);
+            } else {
+              const fallbackDiagnostic =
+                'No additional channel diagnostics were available for this external funding error.';
+              setDiagnostic(fallbackDiagnostic);
+              onLog?.(fallbackDiagnostic);
+            }
+          } catch (diagnosticError) {
+            const diagnosticMessage =
+              diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError);
+            const fallbackDiagnostic =
+              'External funding diagnostics failed; no additional diagnostic details are available.';
+            setDiagnostic(fallbackDiagnostic);
+            onLog?.(`External funding diagnostics failed: ${diagnosticMessage}`);
           }
         }
 
