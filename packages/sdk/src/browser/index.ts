@@ -78,9 +78,11 @@ export type {
   BuildRouterResult,
   CancelInvoiceParams,
   CancelInvoiceResult,
+  CellDep,
   Channel,
   ChannelId,
   CkbInvoiceStatus,
+  CkbTransaction,
   ConnectPeerParams,
   DisconnectPeerParams,
   GetInvoiceParams,
@@ -102,19 +104,51 @@ export type {
   NodeInfoResult,
   OpenChannelParams,
   OpenChannelResult,
+  OpenChannelWithExternalFundingParams,
+  OpenChannelWithExternalFundingResult,
   ParseInvoiceParams,
   ParseInvoiceResult,
   PaymentHash,
   PeerId,
   Pubkey,
+  Script,
   SendPaymentParams,
   SendPaymentResult,
   SendPaymentWithRouterParams,
   SettleInvoiceParams,
   ShutdownChannelParams,
+  SubmitSignedFundingTxParams,
+  SubmitSignedFundingTxResult,
   TransportType,
   UpdateChannelParams,
 } from '../types/rpc.js';
 export { ChannelState } from '../types/rpc.js';
 export { ckbToShannons, fromHex, shannonsToCkb, toHex } from '../utils.js';
+export {
+  type CccKnownScriptCellDepLike,
+  type CccKnownScriptInfoLike,
+  type CccScriptLike,
+  type CccSignerLike,
+  type CreateCccSignFundingTxOptions,
+  cccScriptToFiberScript,
+  createCccSignFundingTx,
+  resolveFundingLockCellDepsByKnownScript,
+} from './ccc-external-funding.js';
 export { callJsonRpc, formatShannonsAsCkb, getLockBalanceShannons } from './ckb-balance.js';
+export {
+  normalizeCkbTransactionForCcc,
+  normalizeCkbTransactionForRpc,
+} from './ckb-transaction-normalizer.js';
+export {
+  computeSuggestedFundingAmountCkb,
+  type DiagnoseExternalFundingFailureOptions,
+  type DiagnoseExternalFundingFailureResult,
+  diagnoseExternalFundingFailure,
+  extractRequiredCapacityCkbFromFundingError,
+  shouldDiagnoseFundingAbortError,
+} from './external-funding-diagnostics.js';
+export {
+  type OpenChannelWithExternalFundingFlowOptions,
+  type OpenChannelWithExternalFundingFlowResult,
+  openChannelWithExternalFundingFlow,
+} from './external-funding-flow.js';

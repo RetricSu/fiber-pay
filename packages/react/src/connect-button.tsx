@@ -48,8 +48,14 @@ export interface ConnectButtonProps {
    */
   fiber?: UseFiberNodeResult;
 
-  /** Credential strategy. Explicitly choose either `"passkey"` or `"password"`. */
-  strategy: ConnectStrategy;
+  /** Credential strategy. Defaults to `"passkey"`. */
+  strategy?: ConnectStrategy;
+
+  /**
+   * Enable external wallet mode (no internal CKB key derivation).
+   * Only applies when ConnectButton manages its own `useFiberNode` instance.
+   */
+  externalWallet?: boolean;
 
   /** Password for the "password" strategy. */
   password?: string;
@@ -292,7 +298,8 @@ export function ConnectButton(props: ConnectButtonProps) {
   const {
     network = 'testnet',
     fiber: externalFiber,
-    strategy,
+    strategy = 'passkey',
+    externalWallet = false,
     password,
     walletId,
     passkeyUsername = 'User',
@@ -313,6 +320,7 @@ export function ConnectButton(props: ConnectButtonProps) {
     walletId,
     wasmFactory,
     nodeConfig,
+    externalWallet,
     enabled: !externalFiber,
   });
 

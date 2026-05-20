@@ -258,6 +258,57 @@ describe('FiberBrowserNode', () => {
 			expect(result.payment_hash).toBe('0x123');
 		});
 
+		it('should proxy openChannelWithExternalFunding and submitSignedFundingTx', async () => {
+			(wasmInstance.invokeCommand as ReturnType<typeof vi.fn>)
+				.mockResolvedValueOnce({
+					channel_id: '0xfeed',
+					unsigned_funding_tx: {
+						version: '0x0',
+						inputs: [],
+						outputs: [],
+						outputs_data: [],
+						cell_deps: [],
+						header_deps: [],
+						witnesses: [],
+					},
+				})
+				.mockResolvedValueOnce({
+					channel_id: '0xfeed',
+					funding_tx_hash: '0xdeadbeef',
+				});
+
+			const openParams = {
+				pubkey: '0xaabb',
+				funding_amount: '0x174876e800',
+				shutdown_script: {
+					code_hash: '0x1234',
+					hash_type: 'type',
+					args: '0x',
+				},
+				funding_lock_script: {
+					code_hash: '0x5678',
+					hash_type: 'type',
+					args: '0x90',
+				},
+			} as const;
+
+			const openResult = await node.openChannelWithExternalFunding(openParams);
+			expect(openResult.channel_id).toBe('0xfeed');
+
+			const submitParams = {
+				channel_id: '0xfeed',
+				signed_funding_tx: openResult.unsigned_funding_tx,
+			};
+			const submitResult = await node.submitSignedFundingTx(submitParams);
+			expect(submitResult.funding_tx_hash).toBe('0xdeadbeef');
+
+			expect(wasmInstance.invokeCommand).toHaveBeenCalledWith(
+				'open_channel_with_external_funding',
+				[openParams],
+			);
+			expect(wasmInstance.invokeCommand).toHaveBeenCalledWith('submit_signed_funding_tx', [submitParams]);
+		});
+
 		it('should throw when calling RPC on non-running node', async () => {
 			await node.stop();
 			await expect(node.getNodeInfo()).rejects.toThrow('not running');

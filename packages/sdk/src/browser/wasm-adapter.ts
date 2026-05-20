@@ -39,6 +39,8 @@ import type {
   NodeInfoResult,
   OpenChannelParams,
   OpenChannelResult,
+  OpenChannelWithExternalFundingParams,
+  OpenChannelWithExternalFundingResult,
   ParseInvoiceParams,
   ParseInvoiceResult,
   SendPaymentParams,
@@ -46,6 +48,8 @@ import type {
   SendPaymentWithRouterParams,
   SettleInvoiceParams,
   ShutdownChannelParams,
+  SubmitSignedFundingTxParams,
+  SubmitSignedFundingTxResult,
   UpdateChannelParams,
 } from '../types/rpc.js';
 
@@ -214,6 +218,20 @@ export class FiberWasmAdapter {
 
   async openChannel(params: OpenChannelParams): Promise<OpenChannelResult> {
     return this.invoke<OpenChannelResult>('open_channel', [params]);
+  }
+
+  async openChannelWithExternalFunding(
+    params: OpenChannelWithExternalFundingParams,
+  ): Promise<OpenChannelWithExternalFundingResult> {
+    return this.invoke<OpenChannelWithExternalFundingResult>('open_channel_with_external_funding', [
+      params,
+    ]);
+  }
+
+  async submitSignedFundingTx(
+    params: SubmitSignedFundingTxParams,
+  ): Promise<SubmitSignedFundingTxResult> {
+    return this.invoke<SubmitSignedFundingTxResult>('submit_signed_funding_tx', [params]);
   }
 
   async acceptChannel(params: AcceptChannelParams): Promise<AcceptChannelResult> {

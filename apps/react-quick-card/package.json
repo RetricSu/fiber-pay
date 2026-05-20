@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ckb-ccc/connector-react": "^1.0.34",
+    "@ckb-ccc/core": "^1.12.5",
     "@fiber-pay/react": "workspace:*",
     "@fiber-pay/sdk": "workspace:*",
     "@nervosnetwork/fiber-js": "~0.8.1",

@@ -56,6 +56,8 @@ import type {
   NodeInfoResult,
   OpenChannelParams,
   OpenChannelResult,
+  OpenChannelWithExternalFundingParams,
+  OpenChannelWithExternalFundingResult,
   ParseInvoiceParams,
   ParseInvoiceResult,
   PaymentHash,
@@ -64,6 +66,8 @@ import type {
   SendPaymentWithRouterParams,
   SettleInvoiceParams,
   ShutdownChannelParams,
+  SubmitSignedFundingTxParams,
+  SubmitSignedFundingTxResult,
   UpdateChannelParams,
 } from '../types/rpc.js';
 import { ChannelState } from '../types/rpc.js';
@@ -291,6 +295,18 @@ export class FiberBrowserNode implements IFiberClient {
 
   async openChannel(params: OpenChannelParams): Promise<OpenChannelResult> {
     return this.ensureRunning().openChannel(params);
+  }
+
+  async openChannelWithExternalFunding(
+    params: OpenChannelWithExternalFundingParams,
+  ): Promise<OpenChannelWithExternalFundingResult> {
+    return this.ensureRunning().openChannelWithExternalFunding(params);
+  }
+
+  async submitSignedFundingTx(
+    params: SubmitSignedFundingTxParams,
+  ): Promise<SubmitSignedFundingTxResult> {
+    return this.ensureRunning().submitSignedFundingTx(params);
   }
 
   async acceptChannel(params: AcceptChannelParams): Promise<AcceptChannelResult> {

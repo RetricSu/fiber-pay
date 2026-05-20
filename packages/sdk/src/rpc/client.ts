@@ -43,6 +43,8 @@ import type {
   // Channel methods
   OpenChannelParams,
   OpenChannelResult,
+  OpenChannelWithExternalFundingParams,
+  OpenChannelWithExternalFundingResult,
   ParseInvoiceParams,
   ParseInvoiceResult,
   PaymentHash,
@@ -52,6 +54,8 @@ import type {
   SendPaymentWithRouterParams,
   SettleInvoiceParams,
   ShutdownChannelParams,
+  SubmitSignedFundingTxParams,
+  SubmitSignedFundingTxResult,
   UpdateChannelParams,
 } from '../types/index.js';
 import { ChannelState } from '../types/index.js';
@@ -214,6 +218,28 @@ export class FiberRpcClient implements IFiberClient {
    */
   async openChannel(params: OpenChannelParams): Promise<OpenChannelResult> {
     return this.call<OpenChannelResult>('open_channel', [params]);
+  }
+
+  /**
+   * Open a channel with external funding.
+   * The returned unsigned funding transaction must be signed externally and
+   * submitted via `submitSignedFundingTx`.
+   */
+  async openChannelWithExternalFunding(
+    params: OpenChannelWithExternalFundingParams,
+  ): Promise<OpenChannelWithExternalFundingResult> {
+    return this.call<OpenChannelWithExternalFundingResult>('open_channel_with_external_funding', [
+      params,
+    ]);
+  }
+
+  /**
+   * Submit the externally signed funding transaction.
+   */
+  async submitSignedFundingTx(
+    params: SubmitSignedFundingTxParams,
+  ): Promise<SubmitSignedFundingTxResult> {
+    return this.call<SubmitSignedFundingTxResult>('submit_signed_funding_tx', [params]);
   }
 
   /**

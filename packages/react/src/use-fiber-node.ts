@@ -17,6 +17,8 @@ export interface UseFiberNodeOptions {
   walletId?: string;
   nodeConfig?: FiberBrowserNodeConfig['nodeConfig'];
   wasmFactory?: FiberWasmFactory;
+  /** If true, CKB signing key is omitted and external wallet is expected for funding/signing. */
+  externalWallet?: boolean;
   /** If false, suppresses initialization effects (like passkey detection). Default true. */
   enabled?: boolean;
 }
@@ -77,6 +79,7 @@ interface NodeEventListeners {
 
 export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
   const walletId = options.walletId ?? `wallet-${options.network}`;
+  const externalWallet = options.externalWallet ?? false;
   const [state, setState] = useState<BrowserNodeState>('idle');
   const [nodeInfo, setNodeInfo] = useState<NodeInfoResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -144,13 +147,13 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
         }
       });
 
-    const provider = new PasskeyCredentialProvider(walletId);
+    const provider = new PasskeyCredentialProvider(walletId, { skipCkbKey: externalWallet });
     setHasPasskeyConfigured(provider.isConfigured());
 
     return () => {
       cancelled = true;
     };
-  }, [walletId, options.enabled]);
+  }, [walletId, options.enabled, externalWallet]);
 
   const initNode = useCallback(
     (
@@ -240,7 +243,9 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
       let node: FiberBrowserNode | null = null;
 
       try {
-        const credential = new PasswordCredentialProvider(walletId);
+        const credential = new PasswordCredentialProvider(walletId, {
+          skipCkbKey: externalWallet,
+        });
         node = initNode(credential);
         const info = await node.start({ unlockParams: { password } });
         if (isMountedRef.current) {
@@ -254,7 +259,7 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
         await cleanupFailedStart(node);
       }
     },
-    [cleanupFailedStart, initNode, walletId],
+    [cleanupFailedStart, initNode, walletId, externalWallet],
   );
 
   const createPasskeyAndStart = useCallback(
@@ -263,7 +268,9 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
       let node: FiberBrowserNode | null = null;
 
       try {
-        const credential = new PasskeyCredentialProvider(walletId);
+        const credential = new PasskeyCredentialProvider(walletId, {
+          skipCkbKey: externalWallet,
+        });
         await credential.register(username);
         if (isMountedRef.current) {
           setHasPasskeyConfigured(true);
@@ -282,7 +289,7 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
         await cleanupFailedStart(node);
       }
     },
-    [cleanupFailedStart, initNode, walletId],
+    [cleanupFailedStart, initNode, walletId, externalWallet],
   );
 
   const startWithPasskey = useCallback(async () => {
@@ -290,7 +297,9 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
     let node: FiberBrowserNode | null = null;
 
     try {
-      const credential = new PasskeyCredentialProvider(walletId);
+      const credential = new PasskeyCredentialProvider(walletId, {
+        skipCkbKey: externalWallet,
+      });
       node = initNode(credential);
       const info = await node.start();
       if (isMountedRef.current) {
@@ -303,7 +312,7 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
 
       await cleanupFailedStart(node);
     }
-  }, [cleanupFailedStart, initNode, walletId]);
+  }, [cleanupFailedStart, initNode, walletId, externalWallet]);
 
   const startWithRawKey = useCallback(
     async (fiberKey: Uint8Array, ckbSecretKey?: Uint8Array) => {
@@ -311,7 +320,11 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
       let node: FiberBrowserNode | null = null;
 
       try {
-        const credential = new RawKeyCredentialProvider(fiberKey, ckbSecretKey, walletId);
+        const credential = new RawKeyCredentialProvider(
+          fiberKey,
+          externalWallet ? undefined : ckbSecretKey,
+          walletId,
+        );
         node = initNode(credential);
         const info = await node.start();
         if (isMountedRef.current) {
@@ -325,7 +338,7 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
         await cleanupFailedStart(node);
       }
     },
-    [cleanupFailedStart, initNode, walletId],
+    [cleanupFailedStart, initNode, walletId, externalWallet],
   );
 
   const stop = useCallback(async () => {
