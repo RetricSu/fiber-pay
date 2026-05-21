@@ -8,7 +8,7 @@ import {
   type HexString,
   type Script,
 } from '@fiber-pay/sdk/browser';
-import { type CSSProperties, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 
 type ConnectStrategy = 'password' | 'passkey';
 
@@ -78,7 +78,7 @@ export function App() {
     externalWallet,
   });
 
-  const addLog = (message: string) => {
+  const addLog = useCallback((message: string) => {
     const now = new Date();
     const ts = now.toISOString().slice(11, 19);
     const entry = {
@@ -86,18 +86,18 @@ export function App() {
       text: `[${ts}] ${message}`,
     };
     setEventLogs((prev) => [entry, ...prev].slice(0, 16));
-  };
+  }, []);
 
-  const clearLogs = () => {
+  const clearLogs = useCallback(() => {
     setEventLogs([]);
-  };
+  }, []);
 
   const channelOpenFlow = useChannelOpenFlow({
     node: fiber.node,
     onLog: addLog,
   });
 
-  const refreshConnectedPeers = async () => {
+  const refreshConnectedPeers = useCallback(async () => {
     if (!fiber.node) {
       setConnectedPeerPubkeys([]);
       return;
@@ -119,7 +119,7 @@ export function App() {
     } finally {
       setIsRefreshingPeers(false);
     }
-  };
+  }, [addLog, fiber.node]);
 
   const connectPeerByAddress = async () => {
     if (!fiber.node) {
@@ -277,7 +277,7 @@ export function App() {
     }
 
     void refreshConnectedPeers();
-  }, [externalWallet, fiber.isRunning, fiber.node]);
+  }, [externalWallet, fiber.isRunning, fiber.node, refreshConnectedPeers]);
 
   useEffect(() => {
     setExternalFundingPeerPubkey((prev) => (prev.trim() ? prev : connectedPeerPubkeys[0] ?? prev));
@@ -314,6 +314,7 @@ export function App() {
     : isOpeningChannel
       ? 'Open Channel (External Wallet Flow...)'
       : 'Open Channel (External Wallet One Click)';
+  const externalWalletToggleLocked = fiber.isRunning || fiber.isStarting || isOpeningChannel;
 
   return (
     <div style={{ padding: 24, fontFamily: 'system-ui, sans-serif', maxWidth: 880, margin: '0 auto' }}>
@@ -371,7 +372,6 @@ export function App() {
         <ConnectButton
           fiber={fiber}
           strategy={strategy}
-          externalWallet={externalWallet}
           password={strategy === 'password' ? password : undefined}
           onConnect={(_node, info) => {
             addLog(`ConnectButton connected: ${shorten(info.pubkey, 12, 10)}`);
@@ -406,6 +406,7 @@ export function App() {
             <input
               type="checkbox"
               checked={externalWallet}
+              disabled={externalWalletToggleLocked}
               onChange={(e) => setExternalWallet(e.target.checked)}
               style={{ width: 16, height: 16 }}
             />
@@ -417,6 +418,11 @@ export function App() {
               ? 'External mode is on. Channel opening will use CCC wallet signing.'
               : 'External mode is off. Channel opening uses internal node-managed funding.'}
           </p>
+          {externalWalletToggleLocked && (
+            <p style={{ marginTop: 6, marginBottom: 0, fontSize: 12, color: '#b45309' }}>
+              Disconnect the node before switching funding mode.
+            </p>
+          )}
 
           {externalWallet && (
             <>
@@ -599,12 +605,12 @@ export function App() {
       <section style={cardStyle}>
         <h2 style={{ marginTop: 0 }}>3) Quick Payment UI</h2>
         <p style={{ marginTop: 0, color: '#475569', fontSize: 13 }}>
-          Drop-in component for invoice creation and payment actions.
+          Reuses the same connected node from section 1 for invoice creation and payment actions.
         </p>
 
         <FiberPayQuickCard
+          fiber={fiber}
           network="testnet"
-          walletId="quick-card-mvp-demo"
           title="Quick Card"
           onInvoiceCreated={handleInvoiceCreated}
           onPaymentResult={handlePaymentResult}

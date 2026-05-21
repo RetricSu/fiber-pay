@@ -24,4 +24,8 @@ export default defineConfig({
   server: {
     port: 5174,
   },
+  build: {
+    // Browser Fiber WASM artifacts are intentionally large in this demo app.
+    chunkSizeWarningLimit: 20000,
+  },
 });

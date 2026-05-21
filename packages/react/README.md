@@ -28,10 +28,28 @@ export function App() {
 
 `FiberPayQuickCard` supports lightweight integration hooks:
 
+- `fiber` (reuse existing `useFiberNode()` session)
 - `className`, `style`, `title`
 - `onInvoiceCreated(invoice)`
 - `onPaymentResult(result)`
 - `onError({ scope, message })`
+
+When you already manage connection state (for example with `ConnectButton`), pass the same hook result into `FiberPayQuickCard` so invoices and payments run on the same node session:
+
+```tsx
+import { ConnectButton, FiberPayQuickCard, useFiberNode } from '@fiber-pay/react';
+
+export function UnifiedFlow() {
+  const fiber = useFiberNode({ network: 'testnet', walletId: 'demo-wallet' });
+
+  return (
+    <>
+      <ConnectButton fiber={fiber} strategy="passkey" />
+      <FiberPayQuickCard fiber={fiber} network="testnet" title="Quick Card" />
+    </>
+  );
+}
+```
 
 ## ConnectButton
 

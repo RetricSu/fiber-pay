@@ -13,18 +13,18 @@ Then open `http://localhost:5174`.
 ## What it demonstrates
 
 - Step-by-step connection lifecycle with `useFiberNode` + `ConnectButton`
-- Direct source-code links for core SDK/demo files from inside the page
 - Explicit strategy selection (`password` or `passkey`) and live hook status visibility
-- UI customization showcase for `ConnectButton` (`style`, `dropdownStyle`, `renderConnectedDropdown`)
-- Runtime verification actions (`node_info`, `list_peers`, `list_channels`) after connect
-- `FiberPayQuickCard` as a standalone fast-MVP payment UI with callback wiring
+- External wallet funding mode toggle with CCC signer integration
+- Peer management + channel open flow (`list_peers`, `connect_peer`, `open_channel`)
+- `FiberPayQuickCard` reusing the same connected node session via the `fiber` prop
 
 ## Suggested walkthrough
 
 1. Choose a connection strategy in section 1.
 2. Connect the node and verify status changes to `running`.
-3. Click "Read runtime snapshot" to confirm RPC calls are working.
-4. Try section 2 to validate quick payment UI integration.
+3. (Optional) enable external wallet mode and connect CCC signer.
+4. Connect/select a peer and open a channel in section 2.
+5. Create and pay invoices in section 3 using the same node session.
 
 ## Notes
 
