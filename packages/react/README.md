@@ -65,6 +65,35 @@ export function HeaderWallet() {
 }
 ```
 
+## FiberNodeButton
+
+`FiberNodeButton` is a higher-level button + dropdown panel for day-to-day node operations.
+It wraps `ConnectButton` and provides default sections for:
+
+- Connection state and disconnect
+- Channel management (peer connect / open channel)
+- Payment management (create invoice / pay invoice)
+- Optional connector section (custom renderer)
+
+```tsx
+import { FiberNodeButton, useFiberNode } from '@fiber-pay/react';
+
+export function WalletEntry() {
+  const fiber = useFiberNode({ network: 'testnet', walletId: 'demo-wallet' });
+
+  return (
+    <FiberNodeButton
+      fiber={fiber}
+      strategy="passkey"
+      onLog={(message) => console.log(message)}
+    />
+  );
+}
+```
+
+For external funding, pass `externalFunding` with an async `resolve` callback that returns
+`signFundingTx` and optional script / dep overrides.
+
 `ConnectButton` uses explicit strategy selection and supports only `"passkey"` or `"password"`.
 
 For custom connected-state panels (for example peer/channel controls), use `renderConnectedDropdown`:
