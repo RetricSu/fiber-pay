@@ -426,6 +426,7 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
     }
 
     setIsRefreshingGraph(true);
+    setLocalError(null);
 
     try {
       const [nodesResult, channelsResult] = await Promise.all([
@@ -483,6 +484,7 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
     }
 
     setIsRefreshingChannels(true);
+    setLocalError(null);
 
     try {
       const result = await fiber.node.listChannels({ include_closed: true });
@@ -852,7 +854,10 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
 
           {graphNodes.length > 0 || graphChannels.length > 0 ? (
             <div style={{ ...styles.stack, marginTop: '0.55rem' }}>
-              <p style={styles.compactText}>Graph sample</p>
+              <p style={styles.compactText}>
+                Graph sample (showing {Math.min(graphNodes.length, 3)} of {graphNodes.length} nodes,{' '}
+                {Math.min(graphChannels.length, 2)} of {graphChannels.length} channels)
+              </p>
               {graphNodes.slice(0, 3).map((node) => (
                 <p key={node.pubkey} style={styles.inlineCode}>
                   Node: {node.node_name || shorten(node.pubkey, 18, 10)}
@@ -901,55 +906,6 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
             </div>
           </div>
 
-          <div style={{ ...styles.stack, marginTop: '0.65rem' }}>
-            <label style={styles.fieldLabel}>
-              Target peer pubkey
-              <input
-                style={styles.input}
-                list={peerListId}
-                value={peerPubkey}
-                onChange={(event) => setPeerPubkey(event.target.value)}
-                placeholder={connectedPeers[0]?.pubkey ?? '0x...'}
-              />
-              <datalist id={peerListId}>
-                {connectedPeers.map((peer) => (
-                  <option key={peer.pubkey} value={peer.pubkey} />
-                ))}
-              </datalist>
-            </label>
-            <label style={styles.fieldLabel}>
-              Funding amount
-              <input
-                style={styles.input}
-                value={fundingAmountCkb}
-                onChange={(event) => setFundingAmountCkb(event.target.value)}
-                placeholder="1000"
-              />
-            </label>
-          </div>
-          <div style={{ ...styles.row, marginTop: '0.55rem', marginBottom: 0 }}>
-            <button
-              type="button"
-              style={styles.primaryButton}
-              disabled={channelOpenFlow.isOpening || !peerPubkey.trim()}
-              onClick={() => {
-                void openChannel();
-              }}
-            >
-              {channelOpenFlow.isOpening ? 'Opening...' : 'Open Channel'}
-            </button>
-          </div>
-          {channelOpenFlow.lastResult && (
-            <p style={{ ...styles.compactText, marginTop: '0.45rem' }}>
-              Channel: {shorten(channelOpenFlow.lastResult.channelId, 12, 8)}
-            </p>
-          )}
-          {channelOpenFlow.suggestedFundingAmountCkb && (
-            <p style={{ ...styles.compactText, marginTop: '0.35rem' }}>
-              Suggested amount: {channelOpenFlow.suggestedFundingAmountCkb} CKB
-            </p>
-          )}
-
           <div style={{ ...styles.filterBar, marginTop: '0.65rem' }}>
             {(['active', 'pending', 'closed', 'all'] as const).map((filter) => (
               <button
@@ -996,7 +952,10 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
                         </span>
                         <span style={styles.statLabel}>Remote CKB</span>
                       </div>
-                      <div style={styles.statTile}>
+                      <div
+                        style={styles.statTile}
+                        title="Pending TLCs (in-flight HTLC-like payment locks on this channel)"
+                      >
                         <span style={styles.statValue}>{channel.pending_tlcs.length}</span>
                         <span style={styles.statLabel}>TLCs</span>
                       </div>
@@ -1012,7 +971,7 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
                     <div style={{ ...styles.row, marginBottom: 0, justifyContent: 'flex-end' }}>
                       <button
                         type="button"
-                        style={pending ? styles.actionButton : styles.dangerButton}
+                        style={styles.actionButton}
                         disabled={!canClose || isClosing}
                         onClick={() => {
                           void closeChannel(channel.channel_id, false);
@@ -1022,7 +981,7 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
                       </button>
                       <button
                         type="button"
-                        style={styles.ghostButton}
+                        style={styles.dangerButton}
                         disabled={pending || !canClose || isClosing}
                         onClick={() => {
                           void closeChannel(channel.channel_id, true);
@@ -1036,6 +995,72 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
               })
             )}
           </div>
+
+          <div
+            style={{
+              marginTop: '0.75rem',
+              paddingTop: '0.6rem',
+              borderTop: '1px solid #e2e8f0',
+            }}
+          >
+            <h5
+              style={{
+                ...styles.sectionTitle,
+                margin: '0 0 0.5rem',
+                fontSize: '0.72rem',
+              }}
+            >
+              Open new channel
+            </h5>
+            <div style={styles.stack}>
+              <label style={styles.fieldLabel}>
+                Target peer pubkey
+                <input
+                  style={styles.input}
+                  list={peerListId}
+                  value={peerPubkey}
+                  onChange={(event) => setPeerPubkey(event.target.value)}
+                  placeholder={connectedPeers[0]?.pubkey ?? '0x...'}
+                />
+                <datalist id={peerListId}>
+                  {connectedPeers.map((peer) => (
+                    <option key={peer.pubkey} value={peer.pubkey} />
+                  ))}
+                </datalist>
+              </label>
+              <label style={styles.fieldLabel}>
+                Funding amount (CKB)
+                <input
+                  style={styles.input}
+                  value={fundingAmountCkb}
+                  onChange={(event) => setFundingAmountCkb(event.target.value)}
+                  placeholder="1000"
+                />
+              </label>
+            </div>
+            <div style={{ ...styles.row, marginTop: '0.55rem', marginBottom: 0 }}>
+              <button
+                type="button"
+                style={styles.primaryButton}
+                disabled={channelOpenFlow.isOpening || !peerPubkey.trim()}
+                onClick={() => {
+                  void openChannel();
+                }}
+              >
+                {channelOpenFlow.isOpening ? 'Opening...' : 'Open Channel'}
+              </button>
+            </div>
+            {channelOpenFlow.lastResult && (
+              <p style={{ ...styles.compactText, marginTop: '0.45rem' }}>
+                Channel: {shorten(channelOpenFlow.lastResult.channelId, 12, 8)}
+              </p>
+            )}
+            {channelOpenFlow.suggestedFundingAmountCkb && (
+              <p style={{ ...styles.compactText, marginTop: '0.35rem' }}>
+                Suggested amount: {channelOpenFlow.suggestedFundingAmountCkb} CKB
+              </p>
+            )}
+          </div>
         </section>
 
         <section style={styles.section}>
@@ -1044,7 +1069,7 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
             <button
               type="button"
               style={styles.actionButton}
-              disabled={isCreatingInvoice}
+              disabled={isCreatingInvoice || !fiber.isRunning}
               onClick={() => {
                 void createInvoice();
               }}
@@ -1067,7 +1092,7 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
             <button
               type="button"
               style={styles.primaryButton}
-              disabled={isPaying}
+              disabled={isPaying || !fiber.isRunning || !invoiceInput.trim()}
               onClick={() => {
                 void submitPayment();
               }}
@@ -1109,6 +1134,7 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
       connectorContext,
       createdInvoice,
       externalFunding?.enabled,
+      fiber.isRunning,
       fiber.nodeInfo?.pubkey,
       fiber.state,
       fundingAmountCkb,
