@@ -513,7 +513,7 @@ export function ConnectButton(props: ConnectButtonProps) {
             type="button"
             onClick={buttonOnClick}
             style={buttonStyle}
-            aria-haspopup="menu"
+            aria-haspopup="dialog"
             aria-expanded={showDropdown}
             aria-controls={showDropdown ? dropdownId : undefined}
           >
@@ -521,7 +521,12 @@ export function ConnectButton(props: ConnectButtonProps) {
           </button>
 
           {showDropdown && (
-            <div id={dropdownId} role="menu" style={{ ...styles.dropdown, ...dropdownStyle }}>
+            <div
+              id={dropdownId}
+              role="dialog"
+              aria-label="Connection panel"
+              style={{ ...styles.dropdown, ...dropdownStyle }}
+            >
               {renderConnectedDropdown ? (
                 renderConnectedDropdown({
                   fiber,

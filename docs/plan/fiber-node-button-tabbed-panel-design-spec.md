@@ -1,7 +1,7 @@
 # FiberNodeButton 分 Tab 重构设计规格（交付开发）
 
 - 日期：2026-05-21
-- 状态：待实现
+- 状态：已实现（v0.2.5）
 - 目标页面：react-quick-card 中的 FiberNodeButton 已连接下拉面板
 - 设计范围：仅重构面板的信息架构与交互，不改底层 SDK RPC 语义
 

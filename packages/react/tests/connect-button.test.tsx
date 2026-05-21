@@ -72,7 +72,7 @@ describe('ConnectButton', () => {
     fireEvent.click(button);
 
     expect(button.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByRole('menu')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Connection panel' })).toBeTruthy();
   });
 
   it('emits onConnect and onDisconnect exactly once per transition', async () => {

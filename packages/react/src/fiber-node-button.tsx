@@ -179,7 +179,7 @@ const styles = {
     display: 'grid',
     gridTemplateRows: 'auto auto minmax(0, 1fr)',
     gap: '0.7rem',
-    minWidth: '360px',
+    minWidth: '280px',
     width: 'min(460px, calc(100vw - 1rem))',
     maxHeight: '72vh',
   } satisfies CSSProperties,
@@ -851,11 +851,14 @@ function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
       const pubkey = toHexPrefixed(peerPubkey);
 
       if (!externalFunding?.enabled) {
-        await channelOpenFlow.openChannel({
+        const openResult = await channelOpenFlow.openChannel({
           pubkey,
           fundingAmountCkb,
           externalWallet: false,
         });
+        if (!openResult) {
+          return;
+        }
         flashStatus('Open channel submitted.', 'success');
         onLog?.('fiber_panel_primary_action_clicked: open_channel');
         await refreshChannels();
@@ -868,7 +871,7 @@ function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
         fundingAmountCkb,
       });
 
-      await channelOpenFlow.openChannel({
+      const openResult = await channelOpenFlow.openChannel({
         pubkey,
         fundingAmountCkb,
         externalWallet: true,
@@ -878,6 +881,9 @@ function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
         signFundingTx: resolved.signFundingTx,
         ckbRpcUrl: resolved.ckbRpcUrl,
       });
+      if (!openResult) {
+        return;
+      }
       flashStatus('Open channel submitted.', 'success');
       onLog?.('fiber_panel_primary_action_clicked: open_channel');
       await refreshChannels();
@@ -1006,8 +1012,13 @@ function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
   }, [channels, selectedChannelId]);
 
   useEffect(() => {
-    if (!selectedChannelId && visibleChannels[0]) {
-      setSelectedChannelId(visibleChannels[0].channel_id);
+    const isSelectedVisible = selectedChannelId
+      ? visibleChannels.some((channel) => channel.channel_id === selectedChannelId)
+      : false;
+
+    if (!isSelectedVisible) {
+      setSelectedChannelId(visibleChannels[0]?.channel_id ?? null);
+      setForceCloseConfirmOpen(false);
     }
   }, [selectedChannelId, visibleChannels]);
 
@@ -1174,7 +1185,7 @@ function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
               type="button"
               role="tab"
               aria-selected={selected}
-              aria-controls={`${tabPanelId}-panel-${tab.id}`}
+              aria-controls={selected ? `${tabPanelId}-panel-${tab.id}` : undefined}
               style={selected ? styles.tabButtonActive : styles.tabButton}
               onClick={() => switchTab(tab.id)}
             >
@@ -1780,7 +1791,7 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
       onError={handleConnectButtonError}
       className={className}
       style={style}
-      dropdownStyle={{ width: 460, ...dropdownStyle }}
+      dropdownStyle={{ maxWidth: 460, width: 'calc(100vw - 1rem)', ...dropdownStyle }}
       renderConnectedDropdown={renderDropdown}
     />
   );
