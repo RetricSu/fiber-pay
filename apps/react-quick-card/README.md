@@ -1,6 +1,6 @@
-# React SDK Demo (ConnectButton + QuickCard)
+# React SDK Demo (FiberNodeButton)
 
-A Vite + React app demonstrating both `ConnectButton` and `FiberPayQuickCard` from `@fiber-pay/react`.
+A Vite + React app focused on onboarding developers to `FiberNodeButton` from `@fiber-pay/react`.
 
 ## Run
 
@@ -12,19 +12,20 @@ Then open `http://localhost:5174`.
 
 ## What it demonstrates
 
-- Step-by-step connection lifecycle with `useFiberNode` + `ConnectButton`
-- Direct source-code links for core SDK/demo files from inside the page
+- Step-by-step connection lifecycle with `useFiberNode` + `FiberNodeButton`
+- `FiberNodeButton` tabbed dropdown panel with global status + task-oriented tabs (`Workbench`, `Channels`, `Diagnostics`)
 - Explicit strategy selection (`password` or `passkey`) and live hook status visibility
-- UI customization showcase for `ConnectButton` (`style`, `dropdownStyle`, `renderConnectedDropdown`)
-- Runtime verification actions (`node_info`, `list_peers`, `list_channels`) after connect
-- `FiberPayQuickCard` as a standalone fast-MVP payment UI with callback wiring
+- External wallet funding mode toggle with CCC signer integration
+- Peer management + channel open flow + diagnostics (`list_peers`, `connect_peer`, `open_channel`, graph snapshot)
+- Integration guide section with copyable wiring snippet and runtime callback logs
 
 ## Suggested walkthrough
 
-1. Choose a connection strategy in section 1.
-2. Connect the node and verify status changes to `running`.
-3. Click "Read runtime snapshot" to confirm RPC calls are working.
-4. Try section 2 to validate quick payment UI integration.
+1. Choose a connection strategy (`password` or `passkey`) in the Live Playground.
+2. Connect the node and verify hook state plus event logs update.
+3. Open the `FiberNodeButton` dropdown and run Workbench -> Channels -> Diagnostics flow.
+4. (Optional) enable external wallet mode and connect CCC signer.
+5. Copy the Integration Guide code block into your app and replace session/wallet details.
 
 ## Notes
 

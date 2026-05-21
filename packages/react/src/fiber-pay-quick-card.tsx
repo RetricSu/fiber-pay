@@ -1,9 +1,11 @@
 import type { GetPaymentResult } from '@fiber-pay/sdk/browser';
 import { type CSSProperties, useEffect, useId, useState } from 'react';
-import { useFiberNode } from './use-fiber-node.js';
+import { type UseFiberNodeResult, useFiberNode } from './use-fiber-node.js';
 import { useFiberPayment } from './use-fiber-payment.js';
 
 export interface FiberPayQuickCardProps {
+  /** Reuse an existing useFiberNode() result instead of creating a new session. */
+  fiber?: UseFiberNodeResult;
   network?: 'testnet' | 'mainnet';
   walletId?: string;
   passkeyUsername?: string;
@@ -38,11 +40,20 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
   const network = props.network ?? 'testnet';
   const passkeyUsername = props.passkeyUsername ?? 'User';
   const title = props.title ?? 'FiberPay Quick Card';
+  const usesExternalFiber = !!props.fiber;
   const onError = props.onError;
   const onInvoiceCreated = props.onInvoiceCreated;
   const onPaymentResult = props.onPaymentResult;
   const passwordInputId = useId();
   const invoiceInputId = useId();
+
+  const managedFiber = useFiberNode({
+    network,
+    walletId: props.walletId,
+    enabled: !usesExternalFiber,
+  });
+
+  const fiber = props.fiber ?? managedFiber;
 
   const {
     node,
@@ -55,7 +66,7 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
     startWithPasskey,
     createPasskeyAndStart,
     stop,
-  } = useFiberNode({ network, walletId: props.walletId });
+  } = fiber;
 
   const { payInvoice, isPaying, error: payError, paymentResult } = useFiberPayment(node);
 
@@ -117,37 +128,44 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
       </h3>
 
       {!nodeInfo ? (
-        <>
-          {isPasskeySupported ? (
-            <div style={rowWithMarginStyle}>
-              {hasPasskeyConfigured ? (
-                <button type="button" onClick={() => void startWithPasskey()}>
-                  Login with Passkey
-                </button>
-              ) : (
-                <button type="button" onClick={() => void createPasskeyAndStart(passkeyUsername)}>
-                  Register Passkey
-                </button>
-              )}
-            </div>
-          ) : null}
+        usesExternalFiber ? (
+          <p>
+            <strong>Connection required:</strong> connect the shared node first, then return here to
+            create or pay invoices.
+          </p>
+        ) : (
+          <>
+            {isPasskeySupported ? (
+              <div style={rowWithMarginStyle}>
+                {hasPasskeyConfigured ? (
+                  <button type="button" onClick={() => void startWithPasskey()}>
+                    Login with Passkey
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => void createPasskeyAndStart(passkeyUsername)}>
+                    Register Passkey
+                  </button>
+                )}
+              </div>
+            ) : null}
 
-          <label htmlFor={passwordInputId}>Password</label>
-          <div style={rowStyle}>
-            <input
-              id={passwordInputId}
-              type="password"
-              autoComplete="current-password"
-              aria-label="Node password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Password"
-            />
-            <button type="button" onClick={() => void startWithPassword(password)}>
-              Start with Password
-            </button>
-          </div>
-        </>
+            <label htmlFor={passwordInputId}>Password</label>
+            <div style={rowStyle}>
+              <input
+                id={passwordInputId}
+                type="password"
+                autoComplete="current-password"
+                aria-label="Node password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Password"
+              />
+              <button type="button" onClick={() => void startWithPassword(password)}>
+                Start with Password
+              </button>
+            </div>
+          </>
+        )
       ) : (
         <>
           <p>

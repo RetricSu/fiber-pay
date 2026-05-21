@@ -28,10 +28,28 @@ export function App() {
 
 `FiberPayQuickCard` supports lightweight integration hooks:
 
+- `fiber` (reuse existing `useFiberNode()` session)
 - `className`, `style`, `title`
 - `onInvoiceCreated(invoice)`
 - `onPaymentResult(result)`
 - `onError({ scope, message })`
+
+When you already manage connection state (for example with `ConnectButton`), pass the same hook result into `FiberPayQuickCard` so invoices and payments run on the same node session:
+
+```tsx
+import { ConnectButton, FiberPayQuickCard, useFiberNode } from '@fiber-pay/react';
+
+export function UnifiedFlow() {
+  const fiber = useFiberNode({ network: 'testnet', walletId: 'demo-wallet' });
+
+  return (
+    <>
+      <ConnectButton fiber={fiber} strategy="passkey" />
+      <FiberPayQuickCard fiber={fiber} network="testnet" title="Quick Card" />
+    </>
+  );
+}
+```
 
 ## ConnectButton
 
@@ -46,6 +64,35 @@ export function HeaderWallet() {
   return <ConnectButton fiber={fiber} strategy="passkey" />;
 }
 ```
+
+## FiberNodeButton
+
+`FiberNodeButton` is a higher-level button + dropdown panel for day-to-day node operations.
+It wraps `ConnectButton` and provides default sections for:
+
+- Connection state and disconnect
+- Channel management (peer connect / open channel)
+- Payment management (create invoice / pay invoice)
+- Optional connector section (custom renderer)
+
+```tsx
+import { FiberNodeButton, useFiberNode } from '@fiber-pay/react';
+
+export function WalletEntry() {
+  const fiber = useFiberNode({ network: 'testnet', walletId: 'demo-wallet' });
+
+  return (
+    <FiberNodeButton
+      fiber={fiber}
+      strategy="passkey"
+      onLog={(message) => console.log(message)}
+    />
+  );
+}
+```
+
+For external funding, pass `externalFunding` with an async `resolve` callback that returns
+`signFundingTx` and optional script / dep overrides.
 
 `ConnectButton` uses explicit strategy selection and supports only `"passkey"` or `"password"`.
 

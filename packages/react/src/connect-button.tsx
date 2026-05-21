@@ -25,6 +25,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
 } from 'react';
@@ -347,6 +348,8 @@ export function ConnectButton(props: ConnectButtonProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const dropdownId = useId();
+  const lastReportedErrorRef = useRef<string | null>(null);
 
   const effectiveIsStarting = isConnecting || isStarting;
 
@@ -377,10 +380,21 @@ export function ConnectButton(props: ConnectButtonProps) {
     prevRunningRef.current = isRunning;
   }, [isRunning, node, nodeInfo, onConnect, onDisconnect]);
 
-  // Notify parent on error
+  // Notify parent on error once per distinct message.
+  const effectiveError = error ?? localError;
   useEffect(() => {
-    if (error) onError?.(error);
-  }, [error, onError]);
+    if (!effectiveError) {
+      lastReportedErrorRef.current = null;
+      return;
+    }
+
+    if (lastReportedErrorRef.current === effectiveError) {
+      return;
+    }
+
+    lastReportedErrorRef.current = effectiveError;
+    onError?.(effectiveError);
+  }, [effectiveError, onError]);
 
   // --- Actions --------------------------------------------------------------
 
@@ -404,7 +418,6 @@ export function ConnectButton(props: ConnectButtonProps) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setLocalError(msg);
-      onError?.(msg);
     } finally {
       setIsConnecting(false);
     }
@@ -416,7 +429,6 @@ export function ConnectButton(props: ConnectButtonProps) {
     startWithPassword,
     startWithPasskey,
     createPasskeyAndStart,
-    onError,
   ]);
 
   const handleDisconnect = useCallback(async () => {
@@ -425,11 +437,10 @@ export function ConnectButton(props: ConnectButtonProps) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setLocalError(msg);
-      onError?.(msg);
     } finally {
       setShowDropdown(false);
     }
-  }, [stop, onError]);
+  }, [stop]);
 
   const closeDropdown = useCallback(() => {
     setShowDropdown(false);
@@ -437,7 +448,7 @@ export function ConnectButton(props: ConnectButtonProps) {
 
   // --- Render ---------------------------------------------------------------
 
-  const hasError = !!(error || localError);
+  const hasError = !!effectiveError;
 
   // Determine button content and behaviour
   let buttonLabel: ReactNode;
@@ -498,12 +509,24 @@ export function ConnectButton(props: ConnectButtonProps) {
 
       {isRunning ? (
         <div style={{ position: 'relative' }} ref={dropdownRef}>
-          <button type="button" onClick={buttonOnClick} style={buttonStyle}>
+          <button
+            type="button"
+            onClick={buttonOnClick}
+            style={buttonStyle}
+            aria-haspopup="dialog"
+            aria-expanded={showDropdown}
+            aria-controls={showDropdown ? dropdownId : undefined}
+          >
             {buttonLabel}
           </button>
 
           {showDropdown && (
-            <div style={{ ...styles.dropdown, ...dropdownStyle }}>
+            <div
+              id={dropdownId}
+              role="dialog"
+              aria-label="Connection panel"
+              style={{ ...styles.dropdown, ...dropdownStyle }}
+            >
               {renderConnectedDropdown ? (
                 renderConnectedDropdown({
                   fiber,
