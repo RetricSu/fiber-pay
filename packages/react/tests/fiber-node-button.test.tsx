@@ -54,7 +54,7 @@ describe('FiberNodeButton', () => {
     expect(screen.getByRole('button', { name: 'Connect' })).toBeTruthy();
   });
 
-  it('shows connection/channel/payment sections in dropdown when connected', async () => {
+  it('shows tabbed panel sections in dropdown when connected', async () => {
     const node = createNodeMock();
     const fiber = createFiberMock({
       state: 'running',
@@ -74,9 +74,11 @@ describe('FiberNodeButton', () => {
     const toggle = screen.getByRole('button', { name: /0x012345/i });
     fireEvent.click(toggle);
 
-    expect(screen.getByText('Connection')).toBeTruthy();
-    expect(screen.getByText('Peers & Graph')).toBeTruthy();
-    expect(screen.getByText('Channels')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Workbench' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Channels' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Diagnostics' })).toBeTruthy();
+    expect(screen.getByText('Connection Prep')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Open Channel' })).toBeTruthy();
     expect(screen.getByText('Payments')).toBeTruthy();
     expect(screen.getByText('Connector slot')).toBeTruthy();
 
@@ -132,8 +134,14 @@ describe('FiberNodeButton', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Channels' }));
+
     await waitFor(() => {
-      expect(screen.getByText('active (1)')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'active (1)' })).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Close Channel' })).toBeTruthy();
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Channel' }));

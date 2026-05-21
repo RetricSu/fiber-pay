@@ -1,10 +1,9 @@
 import { ccc } from '@ckb-ccc/connector-react';
-import { FiberNodeButton, FiberPayQuickCard, useFiberNode } from '@fiber-pay/react';
+import { FiberNodeButton, useFiberNode } from '@fiber-pay/react';
 import {
   cccScriptToFiberScript,
   createCccSignFundingTx,
   resolveFundingLockCellDepsByKnownScript,
-  type GetPaymentResult,
   type Script,
 } from '@fiber-pay/sdk/browser';
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
@@ -18,6 +17,23 @@ interface EventLogEntry {
 
 const TESTNET_CKB_RPC_URL = 'https://testnet.ckbapp.dev/';
 
+const integrationSnippet = `const fiber = useFiberNode({
+  network: 'testnet',
+  walletId: 'my-app-fiber-session',
+  externalWallet,
+});
+
+<FiberNodeButton
+  fiber={fiber}
+  strategy={strategy}
+  password={strategy === 'password' ? password : undefined}
+  externalFunding={{ enabled: externalWallet, resolve: resolveExternalFunding }}
+  onConnect={(_, info) => log('connected', info.pubkey)}
+  onDisconnect={() => log('disconnected')}
+  onError={(msg) => log('error', msg)}
+  onLog={(msg) => log('fiber', msg)}
+/>`;
+
 function shorten(value: string, head = 10, tail = 8): string {
   if (!value || value.length <= head + tail + 3) {
     return value;
@@ -25,12 +41,255 @@ function shorten(value: string, head = 10, tail = 8): string {
   return `${value.slice(0, head)}...${value.slice(-tail)}`;
 }
 
-const cardStyle: CSSProperties = {
-  marginTop: 20,
-  border: '1px solid #e5e7eb',
-  borderRadius: 12,
-  padding: 16,
-  background: '#fafafa',
+const styles = {
+  page: {
+    minHeight: '100vh',
+    padding: '28px 18px 36px',
+    background:
+      'radial-gradient(circle at 4% -12%, rgba(29,78,216,0.2), transparent 42%), radial-gradient(circle at 92% -8%, rgba(14,116,144,0.16), transparent 38%), #f3f6fb',
+    color: '#0f172a',
+    fontFamily: 'IBM Plex Sans, Avenir Next, Segoe UI, sans-serif',
+  } satisfies CSSProperties,
+
+  shell: {
+    maxWidth: '1120px',
+    margin: '0 auto',
+    display: 'grid',
+    gap: '16px',
+  } satisfies CSSProperties,
+
+  hero: {
+    border: '1px solid #d6e0f0',
+    borderRadius: '18px',
+    padding: '18px 18px 16px',
+    background: 'linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(249,251,255,0.95) 100%)',
+    boxShadow: '0 14px 30px -28px rgba(15, 23, 42, 0.45)',
+  } satisfies CSSProperties,
+
+  title: {
+    margin: 0,
+    fontSize: '1.55rem',
+    letterSpacing: '-0.02em',
+  } satisfies CSSProperties,
+
+  subtitle: {
+    margin: '8px 0 0',
+    fontSize: '0.9rem',
+    color: '#475569',
+    maxWidth: '68ch',
+    lineHeight: 1.4,
+  } satisfies CSSProperties,
+
+  layout: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '14px',
+    alignItems: 'flex-start',
+  } satisfies CSSProperties,
+
+  panel: {
+    flex: '1 1 520px',
+    border: '1px solid #d6e0f0',
+    borderRadius: '16px',
+    padding: '14px',
+    background: 'rgba(255,255,255,0.95)',
+    boxShadow: '0 12px 28px -26px rgba(15, 23, 42, 0.5)',
+    display: 'grid',
+    gap: '12px',
+  } satisfies CSSProperties,
+
+  panelTitle: {
+    margin: 0,
+    fontSize: '1rem',
+    letterSpacing: '-0.01em',
+  } satisfies CSSProperties,
+
+  panelLead: {
+    margin: 0,
+    fontSize: '0.8rem',
+    color: '#64748b',
+  } satisfies CSSProperties,
+
+  row: {
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '8px',
+  } satisfies CSSProperties,
+
+  modeButton: {
+    border: '1px solid #cfd8ea',
+    borderRadius: '999px',
+    padding: '6px 12px',
+    fontSize: '0.82rem',
+    fontWeight: 700,
+    background: '#fff',
+    color: '#334155',
+    cursor: 'pointer',
+  } satisfies CSSProperties,
+
+  modeButtonActive: {
+    borderColor: '#1d4ed8',
+    background: '#1d4ed8',
+    color: '#fff',
+  } satisfies CSSProperties,
+
+  passwordInput: {
+    border: '1px solid #cfd8ea',
+    borderRadius: '10px',
+    padding: '7px 9px',
+    fontSize: '0.84rem',
+    minWidth: '230px',
+  } satisfies CSSProperties,
+
+  fundingCard: {
+    border: '1px solid #d7e0ee',
+    borderRadius: '12px',
+    padding: '10px',
+    display: 'grid',
+    gap: '7px',
+    background: '#f8fbff',
+  } satisfies CSSProperties,
+
+  checkboxLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontWeight: 700,
+    color: '#1e293b',
+    cursor: 'pointer',
+    fontSize: '0.84rem',
+  } satisfies CSSProperties,
+
+  helperText: {
+    margin: 0,
+    fontSize: '0.78rem',
+    color: '#64748b',
+    lineHeight: 1.35,
+  } satisfies CSSProperties,
+
+  warningText: {
+    margin: 0,
+    fontSize: '0.78rem',
+    color: '#b45309',
+    lineHeight: 1.35,
+  } satisfies CSSProperties,
+
+  compactMeta: {
+    margin: 0,
+    fontSize: '0.78rem',
+    color: '#475569',
+    lineHeight: 1.35,
+  } satisfies CSSProperties,
+
+  statusGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+    gap: '7px',
+  } satisfies CSSProperties,
+
+  statusItem: {
+    border: '1px solid #dbe4f3',
+    borderRadius: '10px',
+    padding: '7px 9px',
+    fontSize: '0.78rem',
+    color: '#334155',
+    background: '#fff',
+  } satisfies CSSProperties,
+
+  statusLabel: {
+    display: 'block',
+    fontSize: '0.67rem',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: '0.02em',
+  } satisfies CSSProperties,
+
+  statusValue: {
+    display: 'block',
+    marginTop: '2px',
+    fontWeight: 700,
+    color: '#0f172a',
+    wordBreak: 'break-all',
+  } satisfies CSSProperties,
+
+  stepList: {
+    margin: 0,
+    padding: 0,
+    listStyle: 'none',
+    display: 'grid',
+    gap: '8px',
+  } satisfies CSSProperties,
+
+  stepItem: {
+    border: '1px solid #dbe4f3',
+    borderRadius: '10px',
+    padding: '8px 10px',
+    background: '#fff',
+    display: 'grid',
+    gap: '3px',
+  } satisfies CSSProperties,
+
+  stepTitle: {
+    margin: 0,
+    fontSize: '0.82rem',
+    fontWeight: 700,
+    color: '#0f172a',
+  } satisfies CSSProperties,
+
+  stepDesc: {
+    margin: 0,
+    fontSize: '0.76rem',
+    color: '#64748b',
+    lineHeight: 1.35,
+  } satisfies CSSProperties,
+
+  codeBlock: {
+    margin: 0,
+    border: '1px solid #cdd8ea',
+    borderRadius: '10px',
+    padding: '10px',
+    background: '#0f172a',
+    color: '#cbd5e1',
+    fontFamily: 'IBM Plex Mono, Menlo, monospace',
+    fontSize: '0.74rem',
+    lineHeight: 1.45,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+  } satisfies CSSProperties,
+
+  eventBox: {
+    border: '1px solid #cdd8ea',
+    borderRadius: '10px',
+    padding: '10px',
+    background: '#0f172a',
+    color: '#e2e8f0',
+    fontFamily: 'IBM Plex Mono, Menlo, monospace',
+    fontSize: '0.72rem',
+    minHeight: '126px',
+    maxHeight: '220px',
+    overflowY: 'auto',
+  } satisfies CSSProperties,
+
+  actionButton: {
+    border: '1px solid #cfd8ea',
+    borderRadius: '8px',
+    padding: '6px 10px',
+    background: '#fff',
+    color: '#0f172a',
+    fontSize: '0.78rem',
+    fontWeight: 700,
+    cursor: 'pointer',
+  } satisfies CSSProperties,
+
+  errorBox: {
+    border: '1px solid #fecaca',
+    borderRadius: '10px',
+    padding: '8px 10px',
+    color: '#991b1b',
+    background: '#fef2f2',
+    fontSize: '0.78rem',
+  } satisfies CSSProperties,
 };
 
 export function App() {
@@ -44,9 +303,7 @@ export function App() {
   const [strategy, setStrategy] = useState<ConnectStrategy>('password');
   const [externalWallet, setExternalWallet] = useState(false);
   const [password, setPassword] = useState('demo-secret');
-
   const [externalWalletAddress, setExternalWalletAddress] = useState<string | null>(null);
-
   const [eventLogs, setEventLogs] = useState<EventLogEntry[]>([]);
 
   const fiber = useFiberNode({
@@ -62,27 +319,12 @@ export function App() {
       id: `${now.getTime()}-${crypto.randomUUID()}`,
       text: `[${ts}] ${message}`,
     };
-    setEventLogs((prev) => [entry, ...prev].slice(0, 16));
+    setEventLogs((prev) => [entry, ...prev].slice(0, 18));
   }, []);
 
   const clearLogs = useCallback(() => {
     setEventLogs([]);
   }, []);
-
-  const handleInvoiceCreated = (invoice: string) => {
-    console.log('Invoice created:', invoice);
-    addLog(`QuickCard invoice created: ${invoice.slice(0, 32)}...`);
-  };
-
-  const handlePaymentResult = (result: GetPaymentResult) => {
-    console.log('Payment result:', result);
-    addLog(`QuickCard payment status: ${result.status}`);
-  };
-
-  const handleError = (error: { scope: 'node' | 'payment' | 'invoice'; message: string }) => {
-    console.error('FiberPay error:', error);
-    addLog(`QuickCard error (${error.scope}): ${error.message}`);
-  };
 
   useEffect(() => {
     if (!externalWallet || !cccSigner) {
@@ -112,22 +354,6 @@ export function App() {
       cancelled = true;
     };
   }, [addLog, cccSigner, externalWallet]);
-
-  const statusSummary = [
-    { label: 'State', value: fiber.state },
-    { label: 'Connected', value: fiber.isRunning ? 'Yes' : 'No' },
-    { label: 'Node', value: fiber.nodeInfo?.pubkey ? shorten(fiber.nodeInfo.pubkey) : 'Not connected' },
-    {
-      label: 'Funding Mode',
-      value: externalWallet ? 'External wallet (CCC signer)' : 'Internal wallet (node managed)',
-    },
-    {
-      label: 'Passkey',
-      value: fiber.isPasskeySupported ? 'Available' : fiber.passkeyUnavailableReason ?? 'Unavailable',
-    },
-  ];
-
-  const externalWalletToggleLocked = fiber.isRunning || fiber.isStarting;
 
   const resolveExternalFunding = useCallback(
     async () => {
@@ -160,252 +386,213 @@ export function App() {
     [addLog, cccSigner],
   );
 
+  const externalWalletToggleLocked = fiber.isRunning || fiber.isStarting;
+
+  const hookStateItems = [
+    { label: 'Node state', value: fiber.state },
+    { label: 'Connected', value: fiber.isRunning ? 'Yes' : 'No' },
+    {
+      label: 'Funding mode',
+      value: externalWallet ? 'External wallet (CCC signer)' : 'Internal wallet (node managed)',
+    },
+  ];
+
   return (
-    <div style={{ padding: 24, fontFamily: 'system-ui, sans-serif', maxWidth: 880, margin: '0 auto' }}>
-      <h1>Fiber Pay React SDK: Clear Demo</h1>
-      <p style={{ marginTop: 0, color: '#475569' }}>
-        Minimal path only: connect, select peer, open channel, then use QuickCard.
-      </p>
-
-      <section style={cardStyle}>
-        <h2 style={{ marginTop: 0 }}>1) Fiber Node Button</h2>
-
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={() => setStrategy('password')}
-            style={{
-              border: '1px solid #d1d5db',
-              borderRadius: 8,
-              padding: '6px 10px',
-              background: strategy === 'password' ? '#111827' : '#fff',
-              color: strategy === 'password' ? '#fff' : '#111827',
-              cursor: 'pointer',
-            }}
-          >
-            Password
-          </button>
-          <button
-            type="button"
-            onClick={() => setStrategy('passkey')}
-            style={{
-              border: '1px solid #d1d5db',
-              borderRadius: 8,
-              padding: '6px 10px',
-              background: strategy === 'passkey' ? '#111827' : '#fff',
-              color: strategy === 'passkey' ? '#fff' : '#111827',
-              cursor: 'pointer',
-            }}
-          >
-            Passkey
-          </button>
-        </div>
-
-        {strategy === 'password' && (
-          <label style={{ display: 'block', fontSize: 13, marginBottom: 12 }}>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{ marginLeft: 8, padding: '6px 8px', borderRadius: 8, border: '1px solid #d1d5db' }}
-            />
-          </label>
-        )}
-
-        <FiberNodeButton
-          fiber={fiber}
-          strategy={strategy}
-          password={strategy === 'password' ? password : undefined}
-          onLog={addLog}
-          onConnect={(_node, info) => {
-            addLog(`FiberNodeButton connected: ${shorten(info.pubkey, 12, 10)}`);
-          }}
-          onDisconnect={() => {
-            addLog('FiberNodeButton disconnected.');
-          }}
-          onError={(msg) => {
-            addLog(`FiberNodeButton error: ${msg}`);
-          }}
-          externalFunding={{
-            enabled: externalWallet,
-            resolve: resolveExternalFunding,
-          }}
-          renderConnectorSection={() => (
-            <div style={{ display: 'grid', gap: 6 }}>
-              <div style={{ fontSize: 12, color: '#475569' }}>
-                CCC wallet: <strong>{connectedExternalWallet?.name ?? 'Not connected'}</strong>
-                {externalWalletAddress ? ` | address: ${shorten(externalWalletAddress, 20, 10)}` : ''}
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void openExternalWalletConnectModal();
-                  }}
-                  style={{
-                    border: '1px solid #1d4ed8',
-                    borderRadius: 8,
-                    padding: '6px 10px',
-                    background: '#2563eb',
-                    color: '#fff',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {connectedExternalWallet ? 'Switch External Wallet' : 'Connect External Wallet'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void disconnectExternalWallet();
-                  }}
-                  disabled={!connectedExternalWallet}
-                  style={{
-                    border: '1px solid #cbd5e1',
-                    borderRadius: 8,
-                    padding: '6px 10px',
-                    background: '#fff',
-                    color: '#111827',
-                    cursor: connectedExternalWallet ? 'pointer' : 'not-allowed',
-                    opacity: connectedExternalWallet ? 1 : 0.65,
-                  }}
-                >
-                  Disconnect External Wallet
-                </button>
-              </div>
-            </div>
-          )}
-        />
-
-        <div
-          style={{
-            marginTop: 12,
-            border: '1px solid #cbd5e1',
-            borderRadius: 8,
-            padding: 10,
-            background: '#fff',
-          }}
-        >
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              fontWeight: 600,
-              color: '#0f172a',
-              cursor: 'pointer',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={externalWallet}
-              disabled={externalWalletToggleLocked}
-              onChange={(e) => {
-                const checked = e.target.checked;
-                setExternalWallet(checked);
-                if (!checked) {
-                  setExternalWalletAddress(null);
-                }
-              }}
-              style={{ width: 16, height: 16 }}
-            />
-            Use External Wallet (CCC Signer)
-          </label>
-
-          <p style={{ marginTop: 6, marginBottom: 0, fontSize: 12, color: '#64748b' }}>
-            {externalWallet
-              ? 'External mode is on. Channel opening will use CCC wallet signing.'
-              : 'External mode is off. Channel opening uses internal node-managed funding.'}
+    <div style={styles.page}>
+      <div style={styles.shell}>
+        <header style={styles.hero}>
+          <h1 style={styles.title}>FiberNodeButton Developer Demo</h1>
+          <p style={styles.subtitle}>
+            One component, one page: learn FiberNodeButton integration fast, then verify behavior in the
+            live panel and runtime logs.
           </p>
-          {externalWalletToggleLocked && (
-            <p style={{ marginTop: 6, marginBottom: 0, fontSize: 12, color: '#b45309' }}>
-              Disconnect the node before switching funding mode.
+        </header>
+
+        <div style={styles.layout}>
+          <aside style={styles.panel}>
+            <h2 style={styles.panelTitle}>Integration Guide</h2>
+            <p style={styles.panelLead}>Copy this wiring model and replace wallet/session config with your app values.</p>
+
+            <ol style={styles.stepList}>
+              <li style={styles.stepItem}>
+                <p style={styles.stepTitle}>Step 1. Create one shared fiber hook</p>
+                <p style={styles.stepDesc}>Keep useFiberNode in your page or provider and pass the same fiber object into FiberNodeButton.</p>
+              </li>
+              <li style={styles.stepItem}>
+                <p style={styles.stepTitle}>Step 2. Choose auth strategy at runtime</p>
+                <p style={styles.stepDesc}>Password and passkey can share one component, switch via strategy prop.</p>
+              </li>
+              <li style={styles.stepItem}>
+                <p style={styles.stepTitle}>Step 3. Plug external funding only when needed</p>
+                <p style={styles.stepDesc}>Use externalFunding.enabled plus resolve callback for CCC signer handoff.</p>
+              </li>
+              <li style={styles.stepItem}>
+                <p style={styles.stepTitle}>Step 4. Subscribe to callback events</p>
+                <p style={styles.stepDesc}>onConnect, onDisconnect, onError, onLog cover most app-level telemetry needs.</p>
+              </li>
+            </ol>
+
+            <pre style={styles.codeBlock}>{integrationSnippet}</pre>
+
+            <div>
+              <div style={styles.row}>
+                <h3 style={{ ...styles.panelTitle, fontSize: '0.92rem' }}>Runtime Events</h3>
+                <button type="button" onClick={clearLogs} style={styles.actionButton}>
+                  Clear Logs
+                </button>
+              </div>
+              <div style={styles.eventBox}>
+                {eventLogs.length === 0
+                  ? 'No events yet. Connect the node and interact with the tabbed panel.'
+                  : eventLogs.map((entry) => <div key={entry.id}>{entry.text}</div>)}
+              </div>
+            </div>
+          </aside>
+
+          <section style={styles.panel}>
+            <h2 style={styles.panelTitle}>Live Playground</h2>
+            <p style={styles.panelLead}>Choose strategy, toggle funding mode, then open FiberNodeButton.</p>
+
+            <div style={styles.row}>
+              <button
+                type="button"
+                onClick={() => setStrategy('password')}
+                style={{
+                  ...styles.modeButton,
+                  ...(strategy === 'password' ? styles.modeButtonActive : {}),
+                }}
+              >
+                Password
+              </button>
+              <button
+                type="button"
+                onClick={() => setStrategy('passkey')}
+                style={{
+                  ...styles.modeButton,
+                  ...(strategy === 'passkey' ? styles.modeButtonActive : {}),
+                }}
+              >
+                Passkey
+              </button>
+              {strategy === 'password' ? (
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  style={styles.passwordInput}
+                  placeholder="Password for node unlock"
+                />
+              ) : null}
+            </div>
+
+            <FiberNodeButton
+              fiber={fiber}
+              strategy={strategy}
+              password={strategy === 'password' ? password : undefined}
+              onLog={addLog}
+              onConnect={(_node, info) => {
+                addLog(`FiberNodeButton connected: ${shorten(info.pubkey, 12, 10)}`);
+              }}
+              onDisconnect={() => {
+                addLog('FiberNodeButton disconnected.');
+              }}
+              onError={(msg) => {
+                addLog(`FiberNodeButton error: ${msg}`);
+              }}
+              externalFunding={{
+                enabled: externalWallet,
+                resolve: resolveExternalFunding,
+              }}
+              renderConnectorSection={() => (
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ fontSize: 12, color: '#475569' }}>
+                    CCC wallet: <strong>{connectedExternalWallet?.name ?? 'Not connected'}</strong>
+                    {externalWalletAddress ? ` | address: ${shorten(externalWalletAddress, 20, 10)}` : ''}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void openExternalWalletConnectModal();
+                      }}
+                      style={{
+                        border: '1px solid #1d4ed8',
+                        borderRadius: 8,
+                        padding: '6px 10px',
+                        background: '#2563eb',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {connectedExternalWallet ? 'Switch External Wallet' : 'Connect External Wallet'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void disconnectExternalWallet();
+                      }}
+                      disabled={!connectedExternalWallet}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 8,
+                        padding: '6px 10px',
+                        background: '#fff',
+                        color: '#111827',
+                        cursor: connectedExternalWallet ? 'pointer' : 'not-allowed',
+                        opacity: connectedExternalWallet ? 1 : 0.65,
+                        fontWeight: 700,
+                      }}
+                    >
+                      Disconnect External Wallet
+                    </button>
+                  </div>
+                </div>
+              )}
+            />
+
+            <div style={styles.fundingCard}>
+              <label style={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={externalWallet}
+                  disabled={externalWalletToggleLocked}
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setExternalWallet(checked);
+                    if (!checked) {
+                      setExternalWalletAddress(null);
+                    }
+                  }}
+                  style={{ width: 16, height: 16 }}
+                />
+                Use External Wallet (CCC Signer)
+              </label>
+
+              <p style={styles.helperText}>{externalWallet ? 'External mode enabled.' : 'Internal mode enabled.'}</p>
+
+              {externalWalletToggleLocked ? (
+                <p style={styles.warningText}>Disconnect the node before switching funding mode.</p>
+              ) : null}
+            </div>
+
+            <p style={styles.compactMeta}>
+              Node: {fiber.nodeInfo?.pubkey ? shorten(fiber.nodeInfo.pubkey, 18, 12) : 'Not connected'}
             </p>
-          )}
 
-          {externalWallet && (
-            <div style={{ marginTop: 8, fontSize: 12, color: '#475569' }}>
-              CCC wallet: <strong>{connectedExternalWallet?.name ?? 'Not connected'}</strong>
-              {externalWalletAddress ? ` | address: ${shorten(externalWalletAddress, 20, 10)}` : ''}
+            <div style={styles.statusGrid}>
+              {hookStateItems.map((item) => (
+                <div key={item.label} style={styles.statusItem}>
+                  <span style={styles.statusLabel}>{item.label}</span>
+                  <span style={styles.statusValue}>{item.value}</span>
+                </div>
+              ))}
             </div>
-          )}
+
+            {fiber.error ? <div style={styles.errorBox}>Hook error: {fiber.error}</div> : null}
+          </section>
         </div>
-
-        <div style={{ marginTop: 12, fontSize: 13, display: 'grid', gap: 6 }}>
-          {statusSummary.map((item) => (
-            <div key={item.label}>
-              {item.label}: <strong>{item.value}</strong>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section style={cardStyle}>
-        <h2 style={{ marginTop: 0 }}>2) Quick Payment UI (Legacy Comparison)</h2>
-        <p style={{ marginTop: 0, color: '#475569', fontSize: 13 }}>
-          `FiberNodeButton` already includes payment actions in its dropdown panel. This block remains
-          only for side-by-side comparison.
-        </p>
-
-        <FiberPayQuickCard
-          fiber={fiber}
-          network="testnet"
-          title="Quick Card"
-          onInvoiceCreated={handleInvoiceCreated}
-          onPaymentResult={handlePaymentResult}
-          onError={handleError}
-        />
-      </section>
-
-      <details style={{ marginTop: 14 }}>
-        <summary style={{ cursor: 'pointer', color: '#475569', fontSize: 13 }}>Event Logs</summary>
-        <div
-          style={{
-            marginTop: 8,
-            background: '#111827',
-            color: '#e5e7eb',
-            borderRadius: 8,
-            padding: 10,
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-            fontSize: 12,
-            minHeight: 110,
-          }}
-        >
-          {eventLogs.length === 0
-            ? 'No events yet.'
-            : eventLogs.map((entry) => <div key={entry.id}>{entry.text}</div>)}
-        </div>
-        <button
-          type="button"
-          onClick={clearLogs}
-          style={{
-            marginTop: 8,
-            border: '1px solid #d1d5db',
-            borderRadius: 8,
-            padding: '7px 10px',
-            background: '#fff',
-            cursor: 'pointer',
-          }}
-        >
-          Clear logs
-        </button>
-      </details>
-
-      {fiber.error && (
-        <div
-          style={{
-            marginTop: 12,
-            border: '1px solid #fecaca',
-            background: '#fef2f2',
-            color: '#991b1b',
-            borderRadius: 8,
-            padding: '8px 10px',
-            fontSize: 13,
-          }}
-        >
-          Hook error: {fiber.error}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
