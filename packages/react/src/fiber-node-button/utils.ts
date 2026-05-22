@@ -23,7 +23,7 @@ export function toHexPrefixed(value: string): HexString {
   if (!trimmed) {
     throw new Error('Hex value is empty.');
   }
-  return (trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`) as HexString;
+  return (/^0x/i.test(trimmed) ? trimmed : `0x${trimmed}`) as HexString;
 }
 
 export function isPendingChannelState(state: ChannelState): boolean {

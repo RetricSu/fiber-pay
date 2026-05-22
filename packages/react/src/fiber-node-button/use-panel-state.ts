@@ -145,6 +145,7 @@ export function useFiberNodeButtonPanelState(
   const [statusNotice, setStatusNotice] = useState<PanelStatusNotice | null>(null);
 
   const statusTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
   const peerListId = useId();
   const tabPanelId = useId();
 
@@ -159,6 +160,7 @@ export function useFiberNodeButtonPanelState(
 
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       if (statusTimerRef.current !== null) {
         window.clearTimeout(statusTimerRef.current);
       }
@@ -187,7 +189,13 @@ export function useFiberNodeButtonPanelState(
 
   const refreshConnectedPeers = useCallback(async () => {
     if (!fiber.node) {
-      setConnectedPeers([]);
+      if (mountedRef.current) {
+        setConnectedPeers([]);
+      }
+      return;
+    }
+
+    if (!mountedRef.current) {
       return;
     }
 
@@ -195,22 +203,36 @@ export function useFiberNodeButtonPanelState(
 
     try {
       const peers = await fiber.node.listPeers();
+      if (!mountedRef.current) {
+        return;
+      }
       setConnectedPeers(peers.peers);
       setPeerPubkey((prev) => (prev.trim() ? prev : (peers.peers[0]?.pubkey ?? prev)));
       onLog?.(`Loaded connected peers: ${peers.peers.length}.`);
     } catch (error) {
+      if (!mountedRef.current) {
+        return;
+      }
       const message = error instanceof Error ? error.message : String(error);
       reportError(message);
       onLog?.(`Refresh peers failed: ${message}`);
     } finally {
-      setIsRefreshingPeers(false);
+      if (mountedRef.current) {
+        setIsRefreshingPeers(false);
+      }
     }
   }, [fiber.node, onLog, reportError]);
 
   const refreshGraph = useCallback(async () => {
     if (!fiber.node) {
-      setGraphNodes([]);
-      setGraphChannels([]);
+      if (mountedRef.current) {
+        setGraphNodes([]);
+        setGraphChannels([]);
+      }
+      return;
+    }
+
+    if (!mountedRef.current) {
       return;
     }
 
@@ -221,23 +243,37 @@ export function useFiberNodeButtonPanelState(
         fiber.node.graphNodes({ limit: '0x8' }),
         fiber.node.graphChannels({ limit: '0x8' }),
       ]);
+      if (!mountedRef.current) {
+        return;
+      }
       setGraphNodes(nodesResult.nodes);
       setGraphChannels(channelsResult.channels);
       onLog?.(
         `Loaded graph: ${nodesResult.nodes.length} nodes, ${channelsResult.channels.length} channels.`,
       );
     } catch (error) {
+      if (!mountedRef.current) {
+        return;
+      }
       const message = error instanceof Error ? error.message : String(error);
       reportError(message);
       onLog?.(`Refresh graph failed: ${message}`);
     } finally {
-      setIsRefreshingGraph(false);
+      if (mountedRef.current) {
+        setIsRefreshingGraph(false);
+      }
     }
   }, [fiber.node, onLog, reportError]);
 
   const refreshChannels = useCallback(async () => {
     if (!fiber.node) {
-      setChannels([]);
+      if (mountedRef.current) {
+        setChannels([]);
+      }
+      return;
+    }
+
+    if (!mountedRef.current) {
       return;
     }
 
@@ -245,14 +281,22 @@ export function useFiberNodeButtonPanelState(
 
     try {
       const result = await fiber.node.listChannels({ include_closed: true });
+      if (!mountedRef.current) {
+        return;
+      }
       setChannels(result.channels);
       onLog?.(`Loaded channels: ${result.channels.length}.`);
     } catch (error) {
+      if (!mountedRef.current) {
+        return;
+      }
       const message = error instanceof Error ? error.message : String(error);
       reportError(message);
       onLog?.(`Refresh channels failed: ${message}`);
     } finally {
-      setIsRefreshingChannels(false);
+      if (mountedRef.current) {
+        setIsRefreshingChannels(false);
+      }
     }
   }, [fiber.node, onLog, reportError]);
 
@@ -532,23 +576,6 @@ export function useFiberNodeButtonPanelState(
       setForceCloseConfirmOpen(false);
     }
   }, [selectedChannelId, visibleChannels]);
-
-  useEffect(() => {
-    if (!forceCloseConfirmOpen) {
-      return;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setForceCloseConfirmOpen(false);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [forceCloseConfirmOpen]);
 
   const selectedState = selectedChannel?.state.state_name;
   const selectedPending = selectedChannel

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { ChannelsTab } from './channels-tab.js';
 import { DiagnosticsTab } from './diagnostics-tab.js';
 import { styles } from './styles.js';
@@ -9,6 +10,7 @@ import { WorkbenchTab } from './workbench-tab.js';
 export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
   const { dropdownContext, fiber, onLog, externalFunding, renderConnectorSection } = props;
   const state = useFiberNodeButtonPanelState(props);
+  const forceCloseDialogRef = useRef<HTMLDivElement | null>(null);
 
   const {
     activeTab,
@@ -23,6 +25,12 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
     selectedChannel,
     closeChannel,
   } = state;
+
+  useEffect(() => {
+    if (forceCloseConfirmOpen) {
+      forceCloseDialogRef.current?.focus();
+    }
+  }, [forceCloseConfirmOpen]);
 
   return (
     <div style={styles.shell}>
@@ -184,10 +192,17 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
       {forceCloseConfirmOpen && selectedChannel ? (
         <div style={styles.dialogBackdrop}>
           <div
+            ref={forceCloseDialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="Force close confirmation"
+            tabIndex={-1}
             style={styles.dialogCard}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                setForceCloseConfirmOpen(false);
+              }
+            }}
           >
             <h4 style={styles.sectionTitle}>Force close this channel?</h4>
             <p style={styles.compactText}>
