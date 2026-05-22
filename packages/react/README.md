@@ -5,7 +5,7 @@ React hooks and components for browser payment flows on Fiber.
 ## Install
 
 ```bash
-pnpm add @fiber-pay/react react
+pnpm add @fiber-pay/react @nervosnetwork/fiber-js react
 ```
 
 ## One-line import
