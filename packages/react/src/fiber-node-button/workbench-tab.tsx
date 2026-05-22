@@ -118,6 +118,7 @@ export function WorkbenchTab({
           {renderPanelAction({
             id: 'open-channel',
             fiber,
+            state,
             renderAction,
             t,
             buttonStyle: styles.primaryButton,
@@ -154,6 +155,7 @@ export function WorkbenchTab({
           {renderPanelAction({
             id: 'create-invoice',
             fiber,
+            state,
             renderAction,
             t,
             defaultProps: {
@@ -184,6 +186,7 @@ export function WorkbenchTab({
           {renderPanelAction({
             id: 'pay-invoice',
             fiber,
+            state,
             renderAction,
             t,
             buttonStyle: styles.primaryButton,

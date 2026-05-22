@@ -100,7 +100,7 @@ For external funding, pass `externalFunding` with an async `resolve` callback th
 
 - `tabs`: reorder / hide built-in tabs and add custom tabs
 - `renderTabContent(tabId, context)`: override tab body rendering
-- `renderAction(context)`: replace default action button UI/behavior for selected actions
+- `renderAction(context)`: replace default action button UI/behavior for selected actions (context includes `state`)
 - `t(key, fallback, vars?)`: localize labels and copy
 
 Render precedence for a tab body is:

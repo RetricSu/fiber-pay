@@ -105,6 +105,7 @@ export interface FiberNodeButtonRenderActionContext {
   id: FiberNodeButtonActionId;
   defaultProps: FiberNodeButtonActionDefaultProps;
   fiber: UseFiberNodeResult;
+  state: FiberNodeButtonPanelState;
   t: FiberNodeButtonI18n;
 }
 

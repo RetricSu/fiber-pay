@@ -172,6 +172,7 @@ export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTa
             {renderPanelAction({
               id: 'close-channel',
               fiber,
+              state,
               renderAction,
               t,
               defaultProps: {
@@ -192,6 +193,7 @@ export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTa
             {renderPanelAction({
               id: 'force-close-channel',
               fiber,
+              state,
               renderAction,
               t,
               buttonStyle: styles.dangerButton,

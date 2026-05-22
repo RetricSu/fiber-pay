@@ -84,6 +84,8 @@ describe('FiberNodeButton extensibility', () => {
       return dictionary[key] ?? fallback;
     };
 
+    let sawRenderActionState = false;
+
     render(
       <FiberNodeButton
         fiber={fiber}
@@ -105,7 +107,11 @@ describe('FiberNodeButton extensibility', () => {
           }
           return <div>Custom Channels Content</div>;
         }}
-        renderAction={({ id, defaultProps }) => {
+        renderAction={({ id, defaultProps, state }) => {
+          if (state.activeTab !== undefined && state.paymentResult !== undefined) {
+            sawRenderActionState = true;
+          }
+
           if (id !== 'pay-invoice') {
             return undefined;
           }
@@ -141,6 +147,7 @@ describe('FiberNodeButton extensibility', () => {
     fireEvent.click(screen.getByRole('tab', { name: '操作台' }));
     expect(screen.getByRole('button', { name: 'Pay Invoice Custom' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Pay Invoice' })).toBeNull();
+    expect(sawRenderActionState).toBe(true);
   });
 
   it('allows tabs.render to override built-in tab content', async () => {

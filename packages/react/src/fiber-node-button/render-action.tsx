@@ -7,24 +7,35 @@ import type {
   FiberNodeButtonI18n,
   FiberNodeButtonRenderAction,
 } from './types.js';
+import type { FiberNodeButtonPanelState } from './use-panel-state.js';
 import { withDisabledStyle } from './utils.js';
 
 export interface RenderPanelActionOptions {
   id: FiberNodeButtonActionId;
   defaultProps: FiberNodeButtonActionDefaultProps;
   fiber: UseFiberNodeResult;
+  state: FiberNodeButtonPanelState;
   renderAction?: FiberNodeButtonRenderAction;
   t: FiberNodeButtonI18n;
   buttonStyle?: CSSProperties;
 }
 
 export function renderPanelAction(options: RenderPanelActionOptions): ReactNode {
-  const { id, defaultProps, fiber, renderAction, t, buttonStyle = styles.actionButton } = options;
+  const {
+    id,
+    defaultProps,
+    fiber,
+    state,
+    renderAction,
+    t,
+    buttonStyle = styles.actionButton,
+  } = options;
 
   const customAction = renderAction?.({
     id,
     defaultProps,
     fiber,
+    state,
     t,
   });
 
