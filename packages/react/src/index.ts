@@ -30,11 +30,20 @@ export type {
 } from './connect-button.js';
 export { ConnectButton } from './connect-button.js';
 export type {
+  FiberNodeButtonActionDefaultProps,
+  FiberNodeButtonActionId,
   FiberNodeButtonConnectorSectionContext,
   FiberNodeButtonExternalFundingConfig,
   FiberNodeButtonExternalFundingResolved,
   FiberNodeButtonExternalFundingResolverContext,
+  FiberNodeButtonI18n,
   FiberNodeButtonProps,
+  FiberNodeButtonRenderAction,
+  FiberNodeButtonRenderActionContext,
+  FiberNodeButtonTabActions,
+  FiberNodeButtonTabConfig,
+  FiberNodeButtonTabContext,
+  FiberNodeButtonTabId,
 } from './fiber-node-button.js';
 export { FiberNodeButton } from './fiber-node-button.js';
 export type { FiberPayQuickCardProps } from './fiber-pay-quick-card.js';

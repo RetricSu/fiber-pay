@@ -1,13 +1,21 @@
+import { renderPanelAction } from './render-action.js';
 import { styles } from './styles.js';
-import type { FiberNodeButtonPanelProps } from './types.js';
+import type {
+  FiberNodeButtonActionDefaultProps,
+  FiberNodeButtonPanelProps,
+  FiberNodeButtonRenderAction,
+  FiberNodeButtonTabContext,
+} from './types.js';
 import type { FiberNodeButtonPanelState } from './use-panel-state.js';
-import { shorten, withDisabledStyle } from './utils.js';
+import { shorten } from './utils.js';
 
 export interface WorkbenchTabProps {
   state: FiberNodeButtonPanelState;
   fiber: FiberNodeButtonPanelProps['fiber'];
   externalFunding: FiberNodeButtonPanelProps['externalFunding'];
   renderConnectorSection: FiberNodeButtonPanelProps['renderConnectorSection'];
+  renderAction?: FiberNodeButtonRenderAction;
+  t: FiberNodeButtonTabContext['t'];
 }
 
 export function WorkbenchTab({
@@ -15,6 +23,8 @@ export function WorkbenchTab({
   fiber,
   externalFunding,
   renderConnectorSection,
+  renderAction,
+  t,
 }: WorkbenchTabProps) {
   const {
     isNodeReady,
@@ -41,14 +51,24 @@ export function WorkbenchTab({
     <>
       <section style={styles.section}>
         <div style={styles.rowBetween}>
-          <h4 style={styles.sectionTitle}>Connection Prep</h4>
-          <span style={styles.badge}>{isNodeReady ? 'Connected' : 'Disconnected'}</span>
+          <h4 style={styles.sectionTitle}>
+            {t('workbench.connectionPrep.title', 'Connection Prep')}
+          </h4>
+          <span style={styles.badge}>
+            {isNodeReady
+              ? t('workbench.connectionPrep.connected', 'Connected')
+              : t('workbench.connectionPrep.disconnected', 'Disconnected')}
+          </span>
         </div>
         <p style={styles.compactText}>
-          Node: {fiber.nodeInfo?.pubkey ? shorten(fiber.nodeInfo.pubkey, 18, 12) : 'N/A'}
+          {t('workbench.connectionPrep.node', 'Node')}:{' '}
+          {fiber.nodeInfo?.pubkey ? shorten(fiber.nodeInfo.pubkey, 18, 12) : t('meta.na', 'N/A')}
         </p>
         <p style={styles.compactText}>
-          External wallet: {externalFunding?.enabled ? 'Enabled' : 'Disabled'}
+          {t('workbench.connectionPrep.externalWallet', 'External wallet')}:{' '}
+          {externalFunding?.enabled
+            ? t('workbench.connectionPrep.enabled', 'Enabled')
+            : t('workbench.connectionPrep.disabled', 'Disabled')}
         </p>
 
         {renderConnectorSection ? (
@@ -60,12 +80,16 @@ export function WorkbenchTab({
 
       <section style={styles.section}>
         <div style={styles.rowBetween}>
-          <h4 style={styles.sectionTitle}>Open Channel</h4>
-          {channelOpenFlow.lastResult ? <span style={styles.badge}>Recent Success</span> : null}
+          <h4 style={styles.sectionTitle}>{t('workbench.openChannel.title', 'Open Channel')}</h4>
+          {channelOpenFlow.lastResult ? (
+            <span style={styles.badge}>
+              {t('workbench.openChannel.recentSuccess', 'Recent Success')}
+            </span>
+          ) : null}
         </div>
 
         <label style={styles.fieldLabel}>
-          Target Peer Pubkey
+          {t('workbench.openChannel.targetPeerPubkey', 'Target Peer Pubkey')}
           <input
             style={styles.input}
             list={peerListId}
@@ -81,7 +105,7 @@ export function WorkbenchTab({
         </label>
 
         <label style={styles.fieldLabel}>
-          Funding Amount (CKB)
+          {t('workbench.openChannel.fundingAmount', 'Funding Amount (CKB)')}
           <input
             style={styles.input}
             value={fundingAmountCkb}
@@ -91,79 +115,92 @@ export function WorkbenchTab({
         </label>
 
         <div style={styles.row}>
-          <button
-            type="button"
-            style={withDisabledStyle(
-              styles.primaryButton,
-              !isNodeReady || channelOpenFlow.isOpening || !peerPubkey.trim(),
-            )}
-            disabled={!isNodeReady || channelOpenFlow.isOpening || !peerPubkey.trim()}
-            onClick={() => {
-              void openChannel();
-            }}
-          >
-            {channelOpenFlow.isOpening ? 'Opening...' : 'Open Channel'}
-          </button>
+          {renderPanelAction({
+            id: 'open-channel',
+            fiber,
+            renderAction,
+            t,
+            buttonStyle: styles.primaryButton,
+            defaultProps: {
+              id: 'open-channel',
+              label: t('actions.openChannel', 'Open Channel'),
+              loadingLabel: t('actions.openChannel.loading', 'Opening...'),
+              disabled: !isNodeReady || channelOpenFlow.isOpening || !peerPubkey.trim(),
+              loading: channelOpenFlow.isOpening,
+              onTrigger: openChannel,
+            } satisfies FiberNodeButtonActionDefaultProps,
+          })}
         </div>
 
         {channelOpenFlow.lastResult ? (
           <p style={styles.compactText}>
-            Last channel: {shorten(channelOpenFlow.lastResult.channelId, 14, 8)}
+            {t('workbench.openChannel.lastChannel', 'Last channel')}:{' '}
+            {shorten(channelOpenFlow.lastResult.channelId, 14, 8)}
           </p>
         ) : null}
 
         {channelOpenFlow.suggestedFundingAmountCkb ? (
           <p style={styles.compactText}>
-            Suggested amount: {channelOpenFlow.suggestedFundingAmountCkb} CKB
+            {t('workbench.openChannel.suggestedAmount', 'Suggested amount')}:{' '}
+            {channelOpenFlow.suggestedFundingAmountCkb} CKB
           </p>
         ) : null}
       </section>
 
       <section style={styles.section}>
-        <h4 style={styles.sectionTitle}>Payments</h4>
+        <h4 style={styles.sectionTitle}>{t('workbench.payments.title', 'Payments')}</h4>
 
         <div style={styles.row}>
-          <button
-            type="button"
-            style={withDisabledStyle(styles.actionButton, isCreatingInvoice || !isNodeReady)}
-            disabled={isCreatingInvoice || !isNodeReady}
-            onClick={() => {
-              void createInvoice();
-            }}
-          >
-            {isCreatingInvoice ? 'Creating...' : 'Create Invoice (1 CKB)'}
-          </button>
+          {renderPanelAction({
+            id: 'create-invoice',
+            fiber,
+            renderAction,
+            t,
+            defaultProps: {
+              id: 'create-invoice',
+              label: t('actions.createInvoice', 'Create Invoice (1 CKB)'),
+              loadingLabel: t('actions.createInvoice.loading', 'Creating...'),
+              disabled: isCreatingInvoice || !isNodeReady,
+              loading: isCreatingInvoice,
+              onTrigger: createInvoice,
+            } satisfies FiberNodeButtonActionDefaultProps,
+          })}
           {createdInvoice ? (
             <span style={styles.compactText}>{shorten(createdInvoice, 20, 10)}</span>
           ) : null}
         </div>
 
         <label style={styles.fieldLabel}>
-          Invoice
+          {t('workbench.payments.invoice', 'Invoice')}
           <input
             style={styles.input}
             value={invoiceInput}
             onChange={(event) => setInvoiceInput(event.target.value)}
-            placeholder="Paste invoice to pay"
+            placeholder={t('workbench.payments.invoicePlaceholder', 'Paste invoice to pay')}
           />
         </label>
 
         <div style={styles.rowBetween}>
-          <button
-            type="button"
-            style={withDisabledStyle(
-              styles.primaryButton,
-              isPaying || !isNodeReady || !invoiceInput.trim(),
-            )}
-            disabled={isPaying || !isNodeReady || !invoiceInput.trim()}
-            onClick={() => {
-              void submitPayment();
-            }}
-          >
-            {isPaying ? 'Paying...' : 'Pay Invoice'}
-          </button>
+          {renderPanelAction({
+            id: 'pay-invoice',
+            fiber,
+            renderAction,
+            t,
+            buttonStyle: styles.primaryButton,
+            defaultProps: {
+              id: 'pay-invoice',
+              label: t('actions.payInvoice', 'Pay Invoice'),
+              loadingLabel: t('actions.payInvoice.loading', 'Paying...'),
+              disabled: isPaying || !isNodeReady || !invoiceInput.trim(),
+              loading: isPaying,
+              onTrigger: submitPayment,
+            } satisfies FiberNodeButtonActionDefaultProps,
+          })}
 
-          <span style={styles.compactText}>Status: {paymentResult?.status ?? 'Idle'}</span>
+          <span style={styles.compactText}>
+            {t('workbench.payments.status', 'Status')}:{' '}
+            {paymentResult?.status ?? t('workbench.payments.idle', 'Idle')}
+          </span>
         </div>
       </section>
     </>

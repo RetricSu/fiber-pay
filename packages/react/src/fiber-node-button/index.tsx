@@ -5,11 +5,20 @@ import { FiberNodeButtonPanel } from './panel.js';
 import type { FiberNodeButtonProps } from './types.js';
 
 export type {
+  FiberNodeButtonActionDefaultProps,
+  FiberNodeButtonActionId,
   FiberNodeButtonConnectorSectionContext,
   FiberNodeButtonExternalFundingConfig,
   FiberNodeButtonExternalFundingResolved,
   FiberNodeButtonExternalFundingResolverContext,
+  FiberNodeButtonI18n,
   FiberNodeButtonProps,
+  FiberNodeButtonRenderAction,
+  FiberNodeButtonRenderActionContext,
+  FiberNodeButtonTabActions,
+  FiberNodeButtonTabConfig,
+  FiberNodeButtonTabContext,
+  FiberNodeButtonTabId,
 } from './types.js';
 
 export function FiberNodeButton(props: FiberNodeButtonProps) {
@@ -35,6 +44,10 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
     initialFundingAmountCkb = '1000',
     externalFunding,
     renderConnectorSection,
+    tabs,
+    renderTabContent,
+    renderAction,
+    t,
   } = props;
 
   const managedFiber = useFiberNode({
@@ -68,6 +81,10 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
         initialFundingAmountCkb={initialFundingAmountCkb}
         externalFunding={externalFunding}
         renderConnectorSection={renderConnectorSection}
+        tabs={tabs}
+        renderTabContent={renderTabContent}
+        renderAction={renderAction}
+        t={t}
       />
     ),
     [
@@ -79,7 +96,11 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
       network,
       onError,
       onLog,
+      renderAction,
       renderConnectorSection,
+      renderTabContent,
+      t,
+      tabs,
     ],
   );
 

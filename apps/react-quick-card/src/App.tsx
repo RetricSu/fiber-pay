@@ -1,12 +1,17 @@
 import { ccc } from '@ckb-ccc/connector-react';
-import { FiberNodeButton, useFiberNode } from '@fiber-pay/react';
+import {
+  FiberNodeButton,
+  type FiberNodeButtonRenderAction,
+  type FiberNodeButtonTabConfig,
+  useFiberNode,
+} from '@fiber-pay/react';
 import {
   cccScriptToFiberScript,
   createCccSignFundingTx,
   resolveFundingLockCellDepsByKnownScript,
   type Script,
 } from '@fiber-pay/sdk/browser';
-import { type CSSProperties, useCallback, useEffect, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 
 type ConnectStrategy = 'password' | 'passkey';
 
@@ -302,6 +307,7 @@ export function App() {
 
   const [strategy, setStrategy] = useState<ConnectStrategy>('password');
   const [externalWallet, setExternalWallet] = useState(false);
+  const [customTabMode, setCustomTabMode] = useState(false);
   const [password, setPassword] = useState('demo-secret');
   const [externalWalletAddress, setExternalWalletAddress] = useState<string | null>(null);
   const [eventLogs, setEventLogs] = useState<EventLogEntry[]>([]);
@@ -388,6 +394,78 @@ export function App() {
 
   const externalWalletToggleLocked = fiber.isRunning || fiber.isStarting;
 
+  const customI18n = useCallback((key: string, fallback: string) => {
+    const dictionary: Record<string, string> = {
+      'tabs.workbench': '操作台',
+      'tabs.channels': '通道',
+      'actions.payInvoice': '立即支付',
+      'actions.payInvoice.loading': '支付中...',
+      'workbench.payments.title': '支付操作',
+      'workbench.openChannel.title': '开通道',
+      'workbench.connectionPrep.title': '连接准备',
+    };
+
+    return dictionary[key] ?? fallback;
+  }, []);
+
+  const customTabs = useMemo<ReadonlyArray<FiberNodeButtonTabConfig>>(
+    () => [
+      { id: 'workbench' },
+      {
+        id: 'my-stats',
+        label: (t) => t('demo.customTab.title', 'My Stats'),
+        render: ({ state, t }) => (
+          <section style={{ border: '1px solid #dbe4f3', borderRadius: 10, padding: 10 }}>
+            <h4 style={{ margin: 0, fontSize: '0.86rem' }}>
+              {t('demo.customTab.heading', 'Custom Runtime Stats')}
+            </h4>
+            <p style={{ margin: '8px 0 0', fontSize: '0.78rem', color: '#475569' }}>
+              {t('demo.customTab.peerCount', 'Connected peers')}: {state.connectedPeers.length}
+            </p>
+            <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#475569' }}>
+              {t('demo.customTab.activeChannels', 'Active channels')}: {state.activeChannelCount}
+            </p>
+            <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#475569' }}>
+              {t('demo.customTab.paymentStatus', 'Payment status')}: {state.paymentResult?.status ?? 'Idle'}
+            </p>
+          </section>
+        ),
+      },
+      { id: 'channels' },
+      { id: 'diagnostics', hidden: true },
+    ],
+    [],
+  );
+
+  const customRenderAction = useCallback<FiberNodeButtonRenderAction>(({ id, defaultProps }) => {
+    if (id !== 'pay-invoice') {
+      return undefined;
+    }
+
+    return (
+      <button
+        type="button"
+        style={{
+          border: '1px solid #0f766e',
+          borderRadius: 8,
+          padding: '6px 10px',
+          background: '#0f766e',
+          color: '#fff',
+          fontSize: '0.78rem',
+          fontWeight: 700,
+          cursor: defaultProps.disabled ? 'not-allowed' : 'pointer',
+          opacity: defaultProps.disabled ? 0.6 : 1,
+        }}
+        disabled={defaultProps.disabled}
+        onClick={() => {
+          void defaultProps.onTrigger();
+        }}
+      >
+        {defaultProps.loading ? '支付中...' : '立即支付（自定义）'}
+      </button>
+    );
+  }, []);
+
   const hookStateItems = [
     { label: 'Node state', value: fiber.state },
     { label: 'Connected', value: fiber.isRunning ? 'Yes' : 'No' },
@@ -456,6 +534,35 @@ export function App() {
             <div style={styles.row}>
               <button
                 type="button"
+                onClick={() => setCustomTabMode(false)}
+                style={{
+                  ...styles.modeButton,
+                  ...(customTabMode ? {} : styles.modeButtonActive),
+                }}
+              >
+                Default Panel
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomTabMode(true)}
+                style={{
+                  ...styles.modeButton,
+                  ...(customTabMode ? styles.modeButtonActive : {}),
+                }}
+              >
+                Custom Tab Mode
+              </button>
+            </div>
+
+            <p style={styles.helperText}>
+              {customTabMode
+                ? 'Custom mode enabled: adds a My Stats tab, hides Diagnostics, localizes labels, and overrides Pay action button.'
+                : 'Default mode enabled: built-in tabs and default actions.'}
+            </p>
+
+            <div style={styles.row}>
+              <button
+                type="button"
                 onClick={() => setStrategy('password')}
                 style={{
                   ...styles.modeButton,
@@ -503,6 +610,9 @@ export function App() {
                 enabled: externalWallet,
                 resolve: resolveExternalFunding,
               }}
+              tabs={customTabMode ? customTabs : undefined}
+              t={customTabMode ? customI18n : undefined}
+              renderAction={customTabMode ? customRenderAction : undefined}
               renderConnectorSection={() => (
                 <div style={{ display: 'grid', gap: 6 }}>
                   <div style={{ fontSize: 12, color: '#475569' }}>

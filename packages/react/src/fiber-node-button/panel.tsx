@@ -1,14 +1,106 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { ChannelsTab } from './channels-tab.js';
 import { DiagnosticsTab } from './diagnostics-tab.js';
+import { defaultFiberNodeButtonI18n } from './i18n.js';
 import { styles } from './styles.js';
-import { type FiberNodeButtonPanelProps, TAB_ITEMS } from './types.js';
+import {
+  type FiberNodeButtonPanelProps,
+  type FiberNodeButtonTabConfig,
+  type FiberNodeButtonTabContext,
+  type FiberNodeButtonTabId,
+  TAB_ITEMS,
+} from './types.js';
 import { useFiberNodeButtonPanelState } from './use-panel-state.js';
 import { shorten, summarizeError } from './utils.js';
 import { WorkbenchTab } from './workbench-tab.js';
 
+interface ResolvedTabItem {
+  id: FiberNodeButtonTabId;
+  label: string;
+  render?: FiberNodeButtonTabConfig['render'];
+}
+
+function resolveTabLabel(tabId: FiberNodeButtonTabId, t: FiberNodeButtonTabContext['t']): string {
+  const builtIn = TAB_ITEMS.find((item) => item.id === tabId);
+  if (!builtIn) {
+    return tabId;
+  }
+
+  if (builtIn.id === 'workbench') {
+    return t('tabs.workbench', builtIn.label);
+  }
+  if (builtIn.id === 'channels') {
+    return t('tabs.channels', builtIn.label);
+  }
+  return t('tabs.diagnostics', builtIn.label);
+}
+
+function resolveTabs(
+  tabs: ReadonlyArray<FiberNodeButtonTabConfig> | undefined,
+  t: FiberNodeButtonTabContext['t'],
+): ResolvedTabItem[] {
+  const defaultIds = TAB_ITEMS.map((item) => item.id);
+
+  if (!tabs || tabs.length === 0) {
+    return defaultIds.map((id) => ({ id, label: resolveTabLabel(id, t) }));
+  }
+
+  const tabConfigById = new Map<FiberNodeButtonTabId, FiberNodeButtonTabConfig>();
+  const orderedIds: FiberNodeButtonTabId[] = [];
+
+  for (const tabConfig of tabs) {
+    tabConfigById.set(tabConfig.id, tabConfig);
+    if (!orderedIds.includes(tabConfig.id)) {
+      orderedIds.push(tabConfig.id);
+    }
+  }
+
+  for (const id of defaultIds) {
+    if (!orderedIds.includes(id)) {
+      orderedIds.push(id);
+    }
+  }
+
+  const resolvedTabs: ResolvedTabItem[] = [];
+
+  for (const id of orderedIds) {
+    const config = tabConfigById.get(id);
+    if (config?.hidden) {
+      continue;
+    }
+
+    const label =
+      typeof config?.label === 'function'
+        ? config.label(t)
+        : (config?.label ?? resolveTabLabel(id, t));
+
+    const tabItem: ResolvedTabItem = {
+      id,
+      label,
+    };
+
+    if (config?.render) {
+      tabItem.render = config.render;
+    }
+
+    resolvedTabs.push(tabItem);
+  }
+
+  return resolvedTabs;
+}
+
 export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
-  const { dropdownContext, fiber, onLog, externalFunding, renderConnectorSection } = props;
+  const {
+    dropdownContext,
+    fiber,
+    onLog,
+    externalFunding,
+    renderConnectorSection,
+    tabs,
+    renderTabContent,
+    renderAction,
+  } = props;
+  const t = props.t ?? defaultFiberNodeButtonI18n;
   const state = useFiberNodeButtonPanelState(props);
   const forceCloseDialogRef = useRef<HTMLDivElement | null>(null);
 
@@ -26,11 +118,99 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
     closeChannel,
   } = state;
 
+  const tabActions = useMemo<FiberNodeButtonTabContext['actions']>(
+    () => ({
+      openChannel: async () => {
+        await state.openChannel();
+      },
+      createInvoice: async () => {
+        await state.createInvoice();
+      },
+      payInvoice: async () => {
+        await state.submitPayment();
+      },
+      closeChannel: async (channelId: string) => {
+        await state.closeChannel(channelId, false);
+      },
+      forceCloseChannel: async (channelId: string) => {
+        await state.closeChannel(channelId, true);
+      },
+    }),
+    [state],
+  );
+
+  const tabContext = useMemo<FiberNodeButtonTabContext>(
+    () => ({
+      fiber,
+      state,
+      externalFundingEnabled: !!externalFunding?.enabled,
+      t,
+      actions: tabActions,
+    }),
+    [externalFunding?.enabled, fiber, state, t, tabActions],
+  );
+
+  const resolvedTabs = useMemo(() => resolveTabs(tabs, t), [t, tabs]);
+
+  const tabListStyle = useMemo(
+    () => ({
+      ...styles.tabList,
+      gridTemplateColumns: `repeat(${Math.max(1, resolvedTabs.length)}, minmax(0, 1fr))`,
+    }),
+    [resolvedTabs.length],
+  );
+
+  const selectedResolvedTab = useMemo(
+    () => resolvedTabs.find((tab) => tab.id === activeTab),
+    [activeTab, resolvedTabs],
+  );
+
+  const overriddenTabContent = renderTabContent?.(activeTab, tabContext);
+
+  let tabContent = overriddenTabContent;
+  if (tabContent === undefined) {
+    if (activeTab === 'workbench') {
+      tabContent = (
+        <WorkbenchTab
+          state={state}
+          fiber={fiber}
+          externalFunding={externalFunding}
+          renderConnectorSection={renderConnectorSection}
+          renderAction={renderAction}
+          t={t}
+        />
+      );
+    } else if (activeTab === 'channels') {
+      tabContent = (
+        <ChannelsTab state={state} onLog={onLog} renderAction={renderAction} t={t} fiber={fiber} />
+      );
+    } else if (activeTab === 'diagnostics') {
+      tabContent = <DiagnosticsTab state={state} t={t} />;
+    } else if (selectedResolvedTab?.render) {
+      tabContent = selectedResolvedTab.render(tabContext);
+    } else {
+      tabContent = (
+        <div style={styles.notice}>
+          {t('tabs.unimplemented', 'Tab content is not implemented.')}
+        </div>
+      );
+    }
+  }
+
   useEffect(() => {
     if (forceCloseConfirmOpen) {
       forceCloseDialogRef.current?.focus();
     }
   }, [forceCloseConfirmOpen]);
+
+  useEffect(() => {
+    if (resolvedTabs.length === 0) {
+      return;
+    }
+    if (!resolvedTabs.some((tab) => tab.id === activeTab)) {
+      switchTab(resolvedTabs[0].id);
+    }
+  }, [activeTab, resolvedTabs, switchTab]);
 
   return (
     <div style={styles.shell}>
@@ -51,7 +231,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
                 aria-hidden="true"
               />
               <span style={styles.metricMain}>{fiber.state}</span>
-              <span style={styles.metricSub}>Node</span>
+              <span style={styles.metricSub}>{t('metrics.node', 'Node')}</span>
             </span>
 
             <span style={styles.metricDivider} aria-hidden="true">
@@ -60,9 +240,11 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
 
             <span style={styles.metricInline}>
               <span style={styles.metricMain}>
-                {externalFunding?.enabled ? 'External' : 'Internal'}
+                {externalFunding?.enabled
+                  ? t('metrics.funding.external', 'External')
+                  : t('metrics.funding.internal', 'Internal')}
               </span>
-              <span style={styles.metricSub}>Funding</span>
+              <span style={styles.metricSub}>{t('metrics.funding', 'Funding')}</span>
             </span>
 
             <span style={styles.metricDivider} aria-hidden="true">
@@ -71,7 +253,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
 
             <span style={styles.metricInline}>
               <span style={styles.metricMain}>{activeChannelCount}</span>
-              <span style={styles.metricSub}>Active</span>
+              <span style={styles.metricSub}>{t('metrics.active', 'Active')}</span>
             </span>
 
             <span style={styles.metricDivider} aria-hidden="true">
@@ -80,7 +262,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
 
             <span style={styles.metricInline}>
               <span style={styles.metricMain}>{connectedPeers.length}</span>
-              <span style={styles.metricSub}>Peers</span>
+              <span style={styles.metricSub}>{t('metrics.peers', 'Peers')}</span>
             </span>
 
             {latestError ? (
@@ -96,7 +278,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
                     }}
                     aria-hidden="true"
                   />
-                  <span style={styles.metricMain}>Error</span>
+                  <span style={styles.metricMain}>{t('metrics.error', 'Error')}</span>
                 </span>
               </>
             ) : null}
@@ -109,9 +291,9 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
               onClick={() => {
                 void dropdownContext.disconnect();
               }}
-              aria-label="Disconnect node"
+              aria-label={t('actions.disconnect.aria', 'Disconnect node')}
             >
-              Disconnect
+              {t('actions.disconnect', 'Disconnect')}
             </button>
             <button
               type="button"
@@ -119,25 +301,28 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
               onClick={() => {
                 dropdownContext.closeDropdown();
               }}
-              aria-label="Close panel"
+              aria-label={t('actions.closePanel.aria', 'Close panel')}
             >
-              Close Panel
+              {t('actions.closePanel', 'Close Panel')}
             </button>
           </div>
         </div>
 
         <div style={styles.globalMeta}>
           <p style={styles.inlineCode}>
-            Node: {fiber.nodeInfo?.pubkey ? shorten(fiber.nodeInfo.pubkey, 18, 12) : 'N/A'}
+            {t('meta.node', 'Node')}:{' '}
+            {fiber.nodeInfo?.pubkey ? shorten(fiber.nodeInfo.pubkey, 18, 12) : t('meta.na', 'N/A')}
           </p>
           {latestError ? (
-            <p style={styles.globalErrorInline}>Recent error: {summarizeError(latestError, 92)}</p>
+            <p style={styles.globalErrorInline}>
+              {t('meta.recentError', 'Recent error')}: {summarizeError(latestError, 92)}
+            </p>
           ) : null}
         </div>
       </header>
 
-      <div role="tablist" aria-label="Fiber panel tabs" style={styles.tabList}>
-        {TAB_ITEMS.map((tab) => {
+      <div role="tablist" aria-label={t('tabs.aria', 'Fiber panel tabs')} style={tabListStyle}>
+        {resolvedTabs.map((tab) => {
           const selected = activeTab === tab.id;
           return (
             <button
@@ -173,18 +358,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
           </div>
         ) : null}
 
-        {activeTab === 'workbench' ? (
-          <WorkbenchTab
-            state={state}
-            fiber={fiber}
-            externalFunding={externalFunding}
-            renderConnectorSection={renderConnectorSection}
-          />
-        ) : null}
-
-        {activeTab === 'channels' ? <ChannelsTab state={state} onLog={onLog} /> : null}
-
-        {activeTab === 'diagnostics' ? <DiagnosticsTab state={state} /> : null}
+        {tabContent}
 
         {latestError ? <div style={styles.errorNotice}>{latestError}</div> : null}
       </div>
@@ -195,7 +369,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
             ref={forceCloseDialogRef}
             role="dialog"
             aria-modal="true"
-            aria-label="Force close confirmation"
+            aria-label={t('dialog.forceClose.aria', 'Force close confirmation')}
             tabIndex={-1}
             style={styles.dialogCard}
             onKeyDown={(event) => {
@@ -204,13 +378,19 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
               }
             }}
           >
-            <h4 style={styles.sectionTitle}>Force close this channel?</h4>
+            <h4 style={styles.sectionTitle}>
+              {t('dialog.forceClose.title', 'Force close this channel?')}
+            </h4>
             <p style={styles.compactText}>
-              This action may immediately broadcast a unilateral close transaction, can lock
-              liquidity until settlement, and may produce additional fees. Continue only if normal
-              close cannot proceed.
+              {t(
+                'dialog.forceClose.description',
+                'This action may immediately broadcast a unilateral close transaction, can lock liquidity until settlement, and may produce additional fees. Continue only if normal close cannot proceed.',
+              )}
             </p>
-            <p style={styles.inlineCode}>Channel: {shorten(selectedChannel.channel_id, 20, 12)}</p>
+            <p style={styles.inlineCode}>
+              {t('dialog.forceClose.channel', 'Channel')}:{' '}
+              {shorten(selectedChannel.channel_id, 20, 12)}
+            </p>
             <div style={{ ...styles.row, justifyContent: 'flex-end' }}>
               <button
                 type="button"
@@ -219,7 +399,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
                   setForceCloseConfirmOpen(false);
                 }}
               >
-                Cancel
+                {t('dialog.forceClose.cancel', 'Cancel')}
               </button>
               <button
                 type="button"
@@ -230,7 +410,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
                   void closeChannel(selectedChannel.channel_id, true);
                 }}
               >
-                Confirm Force Close
+                {t('dialog.forceClose.confirm', 'Confirm Force Close')}
               </button>
             </div>
           </div>
