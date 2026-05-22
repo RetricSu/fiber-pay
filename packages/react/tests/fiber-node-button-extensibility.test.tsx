@@ -142,4 +142,58 @@ describe('FiberNodeButton extensibility', () => {
     expect(screen.getByRole('button', { name: 'Pay Invoice Custom' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Pay Invoice' })).toBeNull();
   });
+
+  it('allows tabs.render to override built-in tab content', async () => {
+    const node = createNodeMock();
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: { pubkey: '0x0123456789abcdef0123456789abcdef' } as UseFiberNodeResult['nodeInfo'],
+    });
+
+    render(
+      <FiberNodeButton
+        fiber={fiber}
+        strategy="passkey"
+        tabs={[
+          { id: 'workbench' },
+          { id: 'channels', render: () => <div>Channels Overridden By tabs.render</div> },
+          { id: 'diagnostics' },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Channels' }));
+
+    expect(screen.getByText('Channels Overridden By tabs.render')).toBeTruthy();
+  });
+
+  it('shows empty-tab notice when all configured tabs are hidden', async () => {
+    const node = createNodeMock();
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: { pubkey: '0x0123456789abcdef0123456789abcdef' } as UseFiberNodeResult['nodeInfo'],
+    });
+
+    render(
+      <FiberNodeButton
+        fiber={fiber}
+        strategy="passkey"
+        tabs={[
+          { id: 'workbench', hidden: true },
+          { id: 'channels', hidden: true },
+          { id: 'diagnostics', hidden: true },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+
+    expect(screen.getByText('No visible tabs are configured.')).toBeTruthy();
+    expect(screen.queryByRole('tab')).toBeNull();
+  });
 });

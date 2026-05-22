@@ -103,6 +103,15 @@ For external funding, pass `externalFunding` with an async `resolve` callback th
 - `renderAction(context)`: replace default action button UI/behavior for selected actions
 - `t(key, fallback, vars?)`: localize labels and copy
 
+Render precedence for a tab body is:
+1. `renderTabContent(tabId, context)` when it returns a value other than `undefined`
+2. `tabs[i].render(context)` for the selected tab (including built-in tab ids)
+3. built-in tab body (`Workbench`, `Channels`, `Diagnostics`)
+
+`renderTabContent` semantics:
+- return `undefined` to fall back to the next renderer
+- return `null` to intentionally render an empty tab body
+
 ```tsx
 import { FiberNodeButton, useFiberNode } from '@fiber-pay/react';
 

@@ -16,8 +16,19 @@ import { WorkbenchTab } from './workbench-tab.js';
 
 interface ResolvedTabItem {
   id: FiberNodeButtonTabId;
+  domId: string;
   label: string;
   render?: FiberNodeButtonTabConfig['render'];
+}
+
+function toDomSafeTabId(tabId: FiberNodeButtonTabId, index: number): string {
+  const normalized = tabId
+    .trim()
+    .replace(/[^A-Za-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  const safeBase = normalized.length > 0 ? normalized : 'tab';
+  return `${safeBase}-${index + 1}`;
 }
 
 function resolveTabLabel(tabId: FiberNodeButtonTabId, t: FiberNodeButtonTabContext['t']): string {
@@ -42,7 +53,11 @@ function resolveTabs(
   const defaultIds = TAB_ITEMS.map((item) => item.id);
 
   if (!tabs || tabs.length === 0) {
-    return defaultIds.map((id) => ({ id, label: resolveTabLabel(id, t) }));
+    return defaultIds.map((id, index) => ({
+      id,
+      domId: toDomSafeTabId(id, index),
+      label: resolveTabLabel(id, t),
+    }));
   }
 
   const tabConfigById = new Map<FiberNodeButtonTabId, FiberNodeButtonTabConfig>();
@@ -63,7 +78,7 @@ function resolveTabs(
 
   const resolvedTabs: ResolvedTabItem[] = [];
 
-  for (const id of orderedIds) {
+  for (const [index, id] of orderedIds.entries()) {
     const config = tabConfigById.get(id);
     if (config?.hidden) {
       continue;
@@ -76,6 +91,7 @@ function resolveTabs(
 
     const tabItem: ResolvedTabItem = {
       id,
+      domId: toDomSafeTabId(id, index),
       label,
     };
 
@@ -116,27 +132,30 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
     setForceCloseConfirmOpen,
     selectedChannel,
     closeChannel,
+    openChannel,
+    createInvoice,
+    submitPayment,
   } = state;
 
   const tabActions = useMemo<FiberNodeButtonTabContext['actions']>(
     () => ({
       openChannel: async () => {
-        await state.openChannel();
+        await openChannel();
       },
       createInvoice: async () => {
-        await state.createInvoice();
+        await createInvoice();
       },
       payInvoice: async () => {
-        await state.submitPayment();
+        await submitPayment();
       },
       closeChannel: async (channelId: string) => {
-        await state.closeChannel(channelId, false);
+        await closeChannel(channelId, false);
       },
       forceCloseChannel: async (channelId: string) => {
-        await state.closeChannel(channelId, true);
+        await closeChannel(channelId, true);
       },
     }),
-    [state],
+    [closeChannel, createInvoice, openChannel, submitPayment],
   );
 
   const tabContext = useMemo<FiberNodeButtonTabContext>(
@@ -152,24 +171,35 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
 
   const resolvedTabs = useMemo(() => resolveTabs(tabs, t), [t, tabs]);
 
+  const effectiveActiveTab = useMemo(
+    () =>
+      resolvedTabs.some((tab) => tab.id === activeTab) ? activeTab : (resolvedTabs[0]?.id ?? null),
+    [activeTab, resolvedTabs],
+  );
+
+  const selectedResolvedTab = useMemo(
+    () => resolvedTabs.find((tab) => tab.id === effectiveActiveTab) ?? null,
+    [effectiveActiveTab, resolvedTabs],
+  );
+
   const tabListStyle = useMemo(
     () => ({
       ...styles.tabList,
-      gridTemplateColumns: `repeat(${Math.max(1, resolvedTabs.length)}, minmax(0, 1fr))`,
+      gridTemplateColumns: `repeat(${Math.max(1, resolvedTabs.length)}, minmax(112px, 1fr))`,
+      overflowX: 'auto' as const,
     }),
     [resolvedTabs.length],
   );
 
-  const selectedResolvedTab = useMemo(
-    () => resolvedTabs.find((tab) => tab.id === activeTab),
-    [activeTab, resolvedTabs],
-  );
-
-  const overriddenTabContent = renderTabContent?.(activeTab, tabContext);
+  const overriddenTabContent = effectiveActiveTab
+    ? renderTabContent?.(effectiveActiveTab, tabContext)
+    : undefined;
 
   let tabContent = overriddenTabContent;
   if (tabContent === undefined) {
-    if (activeTab === 'workbench') {
+    if (selectedResolvedTab?.render) {
+      tabContent = selectedResolvedTab.render(tabContext);
+    } else if (effectiveActiveTab === 'workbench') {
       tabContent = (
         <WorkbenchTab
           state={state}
@@ -180,14 +210,16 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
           t={t}
         />
       );
-    } else if (activeTab === 'channels') {
+    } else if (effectiveActiveTab === 'channels') {
       tabContent = (
         <ChannelsTab state={state} onLog={onLog} renderAction={renderAction} t={t} fiber={fiber} />
       );
-    } else if (activeTab === 'diagnostics') {
+    } else if (effectiveActiveTab === 'diagnostics') {
       tabContent = <DiagnosticsTab state={state} t={t} />;
-    } else if (selectedResolvedTab?.render) {
-      tabContent = selectedResolvedTab.render(tabContext);
+    } else if (effectiveActiveTab === null) {
+      tabContent = (
+        <div style={styles.notice}>{t('tabs.empty', 'No visible tabs are configured.')}</div>
+      );
     } else {
       tabContent = (
         <div style={styles.notice}>
@@ -323,15 +355,15 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
 
       <div role="tablist" aria-label={t('tabs.aria', 'Fiber panel tabs')} style={tabListStyle}>
         {resolvedTabs.map((tab) => {
-          const selected = activeTab === tab.id;
+          const selected = effectiveActiveTab === tab.id;
           return (
             <button
               key={tab.id}
-              id={`${tabPanelId}-tab-${tab.id}`}
+              id={`${tabPanelId}-tab-${tab.domId}`}
               type="button"
               role="tab"
               aria-selected={selected}
-              aria-controls={selected ? `${tabPanelId}-panel-${tab.id}` : undefined}
+              aria-controls={selected ? `${tabPanelId}-panel-${tab.domId}` : undefined}
               style={selected ? styles.tabButtonActive : styles.tabButton}
               onClick={() => switchTab(tab.id)}
             >
@@ -342,9 +374,11 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
       </div>
 
       <div
-        id={`${tabPanelId}-panel-${activeTab}`}
+        id={`${tabPanelId}-panel-${selectedResolvedTab?.domId ?? 'empty'}`}
         role="tabpanel"
-        aria-labelledby={`${tabPanelId}-tab-${activeTab}`}
+        aria-labelledby={
+          selectedResolvedTab ? `${tabPanelId}-tab-${selectedResolvedTab.domId}` : undefined
+        }
         style={styles.content}
       >
         {statusNotice ? (
