@@ -38,19 +38,23 @@
   },
   "sideEffects": false,
   "dependencies": {
-    "@fiber-pay/sdk": "workspace:*",
-    "@nervosnetwork/fiber-js": "~0.8.1"
+    "@fiber-pay/sdk": "workspace:*"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
-    "qrcode.react": "^4.0.0"
+    "qrcode.react": "^4.0.0",
+    "@nervosnetwork/fiber-js": "~0.8.1"
   },
   "peerDependenciesMeta": {
     "qrcode.react": {
       "optional": true
+    },
+    "@nervosnetwork/fiber-js": {
+      "optional": true
     }
   },
   "devDependencies": {
+    "@nervosnetwork/fiber-js": "~0.8.1",
     "@testing-library/react": "^16.3.0",
     "@types/react": "^18.0.0 || ^19.0.0",
     "jsdom": "^26.1.0"
