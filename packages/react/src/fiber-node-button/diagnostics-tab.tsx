@@ -1,12 +1,14 @@
 import { styles } from './styles.js';
+import type { FiberNodeButtonTabContext } from './types.js';
 import type { FiberNodeButtonPanelState } from './use-panel-state.js';
 import { formatChannelBalance, shorten, withDisabledStyle } from './utils.js';
 
 export interface DiagnosticsTabProps {
   state: FiberNodeButtonPanelState;
+  t: FiberNodeButtonTabContext['t'];
 }
 
-export function DiagnosticsTab({ state }: DiagnosticsTabProps) {
+export function DiagnosticsTab({ state, t }: DiagnosticsTabProps) {
   const {
     isRefreshingPeers,
     refreshConnectedPeers,
@@ -29,7 +31,7 @@ export function DiagnosticsTab({ state }: DiagnosticsTabProps) {
     <>
       <section style={styles.section}>
         <div style={styles.rowBetween}>
-          <h4 style={styles.sectionTitle}>Connected Peers</h4>
+          <h4 style={styles.sectionTitle}>{t('diagnostics.peers.title', 'Connected Peers')}</h4>
           <button
             type="button"
             style={withDisabledStyle(styles.actionButton, isRefreshingPeers)}
@@ -38,21 +40,27 @@ export function DiagnosticsTab({ state }: DiagnosticsTabProps) {
               void refreshConnectedPeers();
             }}
           >
-            {isRefreshingPeers ? 'Refreshing...' : 'Refresh Peers'}
+            {isRefreshingPeers
+              ? t('diagnostics.peers.refresh.loading', 'Refreshing...')
+              : t('diagnostics.peers.refresh', 'Refresh Peers')}
           </button>
         </div>
 
-        <p style={styles.compactText}>Peers: {connectedPeers.length}</p>
+        <p style={styles.compactText}>
+          {t('diagnostics.peers.count', 'Peers')}: {connectedPeers.length}
+        </p>
 
         <div style={{ ...styles.list, maxHeight: '190px' }}>
           {connectedPeers.length === 0 ? (
-            <p style={styles.compactText}>No connected peers.</p>
+            <p style={styles.compactText}>{t('diagnostics.peers.empty', 'No connected peers.')}</p>
           ) : (
             connectedPeers.map((peer) => (
               <article key={peer.pubkey} style={styles.compactChannelRow}>
                 <p style={styles.inlineCode}>{shorten(peer.pubkey, 18, 12)}</p>
                 <details>
-                  <summary style={{ ...styles.compactText, cursor: 'pointer' }}>Address</summary>
+                  <summary style={{ ...styles.compactText, cursor: 'pointer' }}>
+                    {t('diagnostics.peers.address', 'Address')}
+                  </summary>
                   <p style={styles.inlineCode}>{peer.address}</p>
                 </details>
                 <div style={styles.row}>
@@ -64,7 +72,7 @@ export function DiagnosticsTab({ state }: DiagnosticsTabProps) {
                       switchTab('workbench');
                     }}
                   >
-                    Use for Open Channel
+                    {t('diagnostics.peers.useForOpenChannel', 'Use for Open Channel')}
                   </button>
                 </div>
               </article>
@@ -73,7 +81,7 @@ export function DiagnosticsTab({ state }: DiagnosticsTabProps) {
         </div>
 
         <label style={styles.fieldLabel}>
-          Connect Peer Address
+          {t('diagnostics.peers.connectPeerAddress', 'Connect Peer Address')}
           <input
             style={styles.input}
             value={peerAddress}
@@ -91,7 +99,9 @@ export function DiagnosticsTab({ state }: DiagnosticsTabProps) {
               void connectPeerByAddress();
             }}
           >
-            {isConnectingPeer ? 'Connecting...' : 'Connect Peer'}
+            {isConnectingPeer
+              ? t('diagnostics.peers.connect.loading', 'Connecting...')
+              : t('diagnostics.peers.connect', 'Connect Peer')}
           </button>
 
           <button
@@ -102,14 +112,16 @@ export function DiagnosticsTab({ state }: DiagnosticsTabProps) {
               void refreshDiagnostics();
             }}
           >
-            {isRefreshingPeers || isRefreshingGraph ? 'Refreshing...' : 'Refresh All'}
+            {isRefreshingPeers || isRefreshingGraph
+              ? t('diagnostics.peers.refreshAll.loading', 'Refreshing...')
+              : t('diagnostics.peers.refreshAll', 'Refresh All')}
           </button>
         </div>
       </section>
 
       <section style={styles.section}>
         <div style={styles.rowBetween}>
-          <h4 style={styles.sectionTitle}>Graph Snapshot</h4>
+          <h4 style={styles.sectionTitle}>{t('diagnostics.graph.title', 'Graph Snapshot')}</h4>
           <button
             type="button"
             style={withDisabledStyle(styles.actionButton, isRefreshingGraph)}
@@ -118,13 +130,18 @@ export function DiagnosticsTab({ state }: DiagnosticsTabProps) {
               void refreshGraph();
             }}
           >
-            {isRefreshingGraph ? 'Refreshing...' : 'Refresh Graph'}
+            {isRefreshingGraph
+              ? t('diagnostics.graph.refresh.loading', 'Refreshing...')
+              : t('diagnostics.graph.refresh', 'Refresh Graph')}
           </button>
         </div>
 
         <p style={styles.compactText}>
-          showing {Math.min(graphNodes.length, 3)} of {graphNodes.length} nodes,{' '}
-          {Math.min(graphChannels.length, 2)} of {graphChannels.length} channels.
+          {t('diagnostics.graph.showing', 'showing')} {Math.min(graphNodes.length, 3)}{' '}
+          {t('diagnostics.graph.of', 'of')} {graphNodes.length}{' '}
+          {t('diagnostics.graph.nodes', 'nodes')}, {Math.min(graphChannels.length, 2)}{' '}
+          {t('diagnostics.graph.of', 'of')} {graphChannels.length}{' '}
+          {t('diagnostics.graph.channels', 'channels')}.
         </p>
 
         {graphNodes.slice(0, 3).map((node) => (
@@ -144,7 +161,9 @@ export function DiagnosticsTab({ state }: DiagnosticsTabProps) {
         ))}
 
         <details>
-          <summary style={{ ...styles.compactText, cursor: 'pointer' }}>Raw graph snapshot</summary>
+          <summary style={{ ...styles.compactText, cursor: 'pointer' }}>
+            {t('diagnostics.graph.rawSnapshot', 'Raw graph snapshot')}
+          </summary>
           <pre
             style={{
               ...styles.inlineCode,

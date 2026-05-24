@@ -94,6 +94,75 @@ export function WalletEntry() {
 For external funding, pass `externalFunding` with an async `resolve` callback that returns
 `signFundingTx` and optional script / dep overrides.
 
+### Customizing The Panel
+
+`FiberNodeButton` now supports additive panel customization without forking the component:
+
+- `tabs`: reorder / hide built-in tabs and add custom tabs
+- `renderTabContent(tabId, context)`: override tab body rendering
+- `renderAction(context)`: replace default action button UI/behavior for selected actions (context includes `state`)
+- `t(key, fallback, vars?)`: localize labels and copy
+
+Render precedence for a tab body is:
+1. `renderTabContent(tabId, context)` when it returns a value other than `undefined`
+2. `tabs[i].render(context)` for the selected tab (including built-in tab ids)
+3. built-in tab body (`Workbench`, `Channels`, `Diagnostics`)
+
+`renderTabContent` semantics:
+- return `undefined` to fall back to the next renderer
+- return `null` to intentionally render an empty tab body
+
+```tsx
+import { FiberNodeButton, useFiberNode } from '@fiber-pay/react';
+
+export function CustomPanelDemo() {
+  const fiber = useFiberNode({ network: 'testnet', walletId: 'custom-panel-demo' });
+
+  return (
+    <FiberNodeButton
+      fiber={fiber}
+      strategy="passkey"
+      tabs={[
+        { id: 'workbench' },
+        {
+          id: 'my-stats',
+          label: 'My Stats',
+          render: ({ state }) => <div>Peers: {state.connectedPeers.length}</div>,
+        },
+        { id: 'channels' },
+        { id: 'diagnostics', hidden: true },
+      ]}
+      renderAction={({ id, defaultProps }) => {
+        if (id !== 'pay-invoice') {
+          return undefined;
+        }
+
+        return (
+          <button
+            type="button"
+            disabled={defaultProps.disabled}
+            onClick={() => {
+              void defaultProps.onTrigger();
+            }}
+          >
+            {defaultProps.loading ? 'Paying...' : 'Pay Now'}
+          </button>
+        );
+      }}
+      t={(key, fallback) => {
+        const zh: Record<string, string> = {
+          'tabs.workbench': '操作台',
+          'tabs.channels': '通道',
+          'actions.payInvoice': '立即支付',
+        };
+
+        return zh[key] ?? fallback;
+      }}
+    />
+  );
+}
+```
+
 `ConnectButton` uses explicit strategy selection and supports only `"passkey"` or `"password"`.
 
 For custom connected-state panels (for example peer/channel controls), use `renderConnectedDropdown`:
