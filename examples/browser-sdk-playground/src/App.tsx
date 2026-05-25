@@ -83,11 +83,14 @@ export default function App() {
   useEffect(() => {
     if (!nodeInfo?.default_funding_lock_script) {
       setFundingAddress(null);
+      setFundingBalanceCkb(null);
+      setFundingError(null);
       return;
     }
 
     try {
       setFundingAddress(scriptToAddress(nodeInfo.default_funding_lock_script, network));
+      setFundingError(null);
     } catch (error) {
       setFundingAddress(null);
       setFundingError(error instanceof Error ? error.message : String(error));

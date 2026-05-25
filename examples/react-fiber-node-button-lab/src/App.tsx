@@ -123,7 +123,9 @@ const styles = {
   } satisfies CSSProperties,
 
   modeButton: {
-    border: '1px solid #cfd8ea',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#cfd8ea',
     borderRadius: '999px',
     padding: '6px 12px',
     fontSize: '0.82rem',
