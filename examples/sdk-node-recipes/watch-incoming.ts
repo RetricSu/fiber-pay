@@ -12,7 +12,7 @@
  * Prerequisites:
  * - Running Fiber node with at least one open channel
  *
- * Run: npx tsx apps/node-examples/watch-incoming.ts
+ * Run: npx tsx examples/sdk-node-recipes/watch-incoming.ts
  */
 
 import { ckbToShannons, FiberRpcClient, randomBytes32, shannonsToCkb, toHex } from '@fiber-pay/sdk';

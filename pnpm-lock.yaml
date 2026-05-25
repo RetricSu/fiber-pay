@@ -33,23 +33,27 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@25.1.0)(jsdom@26.1.0)(tsx@4.21.0)(yaml@2.8.2)
 
-  apps/browser-wallet:
+  e2e/wasm-smoke:
     dependencies:
-      '@fiber-pay/react':
-        specifier: workspace:*
-        version: link:../../packages/react
+      '@nervosnetwork/fiber-js':
+        specifier: 0.7.1
+        version: 0.7.1
+    devDependencies:
+      playwright:
+        specifier: ^1.55.0
+        version: 1.59.1
+      vite:
+        specifier: ^6.3.5
+        version: 6.4.1(@types/node@25.1.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  examples/browser-sdk-playground:
+    dependencies:
       '@fiber-pay/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
       '@nervosnetwork/fiber-js':
         specifier: ~0.8.1
         version: 0.8.1
-      lucide-react:
-        specifier: ^0.364.0
-        version: 0.364.0(react@19.2.4)
-      qrcode:
-        specifier: ^1.5.4
-        version: 1.5.4
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -63,9 +67,6 @@ importers:
       '@types/node':
         specifier: ^24.12.0
         version: 24.12.0
-      '@types/qrcode':
-        specifier: ^1.5.6
-        version: 1.5.6
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.14
@@ -97,23 +98,7 @@ importers:
         specifier: ^6.0.0
         version: 6.4.1(@types/node@24.12.0)(tsx@4.21.0)(yaml@2.8.2)
 
-  apps/node-examples:
-    dependencies:
-      '@fiber-pay/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
-    devDependencies:
-      '@types/node':
-        specifier: ^25.1.0
-        version: 25.1.0
-      tsx:
-        specifier: ^4.19.0
-        version: 4.21.0
-      typescript:
-        specifier: ~5.9.3
-        version: 5.9.3
-
-  apps/react-quick-card:
+  examples/react-fiber-node-button-lab:
     dependencies:
       '@ckb-ccc/connector-react':
         specifier: ^1.0.34
@@ -171,18 +156,70 @@ importers:
         specifier: ^6.0.0
         version: 6.4.1(@types/node@25.1.0)(tsx@4.21.0)(yaml@2.8.2)
 
-  e2e/wasm-smoke:
+  examples/react-min-connect:
     dependencies:
+      '@fiber-pay/react':
+        specifier: workspace:*
+        version: link:../../packages/react
       '@nervosnetwork/fiber-js':
-        specifier: 0.7.1
-        version: 0.7.1
+        specifier: ~0.8.1
+        version: 0.8.1
+      react:
+        specifier: ^19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.2.4(react@19.2.4)
     devDependencies:
-      playwright:
-        specifier: ^1.55.0
-        version: 1.59.1
+      '@eslint/js':
+        specifier: ^9.39.4
+        version: 9.39.4
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      '@vitejs/plugin-react':
+        specifier: ^4.7.0
+        version: 4.7.0(vite@6.4.1(@types/node@25.1.0)(tsx@4.21.0)(yaml@2.8.2))
+      eslint:
+        specifier: ^9.39.4
+        version: 9.39.4
+      eslint-plugin-react-hooks:
+        specifier: ^7.0.1
+        version: 7.0.1(eslint@9.39.4)
+      eslint-plugin-react-refresh:
+        specifier: ^0.5.2
+        version: 0.5.2(eslint@9.39.4)
+      globals:
+        specifier: ^17.4.0
+        version: 17.4.0
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.57.0
+        version: 8.58.0(eslint@9.39.4)(typescript@5.9.3)
       vite:
-        specifier: ^6.3.5
+        specifier: ^6.0.0
         version: 6.4.1(@types/node@25.1.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  examples/sdk-node-recipes:
+    dependencies:
+      '@fiber-pay/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+    devDependencies:
+      '@types/node':
+        specifier: ^25.1.0
+        version: 25.1.0
+      tsx:
+        specifier: ^4.19.0
+        version: 4.21.0
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
 
   packages/agent:
     dependencies:
@@ -2353,11 +2390,6 @@ packages:
 
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
-
-  lucide-react@0.364.0:
-    resolution: {integrity: sha512-eHfdbJExWtTaZ0tBMGtI7PA/MbqV5wt+o4/yitDce17tadH/75Gq3Tq8jSteb3LhLr0eay/j5YUuN4yXjnI3aw==}
-    peerDependencies:
-      react: ^16.5.1 || ^17.0.0 || ^18.0.0
 
   lz-string@1.5.0:
     resolution: {integrity: sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==}
@@ -5606,10 +5638,6 @@ snapshots:
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
-
-  lucide-react@0.364.0(react@19.2.4):
-    dependencies:
-      react: 19.2.4
 
   lz-string@1.5.0: {}
 

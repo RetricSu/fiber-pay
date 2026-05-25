@@ -22,7 +22,7 @@ function crossOriginIsolation(): Plugin {
 export default defineConfig({
   plugins: [react(), crossOriginIsolation()],
   server: {
-    port: 5173,
+    port: 5176,
   },
   resolve: {
     // Allows referencing standard react imports normally

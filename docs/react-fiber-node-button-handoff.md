@@ -37,7 +37,7 @@ React package:
 - pnpm --filter @fiber-pay/react build
 
 Dogfood app:
-- cd apps/react-quick-card
+- cd examples/react-fiber-node-button-lab
 - pnpm lint
 - pnpm build
 
@@ -48,7 +48,7 @@ Repository checks (pre-commit and manual):
 ## Handoff Notes For Reviewers
 
 Primary dogfood surface:
-- apps/react-quick-card/src/App.tsx
+- examples/react-fiber-node-button-lab/src/App.tsx
 
 SDK source of truth:
 - packages/react/src/fiber-node-button.tsx

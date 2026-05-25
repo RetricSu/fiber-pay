@@ -12,7 +12,7 @@
  * - Running Fiber node with on-chain CKB for funding
  * - A reachable peer to connect to
  *
- * Run: PEER_ADDR="/ip4/x.x.x.x/tcp/8228/p2p/QmXXX" npx tsx apps/node-examples/channel-lifecycle.ts
+ * Run: PEER_ADDR="/ip4/x.x.x.x/tcp/8228/p2p/QmXXX" npx tsx examples/sdk-node-recipes/channel-lifecycle.ts
  */
 
 import { ckbToShannons, ensureHexPrefix, FiberRpcClient, shannonsToCkb } from '@fiber-pay/sdk';

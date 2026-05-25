@@ -13,7 +13,7 @@
  * Prerequisites:
  * - Two connected Fiber nodes with a funded channel between them
  *
- * Run: npx tsx apps/node-examples/hold-invoice.ts
+ * Run: npx tsx examples/sdk-node-recipes/hold-invoice.ts
  */
 
 import { createHash, randomBytes } from 'node:crypto';
