@@ -49,6 +49,15 @@ For external frontend/app projects that call `agent serve` directly:
 
 - [docs/agent-serve-frontend-integration.md](docs/agent-serve-frontend-integration.md)
 
+## SDK demo coverage matrix
+
+The canonical demos are now organized by integration layer under `examples/`:
+
+1. React integration layer (minimal): [examples/react-min-connect](examples/react-min-connect)
+2. React component layer (FiberNodeButton): [examples/react-fiber-node-button-lab](examples/react-fiber-node-button-lab)
+3. Browser SDK layer (`@fiber-pay/sdk/browser`): [examples/browser-sdk-playground](examples/browser-sdk-playground)
+4. Universal SDK layer (`@fiber-pay/sdk` Node recipes): [examples/sdk-node-recipes](examples/sdk-node-recipes)
+
 ## Development
 
 Please read `docs/develop.md` for details.

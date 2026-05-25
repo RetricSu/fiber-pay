@@ -1,0 +1,21 @@
+{
+  "name": "example-sdk-node-recipes",
+  "private": true,
+  "version": "0.0.3",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "basic-payment": "tsx basic-payment.ts",
+    "hold-invoice": "tsx hold-invoice.ts",
+    "channel-lifecycle": "tsx channel-lifecycle.ts",
+    "watch-incoming": "tsx watch-incoming.ts"
+  },
+  "dependencies": {
+    "@fiber-pay/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "tsx": "^4.19.0",
+    "typescript": "~5.9.3"
+  }
+}

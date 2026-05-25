@@ -82,7 +82,7 @@
    - `packages/react/src/types/*`（如有）
    - `packages/react/src/index.ts`（如有新增类型导出）
 4. 示例与文档
-   - `apps/react-quick-card/src/*`
+   - `examples/react-fiber-node-button-lab/src/*`
    - `packages/react/README.md`
    - `packages/sdk/README.md`（补 external funding RPC 用法）
    - 根文档中相关片段
