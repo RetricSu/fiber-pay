@@ -52,6 +52,7 @@ export default function App() {
 
   const [isPasskeySupported, setIsPasskeySupported] = useState(false);
   const [passkeyUnavailableReason, setPasskeyUnavailableReason] = useState<string | null>(null);
+  const [startLoading, setStartLoading] = useState(false);
 
   const [rpcNodeInfoJson, setRpcNodeInfoJson] = useState('');
   const [rpcPeersJson, setRpcPeersJson] = useState('');
@@ -65,6 +66,7 @@ export default function App() {
   const [fundingLoading, setFundingLoading] = useState(false);
 
   const nodeRef = useRef<FiberBrowserNode | null>(null);
+  const startLockRef = useRef(false);
   const rpcClient = useMemo(() => new BrowserRpcClient({ url: rpcUrl }), [rpcUrl]);
 
   useEffect(() => {
@@ -122,39 +124,84 @@ export default function App() {
   );
 
   const startWithPassword = useCallback(async () => {
+    if (startLockRef.current || nodeRef.current) {
+      setNodeError('Node is already starting or running. Stop it before starting a new one.');
+      return;
+    }
+
+    let node: FiberBrowserNode | null = null;
+    startLockRef.current = true;
+    setStartLoading(true);
+
     try {
       setNodeError(null);
       const provider = new PasswordCredentialProvider(`example-browser-sdk-playground-${network}`);
-      const node = buildNode(provider);
+      node = buildNode(provider);
       const info = await node.start({ unlockParams: { password } });
       setNodeInfo(info);
     } catch (error) {
+      if (nodeRef.current === node) {
+        nodeRef.current = null;
+      }
       setNodeError(error instanceof Error ? error.message : String(error));
+    } finally {
+      startLockRef.current = false;
+      setStartLoading(false);
     }
   }, [buildNode, network, password]);
 
   const startWithPasskey = useCallback(async () => {
+    if (startLockRef.current || nodeRef.current) {
+      setNodeError('Node is already starting or running. Stop it before starting a new one.');
+      return;
+    }
+
+    let node: FiberBrowserNode | null = null;
+    startLockRef.current = true;
+    setStartLoading(true);
+
     try {
       setNodeError(null);
       const provider = new PasskeyCredentialProvider(`example-browser-sdk-playground-${network}`);
-      const node = buildNode(provider);
+      node = buildNode(provider);
       const info = await node.start();
       setNodeInfo(info);
     } catch (error) {
+      if (nodeRef.current === node) {
+        nodeRef.current = null;
+      }
       setNodeError(error instanceof Error ? error.message : String(error));
+    } finally {
+      startLockRef.current = false;
+      setStartLoading(false);
     }
   }, [buildNode, network]);
 
   const registerPasskeyAndStart = useCallback(async () => {
+    if (startLockRef.current || nodeRef.current) {
+      setNodeError('Node is already starting or running. Stop it before starting a new one.');
+      return;
+    }
+
+    let node: FiberBrowserNode | null = null;
+    startLockRef.current = true;
+    setStartLoading(true);
+
     try {
       setNodeError(null);
       const provider = new PasskeyCredentialProvider(`example-browser-sdk-playground-${network}`);
       await provider.register('BrowserSdkPlaygroundUser');
-      const node = buildNode(provider);
+      node = buildNode(provider);
       const info = await node.start();
       setNodeInfo(info);
     } catch (error) {
+      if (nodeRef.current === node) {
+        nodeRef.current = null;
+      }
       setNodeError(error instanceof Error ? error.message : String(error));
+    } finally {
+      startLockRef.current = false;
+      setStartLoading(false);
     }
   }, [buildNode, network]);
 
@@ -163,9 +210,15 @@ export default function App() {
       return;
     }
 
+    const node = nodeRef.current;
+
     try {
-      await nodeRef.current.stop();
+      await node.stop();
+      if (nodeRef.current === node) {
+        nodeRef.current = null;
+      }
       setNodeInfo(null);
+      setNodeState('idle');
       setFundingAddress(null);
       setFundingBalanceCkb(null);
       setFundingError(null);
@@ -177,6 +230,9 @@ export default function App() {
   const loadRpcSnapshot = useCallback(async () => {
     setRpcLoading(true);
     setRpcError(null);
+    setRpcNodeInfoJson('');
+    setRpcPeersJson('');
+    setRpcChannelsJson('');
 
     try {
       const [rpcNodeInfo, peers, channels] = await Promise.all([
@@ -283,8 +339,13 @@ export default function App() {
 
           <div className="row">
             {connectMode === 'password' ? (
-              <button type="button" className="btn primary" onClick={() => void startWithPassword()}>
-                Start with Password
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => void startWithPassword()}
+                disabled={startLoading || nodeState !== 'idle'}
+              >
+                {startLoading ? 'Starting...' : 'Start with Password'}
               </button>
             ) : (
               <>
@@ -292,21 +353,21 @@ export default function App() {
                   type="button"
                   className="btn primary"
                   onClick={() => void startWithPasskey()}
-                  disabled={!isPasskeySupported}
+                  disabled={!isPasskeySupported || startLoading || nodeState !== 'idle'}
                 >
-                  Start with Passkey
+                  {startLoading ? 'Starting...' : 'Start with Passkey'}
                 </button>
                 <button
                   type="button"
                   className="btn"
                   onClick={() => void registerPasskeyAndStart()}
-                  disabled={!isPasskeySupported}
+                  disabled={!isPasskeySupported || startLoading || nodeState !== 'idle'}
                 >
-                  Register Passkey and Start
+                  {startLoading ? 'Starting...' : 'Register Passkey and Start'}
                 </button>
               </>
             )}
-            <button type="button" className="btn" onClick={() => void stopNode()}>
+            <button type="button" className="btn" onClick={() => void stopNode()} disabled={startLoading || nodeState === 'idle'}>
               Stop Node
             </button>
           </div>

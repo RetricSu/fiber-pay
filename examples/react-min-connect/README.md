@@ -10,7 +10,7 @@ You will learn:
 
 1. Initialize useFiberNode with network and walletId.
 2. Switch ConnectButton strategy between password and passkey.
-3. Receive onConnect/onDisconnect/onError/onLog callbacks.
+3. Receive onConnect/onDisconnect/onError callbacks.
 4. Render minimal runtime state (state, running, pubkey).
 
 Out of scope:

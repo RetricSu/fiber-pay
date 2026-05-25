@@ -1,4 +1,4 @@
-# react-quick-card
+# react-min-connect
 
 ## 0.0.3
 

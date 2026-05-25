@@ -36,10 +36,10 @@ React package:
 - pnpm --filter @fiber-pay/react typecheck
 - pnpm --filter @fiber-pay/react build
 
-Dogfood app:
-- cd examples/react-fiber-node-button-lab
-- pnpm lint
-- pnpm build
+- Dogfood app:
+  - cd examples/react-fiber-node-button-lab
+  - pnpm lint
+  - pnpm build
 
 Repository checks (pre-commit and manual):
 - pnpm format:check
