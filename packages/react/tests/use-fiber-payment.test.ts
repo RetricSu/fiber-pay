@@ -16,6 +16,16 @@ function createNodeMock(overrides: Partial<FiberBrowserNode> = {}): FiberBrowser
   } as unknown as FiberBrowserNode;
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('useFiberPayment', () => {
   it('supports staged parse/send/wait APIs', async () => {
     const node = createNodeMock();
@@ -77,6 +87,57 @@ describe('useFiberPayment', () => {
     expect(node.waitForPayment).toHaveBeenCalledWith('0xabc');
     expect(result.current.paymentResult?.status).toBe('Succeeded');
     expect(result.current.error).toBeNull();
+  });
+
+  it('clears stale paymentResult when staged sendPayment starts', async () => {
+    const node = createNodeMock();
+    const { result } = renderHook(() => useFiberPayment(node));
+
+    await act(async () => {
+      await result.current.waitForPayment('0xabc');
+    });
+    expect(result.current.paymentResult?.status).toBe('Succeeded');
+
+    await act(async () => {
+      await result.current.sendPayment('ln-next');
+    });
+
+    expect(result.current.paymentResult).toBeNull();
+  });
+
+  it('clears stale paymentResult while staged waitForPayment is pending', async () => {
+    const deferred = createDeferred<{ status: 'Succeeded' }>();
+    const waitForPaymentMock = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'Succeeded' })
+      .mockImplementationOnce(() => deferred.promise);
+
+    const node = createNodeMock({
+      waitForPayment: waitForPaymentMock,
+    });
+    const { result } = renderHook(() => useFiberPayment(node));
+
+    await act(async () => {
+      await result.current.waitForPayment('0xfirst');
+    });
+    expect(result.current.paymentResult?.status).toBe('Succeeded');
+
+    let pendingWait: Promise<unknown> | undefined;
+    await act(async () => {
+      pendingWait = result.current.waitForPayment('0xsecond');
+      await Promise.resolve();
+    });
+
+    expect(result.current.paymentResult).toBeNull();
+    expect(result.current.isPaying).toBe(true);
+
+    await act(async () => {
+      deferred.resolve({ status: 'Succeeded' });
+      await pendingWait;
+    });
+
+    expect(result.current.paymentResult?.status).toBe('Succeeded');
+    expect(result.current.isPaying).toBe(false);
   });
 
   it('captures failed payment message from payInvoice', async () => {

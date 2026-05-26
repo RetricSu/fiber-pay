@@ -92,6 +92,7 @@ export function useFiberPayment(node: FiberBrowserNode | null): UseFiberPaymentR
       if (isMountedRef.current) {
         setIsPaying(true);
         setError(null);
+        setPaymentResult(null);
       }
 
       try {
@@ -115,6 +116,7 @@ export function useFiberPayment(node: FiberBrowserNode | null): UseFiberPaymentR
       if (isMountedRef.current) {
         setIsPaying(true);
         setError(null);
+        setPaymentResult(null);
       }
 
       try {

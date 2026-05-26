@@ -47,6 +47,9 @@ export default defineConfig({
 });
 ```
 
+Note: `configureServer` only applies to Vite dev server. For production builds,
+set these headers on your web server or CDN (for example Nginx, Cloudflare, Vercel).
+
 ## Bundle Size Notes
 
 Browser Fiber WASM artifacts are large by nature. In the current examples, a production build includes

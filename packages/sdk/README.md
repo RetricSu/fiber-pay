@@ -58,6 +58,9 @@ For multithreaded WASM runtime support (`SharedArrayBuffer`), serve the app with
 
 Without these headers, browser node startup can fail at runtime.
 
+In production deployments, configure these headers at your hosting layer (for example
+Nginx, Cloudflare, or Vercel), not only in local dev tooling.
+
 ### Bundle Size Expectations
 
 The Fiber browser runtime is intentionally heavy. Expect a large WASM-related chunk in production builds

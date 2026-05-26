@@ -64,6 +64,9 @@ function crossOriginIsolation(): Plugin {
 }
 ```
 
+Note: this `configureServer` middleware only affects local Vite dev server.
+In production, configure COOP/COEP headers on your web server or CDN.
+
 ## 2) Smallest Passkey Startup (No UI)
 
 ```ts
