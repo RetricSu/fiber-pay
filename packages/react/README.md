@@ -78,6 +78,8 @@ export function App() {
 }
 ```
 
+For a complete browser passkey + payment walkthrough, see [docs/wasm-passkey-payment-component-quickstart.md](./docs/wasm-passkey-payment-component-quickstart.md).
+
 ## Component customization
 
 `FiberPayQuickCard` supports lightweight integration hooks:

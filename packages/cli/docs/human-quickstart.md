@@ -29,7 +29,7 @@ fiber-pay node ready --json
 fiber-pay runtime status --json
 ```
 
-> **Note**: For configuring the keystore password, please refer to the [Password Management Guide](../skills/fiber-pay/references/password-management.md).
+> **Note**: For configuring the keystore password, please refer to the [Password Management Guide](../../../skills/fiber-pay/references/password-management.md).
 
 This initializes binary/config/key/runtime automatically for first-time local bootstrap.
 
@@ -37,8 +37,8 @@ This quickstart assumes the default profile-managed binary path. If you set `--b
 
 See details:
 
-- [Profile & Multi-Node Guide](../skills/fiber-pay/references/profile.md)
-- [Upgrade & Migration](../skills/fiber-pay/references/upgrade.md)
+- [Profile & Multi-Node Guide](../../../skills/fiber-pay/references/profile.md)
+- [Upgrade & Migration](../../../skills/fiber-pay/references/upgrade.md)
 
 ## 3) Connect peer and open a channel
 
@@ -81,6 +81,6 @@ fiber-pay logs --source all --tail 120
 
 For deeper operator docs, see:
 
-- `skills/fiber-pay/references/install.md`
-- `skills/fiber-pay/references/core-operation.md`
-- `skills/fiber-pay/references/profile.md`
+- [install.md](../../../skills/fiber-pay/references/install.md)
+- [core-operation.md](../../../skills/fiber-pay/references/core-operation.md)
+- [profile.md](../../../skills/fiber-pay/references/profile.md)

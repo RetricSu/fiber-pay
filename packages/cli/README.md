@@ -18,7 +18,7 @@ fiber-pay agent serve --agent codex --price 0.1
 fiber-pay agent call http://host:8402 --prompt "your question"
 ```
 
-See [docs/l402-agent-guide.md](../../docs/l402-agent-guide.md) for L402 and agent details.
+See [docs/l402-agent-guide.md](./docs/l402-agent-guide.md) for L402 and agent details.
 
 ## Compatibility
 

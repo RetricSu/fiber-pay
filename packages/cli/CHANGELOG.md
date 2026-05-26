@@ -42,7 +42,7 @@
   - Whitelist only safe environment variables (agent API keys) and block `FIBER_*`, `L402_*`, and `CKB_*` secrets
   - Fail fast with `process.exit(1)` if BoxLite is unreachable or the box is missing (no silent fallback)
   - Support BoxLite 0.8.2 async `/exec` API (execution_id → polling `/executions/{id}/output` with SSE base64 stream parsing)
-  - Add BoxLite setup documentation (now consolidated under `docs/agent-serve-backend-setup.md`)
+  - Add BoxLite setup documentation (now consolidated under `packages/cli/docs/agent-serve-backend-setup.md`)
 
 - 0927945: Filter non-actionable `acpx` reconnect stderr noise in `agent serve` SSE handling to reduce misleading log output while preserving actionable errors.
 - bad399e: fix: persist target fiber version in profile to prevent auto-downgrade during node start
