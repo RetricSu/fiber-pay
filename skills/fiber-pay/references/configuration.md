@@ -55,4 +55,4 @@ The reference file includes useful operational notes:
 
 Use `skills/fiber-pay/references/fnn.reference.yml` when exploring advanced keys that are not yet exposed as first-class CLI flags.
 
-For RPC Biscuit authentication setup and token usage, see `skills/fiber-pay/references/auth.md`.
+For RPC Biscuit authentication setup and token usage, see [auth.md](auth.md).

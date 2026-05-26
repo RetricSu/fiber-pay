@@ -2,7 +2,7 @@
 
 - Structured reference for `config.yml` used by the Fiber Network Node (`fnn`). 
 - All values are set via `fiber-pay config set <path> <value>`.
-- Full commented fnn config.yml artifact: [references/fnn.reference.yml](references/fnn.reference.yml)
+- Full commented fnn config.yml artifact: [fnn.reference.yml](fnn.reference.yml)
 
 ## Top-level
 
@@ -148,8 +148,10 @@ Requires `cch` in `services`.
 
 ## Config priority
 
-1. CLI flags (`--fiber-listening-addr ...`)
-2. Environment variables (`FIBER_LISTENING_ADDR=...`)
+For `fnn` runtime resolution (not fiber-pay CLI global flags), effective value priority is:
+
+1. `fnn` CLI flags (for example `--fiber-listening-addr ...`)
+2. Environment variables (for example `FIBER_LISTENING_ADDR=...`)
 3. `config.yml` (lowest priority)
 
 ## CLI config operations

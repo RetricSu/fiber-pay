@@ -23,7 +23,7 @@ rpc:
   biscuit_public_key: "ed25519/<public-key>"
 ```
 
-Related config key reference: see `references/config.md` (`rpc.biscuit_public_key`).
+Related config key reference: see [config.md](config.md) (`rpc.biscuit_public_key`).
 
 ## 2) CLI usage
 

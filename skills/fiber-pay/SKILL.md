@@ -7,7 +7,7 @@ description: Operate CKB Lightning payments through fiber-pay CLI. Use when task
 
 fiber-pay is an AI payment layer over Fiber Network for CKB Lightning. It provides an AI-friendly CLI to manage node lifecycle, channels, invoices, payments, and more.
 
-- Last updated: 2026-02-19
+- Last updated: 2026-05-26
 - Fiber node target: v0.8.0
 - Fiber RPC reference: https://github.com/nervosnetwork/fiber/blob/v0.8.0/crates/fiber-lib/src/rpc/README.md
 
@@ -76,4 +76,4 @@ Read [references/rebalance.md](references/rebalance.md) for channel liquidity re
 - **Runtime API**: Read [references/runtime-api.md](references/runtime-api.md) for `/jobs/*` and `/monitor/*` endpoints and state model.
 - **Password Management**: Read [references/password-management.md](references/password-management.md) for CLI keystore encryption, security best practices, and the novel WebAuthn Passkey integration for browser environments.
 - **Browser WASM Integration**: Read [references/wasm-browser.md](references/wasm-browser.md) for building browser-based native Fiber nodes using SDK, Vite COOP/COEP isolation, and WebAuthn credential pipelines.
-- **L402 & Agent Service**: Read [references/l402-agent.md](references/l402-agent.md) for L402 payment-gated APIs, `l402 proxy`, `agent serve`, and `agent call` commands. Covers per-session Linux namespace isolation (PID + mount + user namespaces via `unshare`), BoxLite Alpine setup (`scripts/boxlite-setup.sh`), session workspace layout, and the `--no-isolation` debug flag.
+- **L402 & Agent Service**: Read [references/l402-agent.md](references/l402-agent.md) for L402 payment-gated APIs, `l402 proxy`, `agent serve`, and `agent call` commands. Covers per-session Linux namespace isolation (PID + mount + user namespaces via `unshare`), BoxLite Alpine setup (`scripts/boxlite-setup.sh`), and session workspace layout. Isolation is mandatory and no bypass debug flag is supported.
