@@ -6,7 +6,61 @@ React hooks and components for browser payment flows on Fiber.
 
 ```bash
 pnpm add @fiber-pay/react @nervosnetwork/fiber-js react
+# optional, for QR codes in NodeInfoPanel
+pnpm add qrcode.react
 ```
+
+`@nervosnetwork/fiber-js` is a peer dependency used by the browser WASM runtime.
+If you provide a custom `wasmFactory`, you can manage that dependency yourself.
+
+## Browser Requirements (WASM + Passkey)
+
+For multithreaded WASM runtime (`SharedArrayBuffer`) in modern browsers, serve your app with:
+
+- `Cross-Origin-Opener-Policy: same-origin`
+- `Cross-Origin-Embedder-Policy: require-corp`
+
+Without these headers, Fiber WASM startup may fail with browser/runtime errors.
+
+Vite example:
+
+```ts
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { defineConfig, type Plugin } from 'vite';
+import react from '@vitejs/plugin-react';
+
+function crossOriginIsolation(): Plugin {
+  return {
+    name: 'cross-origin-isolation',
+    configureServer(server) {
+      server.middlewares.use((_req: IncomingMessage, res: ServerResponse, next: () => void) => {
+        res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+        res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+        next();
+      });
+    },
+  };
+}
+
+export default defineConfig({
+  plugins: [react(), crossOriginIsolation()],
+});
+```
+
+Note: `configureServer` only applies to Vite dev server. For production builds,
+set these headers on your web server or CDN (for example Nginx, Cloudflare, Vercel).
+
+## Bundle Size Notes
+
+Browser Fiber WASM artifacts are large by nature. In the current examples, a production build includes
+an additional ~14 MB JS chunk (~6.5 MB gzip) for WASM/runtime assets.
+
+Recommended integration strategy:
+
+- Lazy-mount payment-heavy UI (for example route-level split).
+- Keep WASM-dependent flows behind user intent (open panel, start node, pay flow).
+- Accept a separate large chunk for WASM and tune warnings with `build.chunkSizeWarningLimit` when needed.
+- Document expected bundle budgets in your downstream app so this chunk is intentional, not surprising.
 
 ## One-line import
 
@@ -194,3 +248,48 @@ For custom connected-state panels (for example peer/channel controls), use `rend
 - `useFiberPayment(node)`
 
 `useFiberNode` exposes passkey/password startup, node lifecycle methods, and passkey diagnostics (`passkeySupportReason`, `passkeyUnavailableReason`).
+
+`useFiberPayment` supports both convenience and staged flows:
+
+- `payInvoice(invoice)` (parse + send + wait in one call)
+- `parseInvoice(invoice)`
+- `sendPayment(invoice)`
+- `waitForPayment(paymentHash)`
+
+Staged flow example:
+
+```tsx
+const { parseInvoice, sendPayment, waitForPayment, error } = useFiberPayment(node);
+
+const confirmAndPay = async (invoice: string) => {
+  const parsed = await parseInvoice(invoice);
+  // Render your own confirmation UI before actually sending
+  console.log('Will pay hash:', parsed.invoice.data.payment_hash);
+
+  await sendPayment(invoice);
+  const result = await waitForPayment(parsed.invoice.data.payment_hash);
+  console.log('Payment status:', result.status);
+};
+```
+
+## Error Recovery Pattern
+
+If `useFiberNode` startup fails, `state` may enter `error` and `error` will contain the raw failure message.
+You can retry with the same hook instance (no unmount/remount required):
+
+```tsx
+const { state, error, startWithPasskey, startWithPassword } = useFiberNode({
+  network: 'testnet',
+  walletId: 'demo-wallet',
+});
+
+const retry = async () => {
+  if (state === 'error') {
+    await startWithPasskey();
+    // or: await startWithPassword('your-password');
+  }
+};
+```
+
+For production UIs, map `error` to actionable guidance (for example: COOP/COEP missing, invalid password,
+passkey canceled, secure-context requirement).

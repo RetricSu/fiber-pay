@@ -30,6 +30,12 @@ console.log(info.pubkey);
 
 ## Browser Usage
 
+Browser integrations also need the Fiber WASM runtime peer dependency:
+
+```bash
+pnpm add @fiber-pay/sdk @nervosnetwork/fiber-js
+```
+
 Use the browser subpath in frontend apps to avoid pulling Node-only modules:
 
 ```ts
@@ -42,6 +48,24 @@ const client = new BrowserRpcClient({
 const info = await client.nodeInfo();
 console.log(info.pubkey);
 ```
+
+### Browser Runtime Requirements
+
+For multithreaded WASM runtime support (`SharedArrayBuffer`), serve the app with:
+
+- `Cross-Origin-Opener-Policy: same-origin`
+- `Cross-Origin-Embedder-Policy: require-corp`
+
+Without these headers, browser node startup can fail at runtime.
+
+In production deployments, configure these headers at your hosting layer (for example
+Nginx, Cloudflare, or Vercel), not only in local dev tooling.
+
+### Bundle Size Expectations
+
+The Fiber browser runtime is intentionally heavy. Expect a large WASM-related chunk in production builds
+(roughly ~14 MB raw and ~6.5 MB gzip in current examples). Prefer route-level code splitting and lazy
+mounting so the chunk loads only when payment/node features are needed.
 
 `@fiber-pay/sdk/browser` also exports `FiberRpcClient` for migration compatibility.
 

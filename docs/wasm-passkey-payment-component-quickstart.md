@@ -24,7 +24,9 @@ import { FiberPayQuickCard } from '@fiber-pay/react';
 ## 1) Install
 
 ```bash
-pnpm add @fiber-pay/react react
+pnpm add @fiber-pay/react react @nervosnetwork/fiber-js
+# optional, for QR codes in NodeInfoPanel
+pnpm add qrcode.react
 ```
 
 If you prefer lower-level control without React abstractions:
@@ -32,6 +34,38 @@ If you prefer lower-level control without React abstractions:
 ```bash
 pnpm add @fiber-pay/sdk @nervosnetwork/fiber-js
 ```
+
+## Browser Requirements (Must Read)
+
+For browser multithreaded WASM runtime (`SharedArrayBuffer`), your app must serve:
+
+- `Cross-Origin-Opener-Policy: same-origin`
+- `Cross-Origin-Embedder-Policy: require-corp`
+
+Without these headers, `FiberBrowserNode.start()` can fail at runtime.
+
+Vite example plugin:
+
+```ts
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { type Plugin } from 'vite';
+
+function crossOriginIsolation(): Plugin {
+  return {
+    name: 'cross-origin-isolation',
+    configureServer(server) {
+      server.middlewares.use((_req: IncomingMessage, res: ServerResponse, next: () => void) => {
+        res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+        res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+        next();
+      });
+    },
+  };
+}
+```
+
+Note: this `configureServer` middleware only affects local Vite dev server.
+In production, configure COOP/COEP headers on your web server or CDN.
 
 ## 2) Smallest Passkey Startup (No UI)
 
@@ -296,6 +330,8 @@ Use this path when you want to ship a functional payment panel quickly, then pro
 - Treat browser XSS hardening as top priority (CSP, script hygiene, strict dependency review).
 - Avoid exposing privileged backend tokens in browser bundles.
 - For browser multithreaded WASM runtime, keep COOP/COEP settings correctly configured.
+- Expect a large WASM-related bundle chunk (roughly ~14 MB raw, ~6.5 MB gzip in current demos);
+  use route-level split/lazy mounting for payment-heavy UI.
 
 ## 8) Reference Paths
 
