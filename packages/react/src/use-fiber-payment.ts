@@ -1,7 +1,16 @@
-import type { FiberBrowserNode, GetPaymentResult } from '@fiber-pay/sdk/browser';
+import type {
+  FiberBrowserNode,
+  GetPaymentResult,
+  ParseInvoiceResult,
+  PaymentHash,
+  SendPaymentResult,
+} from '@fiber-pay/sdk/browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface UseFiberPaymentResult {
+  parseInvoice: (invoice: string) => Promise<ParseInvoiceResult>;
+  sendPayment: (invoice: string) => Promise<SendPaymentResult>;
+  waitForPayment: (paymentHash: PaymentHash) => Promise<GetPaymentResult>;
   payInvoice: (invoice: string) => Promise<void>;
   isPaying: boolean;
   paymentResult: GetPaymentResult | null;
@@ -28,15 +37,108 @@ export function useFiberPayment(node: FiberBrowserNode | null): UseFiberPaymentR
     [],
   );
 
-  const payInvoice = useCallback(
+  const ensureNode = useCallback(() => {
+    if (!node) {
+      throw new Error('Node is not initialized');
+    }
+
+    return node;
+  }, [node]);
+
+  const parseInvoiceInternal = useCallback(
     async (invoice: string) => {
-      if (!node) {
-        if (isMountedRef.current) {
-          setError('Node is not initialized');
-        }
-        return;
+      const activeNode = ensureNode();
+      return activeNode.parseInvoice({ invoice });
+    },
+    [ensureNode],
+  );
+
+  const sendPaymentInternal = useCallback(
+    async (invoice: string) => {
+      const activeNode = ensureNode();
+      return activeNode.sendPayment({ invoice });
+    },
+    [ensureNode],
+  );
+
+  const waitForPaymentInternal = useCallback(
+    async (paymentHash: PaymentHash) => {
+      const activeNode = ensureNode();
+      return activeNode.waitForPayment(paymentHash);
+    },
+    [ensureNode],
+  );
+
+  const parseInvoice = useCallback(
+    async (invoice: string) => {
+      if (isMountedRef.current) {
+        setError(null);
       }
 
+      try {
+        return await parseInvoiceInternal(invoice);
+      } catch (parseError) {
+        if (isMountedRef.current) {
+          setError(asErrorMessage(parseError));
+        }
+        throw parseError;
+      }
+    },
+    [parseInvoiceInternal],
+  );
+
+  const sendPayment = useCallback(
+    async (invoice: string) => {
+      if (isMountedRef.current) {
+        setIsPaying(true);
+        setError(null);
+      }
+
+      try {
+        return await sendPaymentInternal(invoice);
+      } catch (sendError) {
+        if (isMountedRef.current) {
+          setError(asErrorMessage(sendError));
+        }
+        throw sendError;
+      } finally {
+        if (isMountedRef.current) {
+          setIsPaying(false);
+        }
+      }
+    },
+    [sendPaymentInternal],
+  );
+
+  const waitForPayment = useCallback(
+    async (paymentHash: PaymentHash) => {
+      if (isMountedRef.current) {
+        setIsPaying(true);
+        setError(null);
+      }
+
+      try {
+        const result = await waitForPaymentInternal(paymentHash);
+        if (isMountedRef.current) {
+          setPaymentResult(result);
+        }
+        return result;
+      } catch (waitError) {
+        if (isMountedRef.current) {
+          setError(asErrorMessage(waitError));
+        }
+        throw waitError;
+      } finally {
+        if (isMountedRef.current) {
+          setIsPaying(false);
+        }
+      }
+    },
+    [waitForPaymentInternal],
+  );
+
+  const payInvoice = useCallback(
+    async (invoice: string) => {
       if (isMountedRef.current) {
         setIsPaying(true);
         setError(null);
@@ -44,11 +146,11 @@ export function useFiberPayment(node: FiberBrowserNode | null): UseFiberPaymentR
       }
 
       try {
-        const parsed = await node.parseInvoice({ invoice });
-        await node.sendPayment({ invoice });
+        const parsed = await parseInvoiceInternal(invoice);
+        await sendPaymentInternal(invoice);
 
         const paymentHash = parsed.invoice.data.payment_hash;
-        const result = await node.waitForPayment(paymentHash);
+        const result = await waitForPaymentInternal(paymentHash);
 
         if (result.status === 'Failed') {
           throw new Error(result.failed_error ?? 'Payment failed during routing/execution');
@@ -67,10 +169,13 @@ export function useFiberPayment(node: FiberBrowserNode | null): UseFiberPaymentR
         }
       }
     },
-    [node],
+    [parseInvoiceInternal, sendPaymentInternal, waitForPaymentInternal],
   );
 
   return {
+    parseInvoice,
+    sendPayment,
+    waitForPayment,
     payInvoice,
     isPaying,
     paymentResult,
