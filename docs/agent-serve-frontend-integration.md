@@ -7,6 +7,7 @@ It focuses on:
 - session contract changes (`sessionId` + `sessionToken`)
 - migration steps from older clients
 - security requirements for bearer-style session tokens
+- SSE streaming request/response contract
 - practical request and error handling patterns
 
 For core CLI usage and L402 background, also read [l402-agent-guide.md](./l402-agent-guide.md).
@@ -97,9 +98,18 @@ Typical response:
 
 ### 3) SSE mode
 
-When using SSE, `done` and `error` events include `session` as well.
+Enable SSE with either:
 
-This lets streaming clients keep session state in sync.
+- request body field `stream: "sse"` (recommended)
+- or header `Accept: text/event-stream`
+
+SSE emits these event types:
+
+- `chunk`: incremental stdout payload
+- `done`: completion payload; includes `session`
+- `error`: failure payload; includes `session` when available
+
+Streaming clients should only treat `event: done` as end-of-response.
 
 ### 4) Workspace static file access
 
@@ -238,5 +248,4 @@ Update to the new contract before rolling out server versions with signed sessio
 ## Related docs
 
 - [l402-agent-guide.md](./l402-agent-guide.md)
-- [boxlite-agent-setup.md](./boxlite-agent-setup.md)
-- [agent-serve-sse-changelog.md](./agent-serve-sse-changelog.md)
+- [agent-serve-backend-setup.md](./agent-serve-backend-setup.md)

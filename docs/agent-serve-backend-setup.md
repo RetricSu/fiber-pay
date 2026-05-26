@@ -2,6 +2,8 @@
 
 This guide provides a comprehensive overview of how to set up the backend environment for running `fiber-pay agent serve`. Running AI agents securely requires specific sandbox configurations (via BoxLite), network isolation, and API proxying. This document details how these mechanisms work and how to configure them for different AI agents (like OpenCode, Claude, Codex, etc.).
 
+If you only need a from-scratch BoxLite bootstrap runbook (install CLI, create box, install acpx/opencode, smoke test), start with [boxlite-agent-setup.md](./boxlite-agent-setup.md) first.
+
 ## 0. Quick Deployment Checklist (From Scratch)
 
 Use this checklist when installing on a new server:
