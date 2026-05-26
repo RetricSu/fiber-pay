@@ -621,7 +621,9 @@ export function App() {
                       <div style={{ display: 'grid', gap: 6 }}>
                         <div style={{ fontSize: 12, color: '#475569' }}>
                           CCC wallet: <strong>{connectedExternalWallet?.name ?? 'Not connected'}</strong>
-                          {externalWalletAddress ? ` | address: ${shorten(externalWalletAddress, 20, 10)}` : ''}
+                          {connectedExternalWallet && externalWalletAddress
+                            ? ` | address: ${shorten(externalWalletAddress, 20, 10)}`
+                            : ''}
                         </div>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           <button
