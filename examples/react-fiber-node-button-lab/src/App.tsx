@@ -615,52 +615,56 @@ export function App() {
               tabs={customTabMode ? customTabs : undefined}
               t={customTabMode ? customI18n : undefined}
               renderAction={customTabMode ? customRenderAction : undefined}
-              renderConnectorSection={() => (
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <div style={{ fontSize: 12, color: '#475569' }}>
-                    CCC wallet: <strong>{connectedExternalWallet?.name ?? 'Not connected'}</strong>
-                    {externalWalletAddress ? ` | address: ${shorten(externalWalletAddress, 20, 10)}` : ''}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void openExternalWalletConnectModal();
-                      }}
-                      style={{
-                        border: '1px solid #1d4ed8',
-                        borderRadius: 8,
-                        padding: '6px 10px',
-                        background: '#2563eb',
-                        color: '#fff',
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                      }}
-                    >
-                      {connectedExternalWallet ? 'Switch External Wallet' : 'Connect External Wallet'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void disconnectExternalWallet();
-                      }}
-                      disabled={!connectedExternalWallet}
-                      style={{
-                        border: '1px solid #cbd5e1',
-                        borderRadius: 8,
-                        padding: '6px 10px',
-                        background: '#fff',
-                        color: '#111827',
-                        cursor: connectedExternalWallet ? 'pointer' : 'not-allowed',
-                        opacity: connectedExternalWallet ? 1 : 0.65,
-                        fontWeight: 700,
-                      }}
-                    >
-                      Disconnect External Wallet
-                    </button>
-                  </div>
-                </div>
-              )}
+              renderConnectorSection={
+                externalWallet
+                  ? () => (
+                      <div style={{ display: 'grid', gap: 6 }}>
+                        <div style={{ fontSize: 12, color: '#475569' }}>
+                          CCC wallet: <strong>{connectedExternalWallet?.name ?? 'Not connected'}</strong>
+                          {externalWalletAddress ? ` | address: ${shorten(externalWalletAddress, 20, 10)}` : ''}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void openExternalWalletConnectModal();
+                            }}
+                            style={{
+                              border: '1px solid #1d4ed8',
+                              borderRadius: 8,
+                              padding: '6px 10px',
+                              background: '#2563eb',
+                              color: '#fff',
+                              cursor: 'pointer',
+                              fontWeight: 700,
+                            }}
+                          >
+                            {connectedExternalWallet ? 'Switch External Wallet' : 'Connect External Wallet'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void disconnectExternalWallet();
+                            }}
+                            disabled={!connectedExternalWallet}
+                            style={{
+                              border: '1px solid #cbd5e1',
+                              borderRadius: 8,
+                              padding: '6px 10px',
+                              background: '#fff',
+                              color: '#111827',
+                              cursor: connectedExternalWallet ? 'pointer' : 'not-allowed',
+                              opacity: connectedExternalWallet ? 1 : 0.65,
+                              fontWeight: 700,
+                            }}
+                          >
+                            Disconnect External Wallet
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  : undefined
+              }
             />
 
             <div style={styles.fundingCard}>
