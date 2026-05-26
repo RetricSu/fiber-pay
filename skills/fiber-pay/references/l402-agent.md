@@ -42,11 +42,15 @@ fiber-pay agent serve --agent opencode --price 0.1 --root-key <hex> --approve-al
 
 - Endpoint: `POST /` with `{"prompt": "..."}` for a new session, or
    `{"prompt": "...", "sessionId": "...", "sessionToken": "..."}` to resume.
-- Requires: `npm install -g acpx` and the target agent installed
+- Requires: a reachable BoxLite sandbox (`--boxlite-url`, `--boxlite-box-id`) with `acpx` and the target agent CLI installed in the Box.
 - Agents: any acpx-compatible — `codex`, `claude`, `opencode`, `gemini`, `pi`, etc.
 - Session mode: server issues `sessionId` + `sessionToken`; clients must send both to resume.
 
-Key flags: `--port`, `--cwd`, `--timeout`, `--approve-all`, `--format`.
+Common key flags: `--port`, `--host`, `--cwd`, `--timeout`, `--approve-all`, `--format`, `--boxlite-url`, `--boxlite-box-id`, `--proxy-port`, `--proxy-host-addr`.
+
+Security note:
+
+- `--no-proxy` is local debug only and guarded by `FIBER_PAY_ALLOW_INSECURE_NO_PROXY=1` plus loopback `--host`.
 
 ### Per-session Linux namespace isolation
 
