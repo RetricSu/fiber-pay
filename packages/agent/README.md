@@ -2,6 +2,10 @@
 
 AI-agent orchestration layer for Fiber Network (targeting Fiber `v0.8.0`).
 
+> Status: Experimental. This package is currently **not recommended** for production use.
+> It has not been fully validated by end-to-end tests yet, and implementation quality is still rough.
+> Prefer `@fiber-pay/cli` and `@fiber-pay/sdk` for stable integrations.
+
 This package provides:
 
 - `FiberPay`: high-level, agent-friendly API on top of `@fiber-pay/sdk` + `@fiber-pay/node`
@@ -143,3 +147,4 @@ See `src/mcp-tools.ts` for complete tool names and JSON schemas.
 
 - No dedicated `@fiber-pay/agent` test suite yet
 - MCP runtime execution adapter is not bundled in this package
+- API behavior may still change while the package is being hardened

@@ -14,6 +14,9 @@ Fiber target: `v0.8.0`
 - `@fiber-pay/runtime`: orchestration runtime for jobs, monitoring, retries, and proxy-facing automation loops
 - `@fiber-pay/node`: easy handling for the local `fnn` binary lifecycle
 
+Package maturity note:
+`@fiber-pay/agent` is currently experimental and not recommended for production use yet (limited validation coverage and ongoing hardening).
+
 ## Why this repo is AI-friendly
 
 - Canonical skill guide for agents: `skills/fiber-pay/SKILL.md`
