@@ -22,10 +22,10 @@ Package maturity note:
 2. Build backend/services with SDK: [packages/sdk/README.md](packages/sdk/README.md)
 3. Build browser passkey payment UI (React): [packages/react/docs/wasm-passkey-payment-component-quickstart.md](packages/react/docs/wasm-passkey-payment-component-quickstart.md)
 4. Expose paid AI endpoints (`agent serve`):
-   [packages/cli/docs/l402-agent-guide.md](packages/cli/docs/l402-agent-guide.md),
-   [packages/cli/docs/agent-serve-frontend-integration.md](packages/cli/docs/agent-serve-frontend-integration.md),
-   [packages/cli/docs/agent-serve-backend-setup.md](packages/cli/docs/agent-serve-backend-setup.md),
-   [packages/cli/docs/boxlite-agent-setup.md](packages/cli/docs/boxlite-agent-setup.md)
+   - [packages/cli/docs/l402-agent-guide.md](packages/cli/docs/l402-agent-guide.md)
+   - [packages/cli/docs/agent-serve-frontend-integration.md](packages/cli/docs/agent-serve-frontend-integration.md)
+   - [packages/cli/docs/agent-serve-backend-setup.md](packages/cli/docs/agent-serve-backend-setup.md)
+   - [packages/cli/docs/boxlite-agent-setup.md](packages/cli/docs/boxlite-agent-setup.md)
 
 ## Package Map
 
