@@ -12,7 +12,7 @@ for migration and security guidance.
 ## Prerequisites
 
 - A running Fiber node (`fiber-pay node start`)
-- For agent commands: [acpx](https://github.com/openclaw/acpx) installed globally (`npm install -g acpx`)
+- For `agent serve`: complete [boxlite-agent-setup.md](./boxlite-agent-setup.md) first, then review [agent-serve-backend-setup.md](./agent-serve-backend-setup.md) for proxy and isolation hardening.
 
 ## L402 SDK Module
 
@@ -85,7 +85,7 @@ Options: `--port`, `--host`, `--expiry`, `--json`. Run `fiber-pay l402 proxy -h`
 
 ### agent serve
 
-Expose a local AI agent (via [acpx](https://github.com/openclaw/acpx)) as a paid HTTP service:
+Expose a local AI agent (via an [acpx-compatible agent](https://github.com/openclaw/acpx), typically inside BoxLite) as a paid HTTP service:
 
 ```bash
 fiber-pay agent serve \

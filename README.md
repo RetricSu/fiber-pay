@@ -4,18 +4,39 @@ AI-friendly toolchain for CKB Lightning on Fiber Network.
 
 Fiber target: `v0.8.0`
 
-## Positioning
+## Start Here: CLI + SDK
 
-`fiber-pay` is built to make Fiber programmable for both humans and AI agents:
+`fiber-pay` has two primary integration surfaces:
 
-- `@fiber-pay/sdk`: typed building blocks for Fiber RPC, verification, policy logic, and L402 protocol (now supports native WebAssembly execution in the Browser!)
-- `@fiber-pay/react`: one-line React hooks + starter payment component for browser WASM and passkey flows
-- `@fiber-pay/cli`: stable operator + automation interface with machine-readable output
-- `@fiber-pay/runtime`: orchestration runtime for jobs, monitoring, retries, and proxy-facing automation loops
-- `@fiber-pay/node`: easy handling for the local `fnn` binary lifecycle
+- `@fiber-pay/cli`: operations and automation for humans and agents (profiles, node/channel/payment lifecycle, runtime jobs, L402 proxy, `agent serve` / `agent call`)
+- `@fiber-pay/sdk`: application-facing typed APIs (universal + node + browser entrypoints)
+
+`@fiber-pay/react` is the higher-level React layer built on top of `@fiber-pay/sdk/browser`, intended for fast browser UI integration.
 
 Package maturity note:
 `@fiber-pay/agent` is currently experimental and not recommended for production use yet (limited validation coverage and ongoing hardening).
+
+## Quickstart by Goal
+
+1. Operate Fiber locally (manual workflow): [packages/cli/docs/human-quickstart.md](packages/cli/docs/human-quickstart.md)
+2. Build backend/services with SDK: [packages/sdk/README.md](packages/sdk/README.md)
+3. Build browser passkey payment UI (React): [packages/react/docs/wasm-passkey-payment-component-quickstart.md](packages/react/docs/wasm-passkey-payment-component-quickstart.md)
+4. Expose paid AI endpoints (`agent serve`):
+   - [packages/cli/docs/l402-agent-guide.md](packages/cli/docs/l402-agent-guide.md)
+   - [packages/cli/docs/agent-serve-frontend-integration.md](packages/cli/docs/agent-serve-frontend-integration.md)
+   - [packages/cli/docs/agent-serve-backend-setup.md](packages/cli/docs/agent-serve-backend-setup.md)
+   - [packages/cli/docs/boxlite-agent-setup.md](packages/cli/docs/boxlite-agent-setup.md)
+
+## Package Map
+
+| Package | Role |
+| --- | --- |
+| `@fiber-pay/cli` | Stable operator interface and automation-first command surface |
+| `@fiber-pay/sdk` | Typed protocol/client primitives for app integration |
+| `@fiber-pay/react` | React hooks/components for browser WASM + passkey payment flows |
+| `@fiber-pay/runtime` | Runtime orchestration (jobs, monitoring, retry loops) |
+| `@fiber-pay/node` | Local `fnn` binary lifecycle management |
+| `@fiber-pay/agent` | Experimental package, not recommended for production yet |
 
 ## Why this repo is AI-friendly
 
@@ -33,26 +54,6 @@ Use this prompt in Cursor/Claude/Copilot/other agents:
 ```text
 Follow this document https://raw.githubusercontent.com/RetricSu/fiber-pay/refs/heads/master/skills/fiber-pay/SKILL.md to equip yourself with a p2p payment system. If fiber-pay CLI is not available, install via npm first: npm install -g @fiber-pay/cli. Only clone/build this repository when explicitly asked to work on source code.
 ```
-
-## Human quickstart
-
-If you are operating `fiber-pay` manually (not through an AI agent), start here:
-
-- [docs/human-quickstart.md](docs/human-quickstart.md)
-
-## Browser WASM + Passkey quickstart
-
-Build a browser payment UI component quickly with SDK browser APIs:
-
-- [docs/wasm-passkey-payment-component-quickstart.md](docs/wasm-passkey-payment-component-quickstart.md)
-
-## Agent serve app integration
-
-For external frontend/app projects that call `agent serve` directly:
-
-- [docs/agent-serve-frontend-integration.md](docs/agent-serve-frontend-integration.md)
-- [docs/agent-serve-backend-setup.md](docs/agent-serve-backend-setup.md)
-- [docs/boxlite-agent-setup.md](docs/boxlite-agent-setup.md)
 
 ## SDK demo coverage matrix
 

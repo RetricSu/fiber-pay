@@ -77,7 +77,7 @@ import { FiberPayQuickCard, useFiberNode, useFiberPayment } from '@fiber-pay/rea
 
 For a frontend-first quickstart (WASM + Passkey + minimal React payment component), see:
 
-- [docs/wasm-passkey-payment-component-quickstart.md](../../docs/wasm-passkey-payment-component-quickstart.md)
+- [packages/react/docs/wasm-passkey-payment-component-quickstart.md](../react/docs/wasm-passkey-payment-component-quickstart.md)
 
 ## RPC Authentication (Biscuit)
 
@@ -124,7 +124,7 @@ L402 primitives include:
 - `MacaroonService` — mint and verify L402 tokens
 - `createL402Middleware()` — Express middleware for 402 challenge-response flow
 
-See [docs/l402-agent-guide.md](../../docs/l402-agent-guide.md) for usage.
+See [packages/cli/docs/l402-agent-guide.md](../cli/docs/l402-agent-guide.md) for usage.
 
 ## Compatibility
 
