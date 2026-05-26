@@ -49,6 +49,7 @@ For external frontend/app projects that call `agent serve` directly:
 
 - [docs/agent-serve-frontend-integration.md](docs/agent-serve-frontend-integration.md)
 - [docs/agent-serve-backend-setup.md](docs/agent-serve-backend-setup.md)
+- [docs/boxlite-agent-setup.md](docs/boxlite-agent-setup.md)
 
 ## SDK demo coverage matrix
 
