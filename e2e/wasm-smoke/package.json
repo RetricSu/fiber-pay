@@ -8,7 +8,7 @@
     "smoke:ci": "node ./ci-smoke.mjs"
   },
   "dependencies": {
-    "@nervosnetwork/fiber-js": "0.7.1"
+    "@nervosnetwork/fiber-js": "0.8.1"
   },
   "devDependencies": {
     "playwright": "^1.55.0",

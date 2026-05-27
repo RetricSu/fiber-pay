@@ -17,4 +17,4 @@ import { createFiberNodeManager } from '@fiber-pay/node';
 ## Compatibility
 
 - Node.js `>=20`
-- Fiber target: `v0.8.0`
+- Fiber target: `v0.8.1`

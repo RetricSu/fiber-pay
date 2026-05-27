@@ -36,8 +36,8 @@ importers:
   e2e/wasm-smoke:
     dependencies:
       '@nervosnetwork/fiber-js':
-        specifier: 0.7.1
-        version: 0.7.1
+        specifier: 0.8.1
+        version: 0.8.1
     devDependencies:
       playwright:
         specifier: ^1.55.0
@@ -1043,9 +1043,6 @@ packages:
 
   '@nervosnetwork/ckb-types@0.109.5':
     resolution: {integrity: sha512-5jQNjFw76YCd+Ppl+0RvBWzxwvWaKfWC5wjVFFdNAieX7xksCHfZFIeow8je7AF8uVypwe56WlLBlblxw9NBBQ==}
-
-  '@nervosnetwork/fiber-js@0.7.1':
-    resolution: {integrity: sha512-58LHLTirWUvqlWGj0F0xQJNjx60hIol0rHrPmC68L01I5muH5QQF14Tm5UQ3q9qX+yEvV1esWGowtlnLUh6U0A==}
 
   '@nervosnetwork/fiber-js@0.8.1':
     resolution: {integrity: sha512-T37qCsvrcVGeX1fjv6FrgwhfwiWPqvVmJfil5tirdYevvoZCcfigqrknMdl1lDar4l1HypDswD4szbD0b3Nz/w==}
@@ -4206,11 +4203,6 @@ snapshots:
       tslib: 2.3.1
 
   '@nervosnetwork/ckb-types@0.109.5': {}
-
-  '@nervosnetwork/fiber-js@0.7.1':
-    dependencies:
-      async-mutex: 0.5.0
-      stream-browserify: 3.0.0
 
   '@nervosnetwork/fiber-js@0.8.1':
     dependencies:
