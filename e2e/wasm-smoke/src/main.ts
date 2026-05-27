@@ -134,9 +134,11 @@ async function runSmokeTests() {
   // --- Test 5: node_info ---
   try {
     const info = await adapter!.nodeInfo();
-    if (!info.node_id) throw new Error('node_id missing');
+    const nodeIdentity = (info as { pubkey?: string; node_id?: string }).pubkey
+      ?? (info as { pubkey?: string; node_id?: string }).node_id;
+    if (!nodeIdentity) throw new Error('pubkey/node_id missing');
     pass('node_info');
-    log(`  Node ID: ${info.node_id}`, 'info');
+    log(`  Node Pubkey: ${nodeIdentity}`, 'info');
     log(`  Version: ${info.version}`, 'info');
     log(`  Chain:   ${info.chain_hash}`, 'info');
     totalPass++;

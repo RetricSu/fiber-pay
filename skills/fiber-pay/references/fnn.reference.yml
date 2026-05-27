@@ -1,7 +1,7 @@
 # =============================================================================
 # Fiber Network Node (fnn) - Full Configuration Reference
 # =============================================================================
-# Version: v0.7.1
+# Version: v0.8.1
 #
 # Usage:
 #   fnn --config /path/to/config.yml
