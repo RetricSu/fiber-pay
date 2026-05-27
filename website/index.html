@@ -24,8 +24,8 @@
         <span class="brand-text">fiber-pay</span>
       </a>
       <nav class="top-nav" aria-label="Main navigation">
-        <a href="#cli">CLI</a>
         <a href="#sdk">SDK</a>
+        <a href="#cli">CLI</a>
         <a href="#toolchain">Toolchain</a>
         <a href="#start">Start</a>
       </nav>
@@ -35,83 +35,80 @@
     <main id="top">
       <section class="hero reveal">
         <p class="eyebrow">CKB Fiber Network</p>
-        <h1>Ship payment workflows with a reliable CLI and a typed SDK core.</h1>
+        <h1>Integrate Fiber payments with one React component. Monetize AI agents with one CLI command.</h1>
         <p class="hero-copy">
-          fiber-pay gives operators and developers one stack: automate nodes with
-          CLI commands, then build application logic on a consistent SDK across Node and Browser.
+          Build production payment flows with a React-first SDK layer and run
+          AI-agent-native command workflows with a CLI designed for automation.
         </p>
         <div class="hero-actions">
-          <a class="btn btn-primary" href="#start">Get Started</a>
-          <a class="btn btn-ghost" href="https://github.com/RetricSu/fiber-pay/tree/master/packages/cli" target="_blank" rel="noreferrer">Explore CLI</a>
-          <a class="btn btn-ghost" href="https://github.com/RetricSu/fiber-pay/tree/master/packages/sdk" target="_blank" rel="noreferrer">Explore SDK</a>
+          <a class="btn btn-primary" href="#sdk">Start with React SDK</a>
+          <a class="btn btn-ghost" href="#cli">Run AI Agent CLI Flow</a>
+          <a class="btn btn-ghost" href="https://github.com/RetricSu/fiber-pay/tree/master/examples" target="_blank" rel="noreferrer">Open Examples</a>
         </div>
         <div class="hero-metrics">
           <article>
-            <h2>Operator First</h2>
-            <p>Grouped commands, JSON envelopes, streamable events.</p>
+            <h2>React Plug-and-Play</h2>
+            <p>FiberPayQuickCard and FiberNodeButton for rapid payment UI integration.</p>
           </article>
           <article>
-            <h2>Developer First</h2>
-            <p>Unified typed APIs for node RPC, browser flows, and L402.</p>
+            <h2>AI Agent Native</h2>
+            <p>agent serve, agent call, and L402 gateway flows built into the CLI.</p>
           </article>
           <article>
-            <h2>AI Friendly</h2>
-            <p>Predictable command surfaces for coding agents and automation.</p>
+            <h2>One-command Node Startup</h2>
+            <p>node start handles local Fiber node lifecycle with automation-friendly output.</p>
           </article>
-        </div>
-      </section>
-
-      <section id="cli" class="panel reveal">
-        <div class="section-heading">
-          <p class="eyebrow">CLI Engine</p>
-          <h2>Use fiber-pay CLI as your operations control plane</h2>
-        </div>
-        <div class="split">
-          <div>
-            <p>
-              The CLI is built for both manual workflows and scripted automation. It provides
-              profile-aware configuration, node/channel/payment lifecycle control, runtime jobs,
-              and machine-readable outputs for chaining tools.
-            </p>
-            <ul class="feature-list">
-              <li>Stable command groups: node, channel, payment, runtime, l402, agent</li>
-              <li>Consistent JSON output for parsers and bots</li>
-              <li>Useful for local smoke runs and CI pipelines</li>
-            </ul>
-          </div>
-          <div class="code-card">
-            <p class="code-title">Quick CLI flow</p>
-            <pre><code>npm install -g @fiber-pay/cli
-fiber-pay --profile demo config init --network testnet
-fiber-pay --profile demo node start --json
-fiber-pay --profile demo node ready --json
-fiber-pay --profile demo runtime status --json</code></pre>
-            <button class="copy-btn" data-copy="npm install -g @fiber-pay/cli\nfiber-pay --profile demo config init --network testnet\nfiber-pay --profile demo node start --json\nfiber-pay --profile demo node ready --json\nfiber-pay --profile demo runtime status --json">Copy</button>
-          </div>
         </div>
       </section>
 
       <section id="sdk" class="panel reveal">
         <div class="section-heading">
-          <p class="eyebrow">SDK Stack</p>
-          <h2>Build apps on top of typed Fiber primitives</h2>
+          <p class="eyebrow">React-First SDK</p>
+          <h2>Ship Fiber payment UI with high-level React components first</h2>
         </div>
-        <div class="sdk-grid">
-          <article>
-            <h3>@fiber-pay/sdk</h3>
-            <p>Universal APIs and shared protocol building blocks.</p>
-          </article>
-          <article>
-            <h3>@fiber-pay/sdk/node</h3>
-            <p>Node-focused helpers, including L402 middleware and server tooling.</p>
-          </article>
-          <article>
-            <h3>@fiber-pay/sdk/browser</h3>
-            <p>Browser-ready clients and passkey-friendly runtime integration.</p>
-          </article>
+        <div class="split">
+          <div>
+            <p>
+              Most teams integrate through `@fiber-pay/react` first, then drop down to
+              lower-level SDK APIs only for advanced control. Start with component primitives,
+              keep the browser-node lifecycle in hooks, and customize the panel UX as needed.
+            </p>
+            <ul class="feature-list">
+              <li>Quick entry: FiberPayQuickCard for invoice + payment flows</li>
+              <li>Full panel: FiberNodeButton with tabs customization and i18n override</li>
+              <li>Hooks: useFiberNode and useFiberPayment for controlled app state</li>
+            </ul>
+          </div>
+          <div class="code-card">
+            <p class="code-title">React integration (primary path)</p>
+            <pre><code>import { FiberPayQuickCard, FiberNodeButton, useFiberNode } from '@fiber-pay/react';
+
+export function WalletPanel() {
+  const fiber = useFiberNode({ network: 'testnet', walletId: 'demo-wallet' });
+
+  return (
+    <>
+      <FiberNodeButton
+        fiber={fiber}
+        strategy="passkey"
+        tabs={[{ id: 'workbench' }, { id: 'channels' }]}
+        t={(key, fallback) => key === 'tabs.workbench' ? 'Workbench' : fallback}
+      />
+      <FiberPayQuickCard fiber={fiber} network="testnet" />
+    </>
+  );
+}</code></pre>
+            <button
+              class="copy-btn"
+              data-copy="import { FiberPayQuickCard, FiberNodeButton, useFiberNode } from '@fiber-pay/react';\n\nexport function WalletPanel() {\n  const fiber = useFiberNode({ network: 'testnet', walletId: 'demo-wallet' });\n\n  return (\n    <>\n      <FiberNodeButton\n        fiber={fiber}\n        strategy='passkey'\n        tabs={[{ id: 'workbench' }, { id: 'channels' }]}\n        t={(key, fallback) => key === 'tabs.workbench' ? 'Workbench' : fallback}\n      />\n      <FiberPayQuickCard fiber={fiber} network='testnet' />\n    </>\n  );\n}"
+            >
+              Copy
+            </button>
+          </div>
         </div>
-        <div class="code-card wide">
-          <p class="code-title">SDK example</p>
+
+        <details class="advanced-block">
+          <summary>Advanced: low-level SDK API (FiberRpcClient)</summary>
           <pre><code>import { FiberRpcClient } from '@fiber-pay/sdk';
 
 const client = new FiberRpcClient({
@@ -121,29 +118,72 @@ const client = new FiberRpcClient({
 
 const info = await client.nodeInfo();
 console.log(info.pubkey);</code></pre>
+        </details>
+      </section>
+
+      <section id="cli" class="panel reveal">
+        <div class="section-heading">
+          <p class="eyebrow">AI Agent CLI</p>
+          <h2>Start nodes and publish paid AI-agent services from one command surface</h2>
+        </div>
+        <div class="split">
+          <div>
+            <p>
+              fiber-pay CLI is designed for AI agents and automation scripts, not just manual
+              shell usage. Use it to bootstrap nodes, expose paid local agents via L402,
+              and call remote paid agents from another profile.
+            </p>
+            <ul class="feature-list">
+              <li>One-command node startup and runtime inspection</li>
+              <li>agent serve and agent call for paid AI workflows</li>
+              <li>l402 proxy for monetizing existing HTTP APIs</li>
+            </ul>
+          </div>
+          <div class="code-card">
+            <p class="code-title">AI agent + node CLI flow</p>
+            <pre><code>npm install -g @fiber-pay/cli
+
+# 1) start local Fiber node
+fiber-pay --profile demo node start --json
+
+# 2) publish a paid AI agent service
+fiber-pay --profile demo agent serve --agent codex --price 0.1
+
+# 3) consume remote agent from another profile
+fiber-pay --profile user agent call http://127.0.0.1:8402 --prompt "review this code"
+
+# 4) monetize any HTTP API with L402
+fiber-pay l402 proxy --target http://localhost:3000 --price 0.1</code></pre>
+            <button
+              class="copy-btn"
+              data-copy="npm install -g @fiber-pay/cli\n\n# 1) start local Fiber node\nfiber-pay --profile demo node start --json\n\n# 2) publish a paid AI agent service\nfiber-pay --profile demo agent serve --agent codex --price 0.1\n\n# 3) consume remote agent from another profile\nfiber-pay --profile user agent call http://127.0.0.1:8402 --prompt 'review this code'\n\n# 4) monetize any HTTP API with L402\nfiber-pay l402 proxy --target http://localhost:3000 --price 0.1"
+            >
+              Copy
+            </button>
+          </div>
         </div>
       </section>
 
       <section id="toolchain" class="panel reveal">
         <div class="section-heading">
           <p class="eyebrow">Complete Toolchain</p>
-          <h2>From command execution to integration code in one repo</h2>
+          <h2>Build on the full fiber-pay stack: CLI + SDK + Runtime ecosystem</h2>
         </div>
         <div class="toolchain-grid">
           <article>
-            <h3>CLI for operators</h3>
-            <p>Run and inspect Fiber workflows quickly with deterministic output.</p>
+            <h3>CLI command surface</h3>
+            <p>Operator workflows, AI-agent service commands, and machine-readable output.</p>
             <a href="https://github.com/RetricSu/fiber-pay/blob/master/packages/cli/README.md" target="_blank" rel="noreferrer">Read CLI docs</a>
           </article>
           <article>
-            <h3>SDK for builders</h3>
-            <p>Compose app logic with strongly typed APIs and protocol helpers.</p>
-            <a href="https://github.com/RetricSu/fiber-pay/blob/master/packages/sdk/README.md" target="_blank" rel="noreferrer">Read SDK docs</a>
+            <h3>SDK + React integration</h3>
+            <p>Use React components first, then drop to sdk/node/browser entrypoints when needed.</p>
+            <a href="https://github.com/RetricSu/fiber-pay/blob/master/packages/react/README.md" target="_blank" rel="noreferrer">Read React docs</a>
           </article>
           <article>
-            <h3>React layer</h3>
-            <p>Use the React package for faster browser payment UI delivery.</p>
-            <a href="https://github.com/RetricSu/fiber-pay/blob/master/packages/react/README.md" target="_blank" rel="noreferrer">Read React docs</a>
+            <h3>Node + Runtime orchestration</h3>
+            <p>Manage fnn lifecycle and runtime job loops for durable automation tasks.</p>
+            <a href="https://github.com/RetricSu/fiber-pay/blob/master/packages/runtime/README.md" target="_blank" rel="noreferrer">Read Runtime docs</a>
           </article>
         </div>
       </section>

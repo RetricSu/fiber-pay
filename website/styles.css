@@ -235,6 +235,26 @@ h1 {
   margin-top: 18px;
 }
 
+.advanced-block {
+  margin-top: 18px;
+  border: 1px solid rgba(22, 35, 37, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 12px 14px;
+}
+
+.advanced-block summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.advanced-block pre {
+  margin-top: 10px;
+  border-radius: 10px;
+  background: #11181a;
+  color: #d6e8e5;
+}
+
 .code-title {
   margin: 0;
   font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;

@@ -1,21 +1,26 @@
-const copyButton = document.querySelector('.copy-btn');
+const copyButtons = document.querySelectorAll('.copy-btn');
 
-if (copyButton) {
-  copyButton.addEventListener('click', async () => {
-    const text = copyButton.getAttribute('data-copy') || '';
+copyButtons.forEach((button) => {
+  const originalText = button.textContent || 'Copy';
+  let timeoutId = null;
+
+  button.addEventListener('click', async () => {
+    const text = (button.getAttribute('data-copy') || '').replace(/\\n/g, '\n');
 
     try {
       await navigator.clipboard.writeText(text);
-      const original = copyButton.textContent;
-      copyButton.textContent = 'Copied';
-      window.setTimeout(() => {
-        copyButton.textContent = original;
-      }, 1200);
+      button.textContent = 'Copied';
     } catch {
-      copyButton.textContent = 'Copy failed';
-      window.setTimeout(() => {
-        copyButton.textContent = 'Copy';
-      }, 1200);
+      button.textContent = 'Copy failed';
     }
+
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
+
+    timeoutId = window.setTimeout(() => {
+      button.textContent = originalText;
+      timeoutId = null;
+    }, 1200);
   });
-}
+});
