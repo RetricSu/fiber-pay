@@ -23,5 +23,5 @@ See [docs/l402-agent-guide.md](./docs/l402-agent-guide.md) for L402 and agent de
 ## Compatibility
 
 - Node.js `>=20`
-- Fiber target: `v0.8.0`
+- Fiber target: `v0.8.1`
 
