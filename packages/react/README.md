@@ -154,11 +154,12 @@ If you use CCC wallets, `@fiber-pay/sdk/browser` provides
 `createCccExternalFundingResolver(...)` so you do not need to handwrite resolve logic:
 
 ```tsx
+import { ccc } from '@ckb-ccc/connector-react';
 import { createCccExternalFundingResolver } from '@fiber-pay/sdk/browser';
 
 const resolveExternalFunding = createCccExternalFundingResolver({
   signer: cccSigner,
-  knownScripts: ['SECP256K1_BLAKE160'],
+  knownScripts: Object.values(ccc.KnownScript),
   ckbRpcUrl: 'https://testnet.ckbapp.dev/',
 });
 ```

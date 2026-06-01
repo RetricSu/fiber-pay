@@ -34,11 +34,12 @@ For external wallet channel funding in React UIs (for example `FiberNodeButton`)
 you can use a prebuilt CCC resolver factory instead of wiring scripts/deps manually.
 
 ```ts
+import { ccc } from '@ckb-ccc/connector-react';
 import { createCccExternalFundingResolver } from '@fiber-pay/sdk/browser';
 
 const resolveExternalFunding = createCccExternalFundingResolver({
   signer: cccSigner,
-  knownScripts: ['SECP256K1_BLAKE160'],
+  knownScripts: Object.values(ccc.KnownScript),
   ckbRpcUrl: 'https://testnet.ckbapp.dev/',
 });
 
