@@ -38,8 +38,34 @@ export interface CccSignerLike {
   };
 }
 
+export interface CccRecommendedAddressObjLike {
+  script: CccScriptLike;
+  toString?: () => string;
+}
+
+export interface CccFundingSignerLike extends CccSignerLike {
+  getRecommendedAddressObj: () => Promise<CccRecommendedAddressObjLike>;
+}
+
 export interface CreateCccSignFundingTxOptions {
   toRpcTransaction?: (signedTx: unknown) => Record<string, unknown>;
+}
+
+export interface CccExternalFundingResolved {
+  signFundingTx: (txForSigner: unknown) => Promise<unknown>;
+  shutdownScript: Script;
+  fundingLockScript: Script;
+  fundingLockScriptCellDeps?: CellDep[];
+  ckbRpcUrl?: string;
+}
+
+export interface CreateCccExternalFundingResolverOptions {
+  signer: CccFundingSignerLike;
+  knownScripts?: readonly string[];
+  ckbRpcUrl?: string;
+  signFundingTxOptions?: CreateCccSignFundingTxOptions;
+  onKnownScriptResolved?: (knownScript: string) => void;
+  onAddressResolved?: (address: CccRecommendedAddressObjLike) => void;
 }
 
 function toHexPrefixed(value: string): HexString {
@@ -124,5 +150,41 @@ export function createCccSignFundingTx(
   return async (txForSigner: unknown): Promise<Record<string, unknown>> => {
     const signedTx = await signer.signTransaction(txForSigner);
     return toRpcTransaction(signedTx);
+  };
+}
+
+export function createCccExternalFundingResolver<TContext = unknown>(
+  options: CreateCccExternalFundingResolverOptions,
+) {
+  const {
+    signer,
+    knownScripts = [],
+    ckbRpcUrl,
+    signFundingTxOptions,
+    onKnownScriptResolved,
+    onAddressResolved,
+  } = options;
+
+  return async (_context: TContext): Promise<CccExternalFundingResolved> => {
+    const addressObj = await signer.getRecommendedAddressObj();
+    onAddressResolved?.(addressObj);
+
+    const walletScript = cccScriptToFiberScript(addressObj.script);
+    const resolvedDeps =
+      knownScripts.length > 0
+        ? await resolveFundingLockCellDepsByKnownScript(signer, walletScript, knownScripts)
+        : null;
+
+    if (resolvedDeps?.knownScript) {
+      onKnownScriptResolved?.(resolvedDeps.knownScript);
+    }
+
+    return {
+      signFundingTx: createCccSignFundingTx(signer, signFundingTxOptions),
+      shutdownScript: walletScript,
+      fundingLockScript: walletScript,
+      fundingLockScriptCellDeps: resolvedDeps?.cellDeps,
+      ckbRpcUrl,
+    };
   };
 }

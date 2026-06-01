@@ -125,12 +125,17 @@ export type {
 export { ChannelState } from '../types/rpc.js';
 export { ckbToShannons, fromHex, shannonsToCkb, toHex } from '../utils.js';
 export {
+  type CccExternalFundingResolved,
+  type CccFundingSignerLike,
   type CccKnownScriptCellDepLike,
   type CccKnownScriptInfoLike,
+  type CccRecommendedAddressObjLike,
   type CccScriptLike,
   type CccSignerLike,
+  type CreateCccExternalFundingResolverOptions,
   type CreateCccSignFundingTxOptions,
   cccScriptToFiberScript,
+  createCccExternalFundingResolver,
   createCccSignFundingTx,
   resolveFundingLockCellDepsByKnownScript,
 } from './ccc-external-funding.js';
