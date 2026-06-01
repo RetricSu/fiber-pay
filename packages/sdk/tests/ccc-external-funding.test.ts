@@ -173,4 +173,35 @@ describe('ccc external funding helpers', () => {
 		expect(result.fundingLockScriptCellDeps).toBeUndefined();
 		expect(signer.client.getKnownScript).not.toHaveBeenCalled();
 	});
+
+	it('throws a clear error when signer does not support getRecommendedAddressObj', async () => {
+		const resolve = createCccExternalFundingResolver({
+			signer: {
+				signTransaction: vi.fn(async (tx: unknown) => tx),
+				client: {
+					getKnownScript: vi.fn(),
+				},
+			} as unknown as Parameters<typeof createCccExternalFundingResolver>[0]['signer'],
+		});
+
+		await expect(resolve({})).rejects.toThrow(
+			'The provided signer does not support "getRecommendedAddressObj".',
+		);
+	});
+
+	it('throws a clear error when recommended address is missing script', async () => {
+		const resolve = createCccExternalFundingResolver({
+			signer: {
+				signTransaction: vi.fn(async (tx: unknown) => tx),
+				getRecommendedAddressObj: vi.fn(async () => ({})),
+				client: {
+					getKnownScript: vi.fn(),
+				},
+			} as unknown as Parameters<typeof createCccExternalFundingResolver>[0]['signer'],
+		});
+
+		await expect(resolve({})).rejects.toThrow(
+			'The recommended address object is missing the script property.',
+		);
+	});
 });

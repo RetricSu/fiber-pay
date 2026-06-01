@@ -166,7 +166,33 @@ export function createCccExternalFundingResolver<TContext = unknown>(
   } = options;
 
   return async (_context: TContext): Promise<CccExternalFundingResolved> => {
+    if (typeof signer.signTransaction !== 'function') {
+      throw new Error(
+        'The provided signer does not support "signTransaction". Please ensure you are passing a compatible CCC signer.',
+      );
+    }
+
+    if (typeof signer.getRecommendedAddressObj !== 'function') {
+      throw new Error(
+        'The provided signer does not support "getRecommendedAddressObj". Please ensure you are passing a compatible CCC signer.',
+      );
+    }
+
+    if (knownScripts.length > 0 && typeof signer.client?.getKnownScript !== 'function') {
+      throw new Error(
+        'The provided signer does not support "client.getKnownScript", which is required when knownScripts are configured.',
+      );
+    }
+
     const addressObj = await signer.getRecommendedAddressObj();
+    if (!addressObj) {
+      throw new Error('Failed to retrieve the recommended address from the signer.');
+    }
+
+    if (!addressObj.script) {
+      throw new Error('The recommended address object is missing the script property.');
+    }
+
     onAddressResolved?.(addressObj);
 
     const walletScript = cccScriptToFiberScript(addressObj.script);

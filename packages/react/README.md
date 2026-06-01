@@ -158,7 +158,7 @@ import { createCccExternalFundingResolver } from '@fiber-pay/sdk/browser';
 
 const resolveExternalFunding = createCccExternalFundingResolver({
   signer: cccSigner,
-  knownScripts: Object.values(ccc.KnownScript),
+  knownScripts: ['SECP256K1_BLAKE160'],
   ckbRpcUrl: 'https://testnet.ckbapp.dev/',
 });
 ```
