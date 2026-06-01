@@ -1,6 +1,6 @@
 {
   "name": "@fiber-pay/node",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Fiber Network node binary management and process lifecycle",
   "type": "module",
   "main": "./dist/index.js",

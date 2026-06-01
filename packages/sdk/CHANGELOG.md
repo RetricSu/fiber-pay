@@ -1,5 +1,34 @@
 # @fiber-pay/sdk
 
+## 0.2.6
+
+### Patch Changes
+
+- 7bc83aa: Add external funding channel RPC support in the SDK, including typed client methods for:
+
+  - `open_channel_with_external_funding`
+  - `submit_signed_funding_tx`
+
+  Add optional external wallet mode for React integrations:
+
+  - `useFiberNode({ externalWallet?: boolean })`
+  - `ConnectButton` supports optional `strategy` (default `passkey`) and `externalWallet`
+
+  Update the `react-quick-card` example to demonstrate passkey/password strategies with optional external wallet mode.
+
+- b0610f7: Restructure official demos into an examples-based coverage matrix and refresh integration docs.
+
+  New layer-oriented examples:
+
+  - react-min-connect (useFiberNode + ConnectButton minimal integration)
+  - react-fiber-node-button-lab (FiberNodeButton default/custom tabs workflow)
+  - browser-sdk-playground (direct @fiber-pay/sdk/browser usage)
+  - sdk-node-recipes (FiberRpcClient Node script recipes)
+
+  This release improves discoverability and onboarding paths for React and SDK integrations.
+
+- 06cfef0: Add `createCccExternalFundingResolver` runtime validation for signer capabilities and recommended address shape, and improve docs/examples for copy-pasteable known script configuration.
+
 ## 0.2.5
 
 ### Patch Changes
