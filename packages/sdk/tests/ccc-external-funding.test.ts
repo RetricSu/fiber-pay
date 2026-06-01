@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
 	cccScriptToFiberScript,
+	createCccExternalFundingResolver,
 	createCccSignFundingTx,
 	resolveFundingLockCellDepsByKnownScript,
 } from '../src/browser/ccc-external-funding.js';
@@ -86,5 +87,121 @@ describe('ccc external funding helpers', () => {
 		const signFundingTx = createCccSignFundingTx(signer);
 		const result = await signFundingTx({ inputs: [] });
 		expect(result.cell_deps?.[0]?.dep_type).toBe('dep_group');
+	});
+
+	it('creates a CCC external funding resolver for FiberNodeButton-style flows', async () => {
+		const onKnownScriptResolved = vi.fn();
+		const onAddressResolved = vi.fn();
+		const signer = {
+			signTransaction: vi.fn(async (tx: unknown) => tx),
+			getRecommendedAddressObj: vi.fn(async () => ({
+				script: {
+					codeHash: '0x1234',
+					hashType: 'type' as const,
+					args: '0xabcd',
+				},
+				toString: () => 'ckt1qyqv9...',
+			})),
+			client: {
+				getKnownScript: vi.fn(async () => ({
+					codeHash: '0x1234',
+					hashType: 'type' as const,
+					cellDeps: [
+						{
+							cellDep: {
+								outPoint: {
+									txHash: '0xbeef',
+									index: 1,
+								},
+								depType: 'code' as const,
+							},
+						},
+					],
+				})),
+			},
+		};
+
+		const resolve = createCccExternalFundingResolver({
+			signer,
+			knownScripts: ['SECP256K1_BLAKE160'],
+			ckbRpcUrl: 'https://testnet.ckbapp.dev/',
+			onKnownScriptResolved,
+			onAddressResolved,
+		});
+
+		const result = await resolve({});
+
+		expect(result.shutdownScript).toEqual({
+			code_hash: '0x1234',
+			hash_type: 'type',
+			args: '0xabcd',
+		});
+		expect(result.fundingLockScript).toEqual(result.shutdownScript);
+		expect(result.fundingLockScriptCellDeps).toEqual([
+			{
+				out_point: {
+					tx_hash: '0xbeef',
+					index: '0x1',
+				},
+				dep_type: 'code',
+			},
+		]);
+		expect(result.ckbRpcUrl).toBe('https://testnet.ckbapp.dev/');
+		expect(typeof result.signFundingTx).toBe('function');
+		expect(onKnownScriptResolved).toHaveBeenCalledWith('SECP256K1_BLAKE160');
+		expect(onAddressResolved).toHaveBeenCalledTimes(1);
+	});
+
+	it('skips known script lookup when no knownScripts are provided', async () => {
+		const signer = {
+			signTransaction: vi.fn(async (tx: unknown) => tx),
+			getRecommendedAddressObj: vi.fn(async () => ({
+				script: {
+					codeHash: '0x1234',
+					hashType: 'type' as const,
+					args: '0xabcd',
+				},
+			})),
+			client: {
+				getKnownScript: vi.fn(),
+			},
+		};
+
+		const resolve = createCccExternalFundingResolver({ signer });
+		const result = await resolve({});
+
+		expect(result.fundingLockScriptCellDeps).toBeUndefined();
+		expect(signer.client.getKnownScript).not.toHaveBeenCalled();
+	});
+
+	it('throws a clear error when signer does not support getRecommendedAddressObj', async () => {
+		const resolve = createCccExternalFundingResolver({
+			signer: {
+				signTransaction: vi.fn(async (tx: unknown) => tx),
+				client: {
+					getKnownScript: vi.fn(),
+				},
+			} as unknown as Parameters<typeof createCccExternalFundingResolver>[0]['signer'],
+		});
+
+		await expect(resolve({})).rejects.toThrow(
+			'The provided signer does not support "getRecommendedAddressObj".',
+		);
+	});
+
+	it('throws a clear error when recommended address is missing script', async () => {
+		const resolve = createCccExternalFundingResolver({
+			signer: {
+				signTransaction: vi.fn(async (tx: unknown) => tx),
+				getRecommendedAddressObj: vi.fn(async () => ({})),
+				client: {
+					getKnownScript: vi.fn(),
+				},
+			} as unknown as Parameters<typeof createCccExternalFundingResolver>[0]['signer'],
+		});
+
+		await expect(resolve({})).rejects.toThrow(
+			'The recommended address object is missing the script property.',
+		);
 	});
 });

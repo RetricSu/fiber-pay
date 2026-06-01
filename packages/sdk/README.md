@@ -28,6 +28,28 @@ const info = await client.nodeInfo();
 console.log(info.pubkey);
 ```
 
+### CCC External Funding Resolver (React-Friendly)
+
+For external wallet channel funding in React UIs (for example `FiberNodeButton`),
+you can use a prebuilt CCC resolver factory instead of wiring scripts/deps manually.
+
+```ts
+import { ccc } from '@ckb-ccc/connector-react';
+import { createCccExternalFundingResolver } from '@fiber-pay/sdk/browser';
+
+const resolveExternalFunding = createCccExternalFundingResolver({
+  signer: cccSigner,
+  knownScripts: Object.values(ccc.KnownScript),
+  ckbRpcUrl: 'https://testnet.ckbapp.dev/',
+});
+
+// FiberNodeButton externalFunding usage
+const externalFunding = {
+  enabled: true,
+  resolve: resolveExternalFunding,
+};
+```
+
 ## Browser Usage
 
 Browser integrations also need the Fiber WASM runtime peer dependency:

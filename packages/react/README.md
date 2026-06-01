@@ -150,6 +150,20 @@ export function WalletEntry() {
 For external funding, pass `externalFunding` with an async `resolve` callback that returns
 `signFundingTx` and optional script / dep overrides.
 
+If you use CCC wallets, `@fiber-pay/sdk/browser` provides
+`createCccExternalFundingResolver(...)` so you do not need to handwrite resolve logic:
+
+```tsx
+import { ccc } from '@ckb-ccc/connector-react';
+import { createCccExternalFundingResolver } from '@fiber-pay/sdk/browser';
+
+const resolveExternalFunding = createCccExternalFundingResolver({
+  signer: cccSigner,
+  knownScripts: Object.values(ccc.KnownScript),
+  ckbRpcUrl: 'https://testnet.ckbapp.dev/',
+});
+```
+
 ### Customizing The Panel
 
 `FiberNodeButton` now supports additive panel customization without forking the component:

@@ -6,10 +6,8 @@ import {
   useFiberNode,
 } from '@fiber-pay/react';
 import {
-  cccScriptToFiberScript,
-  createCccSignFundingTx,
-  resolveFundingLockCellDepsByKnownScript,
-  type Script,
+  createCccExternalFundingResolver,
+  type CccRecommendedAddressObjLike,
 } from '@fiber-pay/sdk/browser';
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -363,36 +361,25 @@ export function App() {
     };
   }, [addLog, cccSigner, externalWallet]);
 
-  const resolveExternalFunding = useCallback(
-    async () => {
-      if (!cccSigner) {
+  const resolveExternalFunding = useMemo(() => {
+    if (!cccSigner) {
+      return async () => {
         throw new Error('External wallet mode requires a connected CCC wallet signer.');
-      }
-
-      const addressObj = await cccSigner.getRecommendedAddressObj();
-      const walletScript: Script = cccScriptToFiberScript(addressObj.script);
-      const resolvedDeps = await resolveFundingLockCellDepsByKnownScript(
-        cccSigner,
-        walletScript,
-        Object.values(ccc.KnownScript),
-      );
-
-      setExternalWalletAddress(addressObj.toString());
-
-      if (resolvedDeps?.knownScript) {
-        addLog(`Using CCC known script deps: ${resolvedDeps.knownScript}.`);
-      }
-
-      return {
-        signFundingTx: createCccSignFundingTx(cccSigner),
-        shutdownScript: walletScript,
-        fundingLockScript: walletScript,
-        fundingLockScriptCellDeps: resolvedDeps?.cellDeps,
-        ckbRpcUrl: TESTNET_CKB_RPC_URL,
       };
-    },
-    [addLog, cccSigner],
-  );
+    }
+
+    return createCccExternalFundingResolver({
+      signer: cccSigner,
+      knownScripts: Object.values(ccc.KnownScript),
+      ckbRpcUrl: TESTNET_CKB_RPC_URL,
+      onKnownScriptResolved: (knownScript: string) => {
+        addLog(`Using CCC known script deps: ${knownScript}.`);
+      },
+      onAddressResolved: (addressObj: CccRecommendedAddressObjLike) => {
+        setExternalWalletAddress(addressObj.toString?.() ?? null);
+      },
+    });
+  }, [addLog, cccSigner]);
 
   const externalWalletToggleLocked = fiber.isRunning || fiber.isStarting;
 
