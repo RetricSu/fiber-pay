@@ -1,6 +1,6 @@
 {
   "name": "@fiber-pay/react",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "description": "React hooks and components for Fiber browser payments",
   "type": "module",
   "main": "./dist/index.js",

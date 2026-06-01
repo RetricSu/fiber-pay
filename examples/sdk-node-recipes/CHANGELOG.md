@@ -1,5 +1,14 @@
 # node-examples
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [7bc83aa]
+- Updated dependencies [b0610f7]
+- Updated dependencies [06cfef0]
+  - @fiber-pay/sdk@0.3.0
+
 ## 0.0.3
 
 ### Patch Changes
