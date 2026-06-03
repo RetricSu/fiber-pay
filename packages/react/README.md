@@ -185,7 +185,7 @@ export function WalletEntry() {
 | `walletId` | `string` | — | Wallet identifier for IndexedDB isolation. |
 | `passkeyUsername` | `string` | `"User"` | Display name for passkey registration. |
 | `wasmFactory` | `FiberWasmFactory` | — | Optional WASM factory override. |
-| `nodeConfig` | `FiberBrowserNodeConfig["nodeConfig"]` | — | Additional node configuration. |
+| `nodeConfig` | `UseFiberNodeOptions["nodeConfig"]` | — | Additional node configuration. |
 | `className` | `string` | — | Additional CSS class for the root container. |
 | `style` | `CSSProperties` | — | Inline styles for the root container. |
 | `dropdownStyle` | `CSSProperties` | — | Inline styles for the dropdown panel. |
@@ -209,7 +209,7 @@ export function WalletEntry() {
 
 | Node State | Button Label | Panel |
 |-----------|--------------|-------|
-| `idle` | "Connect with Passkey" | Hidden |
+| `idle` | "Connect with Passkey" / "Connect" (strategy-dependent) | Hidden |
 | `unlocking` / `starting` | "Connecting…" (spinner) | Hidden |
 | `running` | Truncated pubkey + ▼ | Visible |
 | `error` | Error message shown | Hidden |
@@ -295,7 +295,7 @@ export function CustomPanelDemo() {
 
 | Action ID | Default Label | Context |
 |-----------|---------------|---------|
-| `open-channel` | "Open Channel" | Includes `initialPeerPubkey`, `initialPeerAddress`, `initialFundingAmountCkb` |
+| `open-channel` | "Open Channel" | Form state is accessible via `state` |
 | `create-invoice` | "Create Invoice" | — |
 | `pay-invoice` | "Pay Invoice" | — |
 | `close-channel` | "Close Channel" | Includes `channelId` |
@@ -359,7 +359,7 @@ For custom connected-state panels (for example peer/channel controls), use `rend
 
 ### Localization keys
 
-The following keys can be localized via the `t` prop:
+The following common keys can be localized via the `t` prop (additional keys exist for metrics, meta, and dialogs):
 
 | Key | Default | Used In |
 |-----|---------|---------|
