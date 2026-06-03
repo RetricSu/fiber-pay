@@ -147,24 +147,74 @@ export function WalletEntry() {
 }
 ```
 
-For external funding, pass `externalFunding` with an async `resolve` callback that returns
-`signFundingTx` and optional script / dep overrides.
+### What it does
 
-If you use CCC wallets, `@fiber-pay/sdk/browser` provides
-`createCccExternalFundingResolver(...)` so you do not need to handwrite resolve logic:
+`FiberNodeButton` gives you a complete wallet UI in a single component:
 
-```tsx
-import { ccc } from '@ckb-ccc/connector-react';
-import { createCccExternalFundingResolver } from '@fiber-pay/sdk/browser';
+1. **Connect / Disconnect** — Handles passkey or password authentication via `ConnectButton`
+2. **Workbench tab** — Create invoices, pay invoices, and see node info at a glance
+3. **Channels tab** — List active channels, connect to peers, and open new channels
+4. **Diagnostics tab** — Inspect node state, peer list, and passkey support status
+5. **External funding** — Optionally delegate CKB funding to an external wallet (e.g. CCC)
 
-const resolveExternalFunding = createCccExternalFundingResolver({
-  signer: cccSigner,
-  knownScripts: Object.values(ccc.KnownScript),
-  ckbRpcUrl: 'https://testnet.ckbapp.dev/',
-});
+```
+┌─────────────────────────────────────────┐
+│  [🔵 abc123…e789 ▼]  ← ConnectButton   │
+├─────────────────────────────────────────┤
+│  ┌──────────┬──────────┬────────────┐  │
+│  │ Workbench│ Channels │ Diagnostics│  │
+│  ├──────────┴──────────┴────────────┤  │
+│  │  • Create Invoice                │  │
+│  │  • Pay Invoice                   │  │
+│  │  • Node Info                     │  │
+│  │                                  │  │
+│  │  [Disconnect]                    │  │
+│  └──────────────────────────────────┘  │
+└─────────────────────────────────────────┘
 ```
 
-### Customizing The Panel
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `network` | `"testnet" \| "mainnet"` | `"testnet"` | Network to connect to. |
+| `fiber` | `UseFiberNodeResult` | — | Pre-existing hook result. When provided, the button shares this session instead of creating its own. |
+| `strategy` | `"passkey" \| "password"` | `"passkey"` | Credential strategy for authentication. |
+| `externalWallet` | `boolean` | `false` | Enable external wallet mode (no internal CKB key derivation). |
+| `password` | `string` | — | Password for the `"password"` strategy. |
+| `walletId` | `string` | — | Wallet identifier for IndexedDB isolation. |
+| `passkeyUsername` | `string` | `"User"` | Display name for passkey registration. |
+| `wasmFactory` | `FiberWasmFactory` | — | Optional WASM factory override. |
+| `nodeConfig` | `UseFiberNodeOptions["nodeConfig"]` | — | Additional node configuration. |
+| `className` | `string` | — | Additional CSS class for the root container. |
+| `style` | `CSSProperties` | — | Inline styles for the root container. |
+| `dropdownStyle` | `CSSProperties` | — | Inline styles for the dropdown panel. |
+| `onConnect` | `(node, nodeInfo) => void` | — | Called when the node reaches the `"running"` state. |
+| `onDisconnect` | `() => void` | — | Called after the node is stopped. |
+| `onError` | `(error: string) => void` | — | Called when an error occurs. |
+| `onLog` | `(message: string) => void` | — | Called with informational log messages. |
+| `initialPeerPubkey` | `string` | `""` | Pre-filled peer pubkey for the open-channel form. |
+| `initialPeerAddress` | `string` | `""` | Pre-filled peer address for the open-channel form. |
+| `initialFundingAmountCkb` | `string` | `"1000"` | Pre-filled funding amount (in CKB) for the open-channel form. |
+| `externalFunding` | `FiberNodeButtonExternalFundingConfig` | — | External funding resolver configuration. |
+| `renderConnectorSection` | `(context) => ReactNode` | — | Custom renderer for the connector section inside the panel. |
+| `tabs` | `FiberNodeButtonTabConfig[]` | — | Reorder, hide, or extend built-in tabs. |
+| `renderTabContent` | `(tabId, context) => ReactNode \| undefined` | — | Override tab body rendering per tab. Return `undefined` to fall through. |
+| `renderAction` | `(context) => ReactNode \| undefined` | — | Replace default action buttons (e.g. Pay Invoice, Open Channel). |
+| `t` | `FiberNodeButtonI18n` | — | Localization function for labels and copy. |
+
+### State mapping
+
+`FiberNodeButton` delegates connection state to `ConnectButton`. The UI updates automatically as the underlying node state changes:
+
+| Node State | Button Label | Panel |
+|-----------|--------------|-------|
+| `idle` | "Connect with Passkey" / "Connect" (strategy-dependent) | Hidden |
+| `unlocking` / `starting` | "Connecting…" (spinner) | Hidden |
+| `running` | Truncated pubkey + ▼ | Visible |
+| `error` | Error message shown | Hidden |
+
+### Tab customization
 
 `FiberNodeButton` now supports additive panel customization without forking the component:
 
@@ -233,6 +283,55 @@ export function CustomPanelDemo() {
 }
 ```
 
+#### Built-in tab IDs
+
+| Tab ID | Default Label | Can Hide |
+|--------|---------------|----------|
+| `workbench` | "Workbench" | Yes |
+| `channels` | "Channels" | Yes |
+| `diagnostics` | "Diagnostics" | Yes |
+
+#### Action IDs for `renderAction`
+
+| Action ID | Default Label | Context |
+|-----------|---------------|---------|
+| `open-channel` | "Open Channel" | Form state is accessible via `state` |
+| `create-invoice` | "Create Invoice" | — |
+| `pay-invoice` | "Pay Invoice" | — |
+| `close-channel` | "Close Channel" | Includes `channelId` |
+| `force-close-channel` | "Force Close" | Includes `channelId` |
+
+### External funding
+
+For external funding, pass `externalFunding` with an async `resolve` callback that returns
+`signFundingTx` and optional script / dep overrides.
+
+If you use CCC wallets, `@fiber-pay/sdk/browser` provides
+`createCccExternalFundingResolver(...)` so you do not need to handwrite resolve logic:
+
+```tsx
+import { ccc } from '@ckb-ccc/connector-react';
+import { createCccExternalFundingResolver } from '@fiber-pay/sdk/browser';
+
+const resolveExternalFunding = createCccExternalFundingResolver({
+  signer: cccSigner,
+  knownScripts: Object.values(ccc.KnownScript),
+  ckbRpcUrl: 'https://testnet.ckbapp.dev/',
+});
+```
+
+Then pass it to `FiberNodeButton`:
+
+```tsx
+<FiberNodeButton
+  fiber={fiber}
+  strategy="passkey"
+  externalFunding={{ enabled: true, resolve: resolveExternalFunding }}
+/>
+```
+
+### Custom connected dropdown
+
 `ConnectButton` uses explicit strategy selection and supports only `"passkey"` or `"password"`.
 
 For custom connected-state panels (for example peer/channel controls), use `renderConnectedDropdown`:
@@ -257,6 +356,21 @@ For custom connected-state panels (for example peer/channel controls), use `rend
   )}
 />
 ```
+
+### Localization keys
+
+The following common keys can be localized via the `t` prop (additional keys exist for metrics, meta, and dialogs):
+
+| Key | Default | Used In |
+|-----|---------|---------|
+| `tabs.workbench` | "Workbench" | Tab label |
+| `tabs.channels` | "Channels" | Tab label |
+| `tabs.diagnostics` | "Diagnostics" | Tab label |
+| `actions.openChannel` | "Open Channel" | Action button |
+| `actions.createInvoice` | "Create Invoice" | Action button |
+| `actions.payInvoice` | "Pay Invoice" | Action button |
+| `actions.closeChannel` | "Close Channel" | Action button |
+| `actions.forceCloseChannel` | "Force Close" | Action button |
 
 ## Hooks
 
