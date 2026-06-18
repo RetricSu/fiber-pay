@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>fiber-pay | CKB Fiber CLI + SDK Toolchain</title>
+    <meta
+      name="description"
+      content="fiber-pay is an AI-friendly toolchain for CKB Lightning on Fiber Network. Build with a stable CLI and a typed SDK stack for Node and Browser."
+    />
+    <meta property="og:title" content="fiber-pay | CLI + SDK Toolchain" />
+    <meta
+      property="og:description"
+      content="Promotional site for fiber-pay: operator-grade CLI and developer-first SDK on Fiber Network."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top">fiber-pay</a>
+      <nav aria-label="Main navigation">
+        <a href="#sdk">SDK</a>
+        <a href="#cli">CLI</a>
+        <a href="#toolchain">Toolchain</a>
+        <a href="https://github.com/RetricSu/fiber-pay" target="_blank" rel="noreferrer">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <h1>fiber-pay</h1>
+        <p class="tagline">
+          Integrate Fiber payments with one React component. Monetize AI agents with one CLI command.
+        </p>
+        <p>
+          fiber-pay is an AI-friendly toolchain for CKB Lightning on Fiber Network. Build
+          production payment flows with a React-first SDK layer and run AI-agent-native command
+          workflows with a CLI designed for automation.
+        </p>
+        <p>
+          <a href="#sdk">Get started with the React SDK</a> ·
+          <a href="#cli">Run the AI agent CLI flow</a> ·
+          <a href="https://github.com/RetricSu/fiber-pay/tree/master/examples" target="_blank" rel="noreferrer">Browse examples</a>
+        </p>
+
+        <ul>
+          <li><strong>React plug-and-play.</strong> <code>FiberPayQuickCard</code> and <code>FiberNodeButton</code> for rapid payment UI integration.</li>
+          <li><strong>AI agent native.</strong> <code>agent serve</code>, <code>agent call</code>, and <code>L402</code> gateway flows built into the CLI.</li>
+          <li><strong>One-command node startup.</strong> <code>node start</code> handles local Fiber node lifecycle with automation-friendly output.</li>
+        </ul>
+      </section>
+
+      <hr />
+
+      <section id="sdk">
+        <h2>React-First SDK</h2>
+        <p>
+          Most teams integrate through <code>@fiber-pay/react</code> first, then drop down to
+          lower-level SDK APIs only for advanced control. Start with component primitives,
+          keep the browser-node lifecycle in hooks, and customize the panel UX as needed.
+        </p>
+        <ul>
+          <li>Quick entry: <code>FiberPayQuickCard</code> for invoice + payment flows.</li>
+          <li>Full panel: <code>FiberNodeButton</code> with tabs customization and i18n override.</li>
+          <li>Hooks: <code>useFiberNode</code> and <code>useFiberPayment</code> for controlled app state.</li>
+        </ul>
+
+        <pre><code>import { FiberPayQuickCard, FiberNodeButton, useFiberNode } from '@fiber-pay/react';
+
+export function WalletPanel() {
+  const fiber = useFiberNode({ network: 'testnet', walletId: 'demo-wallet' });
+
+  return (
+    &lt;&gt;
+      &lt;FiberNodeButton
+        fiber={fiber}
+        strategy="passkey"
+        tabs={[{ id: 'workbench' }, { id: 'channels' }]}
+        t={(key, fallback) =&gt; key === 'tabs.workbench' ? 'Workbench' : fallback}
+      /&gt;
+      &lt;FiberPayQuickCard fiber={fiber} network="testnet" /&gt;
+    &lt;/&gt;
+  );
+}</code></pre>
+
+        <details>
+          <summary>Advanced: low-level SDK API (<code>FiberRpcClient</code>)</summary>
+          <pre><code>import { FiberRpcClient } from '@fiber-pay/sdk';
+
+const client = new FiberRpcClient({
+  url: 'http://127.0.0.1:8227',
+  biscuitToken: process.env.FIBER_RPC_BISCUIT_TOKEN,
+});
+
+const info = await client.nodeInfo();
+console.log(info.pubkey);</code></pre>
+        </details>
+      </section>
+
+      <hr />
+
+      <section id="cli">
+        <h2>AI Agent CLI</h2>
+        <p>
+          fiber-pay CLI is designed for AI agents and automation scripts, not just manual
+          shell usage. Use it to bootstrap nodes, expose paid local agents via L402,
+          and call remote paid agents from another profile.
+        </p>
+        <ul>
+          <li>One-command node startup and runtime inspection.</li>
+          <li><code>agent serve</code> and <code>agent call</code> for paid AI workflows.</li>
+          <li><code>l402 proxy</code> for monetizing existing HTTP APIs.</li>
+        </ul>
+
+        <pre><code>npm install -g @fiber-pay/cli
+
+# 1) start local Fiber node
+fiber-pay --profile demo node start --json
+
+# 2) publish a paid AI agent service
+fiber-pay --profile demo agent serve --agent codex --price 0.1
+
+# 3) consume remote agent from another profile
+fiber-pay --profile user agent call http://127.0.0.1:8402 --prompt "review this code"
+
+# 4) monetize any HTTP API with L402
+fiber-pay l402 proxy --target http://localhost:3000 --price 0.1</code></pre>
+      </section>
+
+      <hr />
+
+      <section id="toolchain">
+        <h2>Complete Toolchain</h2>
+        <p>
+          Build on the full fiber-pay stack: CLI + SDK + Runtime ecosystem.
+        </p>
+
+        <h3><a href="https://github.com/RetricSu/fiber-pay/blob/master/packages/cli/README.md" target="_blank" rel="noreferrer">CLI command surface</a></h3>
+        <p>Operator workflows, AI-agent service commands, and machine-readable output.</p>
+
+        <h3><a href="https://github.com/RetricSu/fiber-pay/blob/master/packages/react/README.md" target="_blank" rel="noreferrer">SDK + React integration</a></h3>
+        <p>Use React components first, then drop to sdk/node/browser entrypoints when needed.</p>
+
+        <h3><a href="https://github.com/RetricSu/fiber-pay/blob/master/packages/runtime/README.md" target="_blank" rel="noreferrer">Node + Runtime orchestration</a></h3>
+        <p>Manage <code>fnn</code> lifecycle and runtime job loops for durable automation tasks.</p>
+      </section>
+
+      <hr />
+
+      <section id="start">
+        <h2>Start building on fiber-pay today</h2>
+        <p>
+          Choose your path: automate operations with CLI, implement core logic with SDK,
+          or ship UI fast with React on top.
+        </p>
+        <p>
+          <a href="https://github.com/RetricSu/fiber-pay" target="_blank" rel="noreferrer">Open repository</a> ·
+          <a href="https://github.com/RetricSu/fiber-pay/tree/master/examples" target="_blank" rel="noreferrer">View examples</a>
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>fiber-pay — AI-friendly toolchain for CKB Lightning on Fiber Network.</p>
+    </footer>
+  </body>
+</html>

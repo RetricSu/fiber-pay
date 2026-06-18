@@ -16,6 +16,12 @@ Fiber target: `v0.8.1`
 Package maturity note:
 `@fiber-pay/agent` is currently experimental and not recommended for production use yet (limited validation coverage and ongoing hardening).
 
+## Project Website
+
+- GitHub Pages landing site: https://retricsu.github.io/fiber-pay/
+- Site source: [website/index.html](website/index.html)
+- Deployment workflow: [pages.yml](.github/workflows/pages.yml)
+
 ## Quickstart by Goal
 
 1. Operate Fiber locally (manual workflow): [packages/cli/docs/human-quickstart.md](packages/cli/docs/human-quickstart.md)
