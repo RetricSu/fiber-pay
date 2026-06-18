@@ -45,9 +45,9 @@
         </p>
 
         <ul>
-          <li><strong>React plug-and-play.</strong> FiberPayQuickCard and FiberNodeButton for rapid payment UI integration.</li>
-          <li><strong>AI agent native.</strong> agent serve, agent call, and L402 gateway flows built into the CLI.</li>
-          <li><strong>One-command node startup.</strong> node start handles local Fiber node lifecycle with automation-friendly output.</li>
+          <li><strong>React plug-and-play.</strong> <code>FiberPayQuickCard</code> and <code>FiberNodeButton</code> for rapid payment UI integration.</li>
+          <li><strong>AI agent native.</strong> <code>agent serve</code>, <code>agent call</code>, and <code>L402</code> gateway flows built into the CLI.</li>
+          <li><strong>One-command node startup.</strong> <code>node start</code> handles local Fiber node lifecycle with automation-friendly output.</li>
         </ul>
       </section>
 
@@ -61,9 +61,9 @@
           keep the browser-node lifecycle in hooks, and customize the panel UX as needed.
         </p>
         <ul>
-          <li>Quick entry: FiberPayQuickCard for invoice + payment flows.</li>
-          <li>Full panel: FiberNodeButton with tabs customization and i18n override.</li>
-          <li>Hooks: useFiberNode and useFiberPayment for controlled app state.</li>
+          <li>Quick entry: <code>FiberPayQuickCard</code> for invoice + payment flows.</li>
+          <li>Full panel: <code>FiberNodeButton</code> with tabs customization and i18n override.</li>
+          <li>Hooks: <code>useFiberNode</code> and <code>useFiberPayment</code> for controlled app state.</li>
         </ul>
 
         <pre><code>import { FiberPayQuickCard, FiberNodeButton, useFiberNode } from '@fiber-pay/react';
@@ -85,7 +85,7 @@ export function WalletPanel() {
 }</code></pre>
 
         <details>
-          <summary>Advanced: low-level SDK API (FiberRpcClient)</summary>
+          <summary>Advanced: low-level SDK API (<code>FiberRpcClient</code>)</summary>
           <pre><code>import { FiberRpcClient } from '@fiber-pay/sdk';
 
 const client = new FiberRpcClient({
@@ -109,8 +109,8 @@ console.log(info.pubkey);</code></pre>
         </p>
         <ul>
           <li>One-command node startup and runtime inspection.</li>
-          <li>agent serve and agent call for paid AI workflows.</li>
-          <li>l402 proxy for monetizing existing HTTP APIs.</li>
+          <li><code>agent serve</code> and <code>agent call</code> for paid AI workflows.</li>
+          <li><code>l402 proxy</code> for monetizing existing HTTP APIs.</li>
         </ul>
 
         <pre><code>npm install -g @fiber-pay/cli
@@ -143,7 +143,7 @@ fiber-pay l402 proxy --target http://localhost:3000 --price 0.1</code></pre>
         <p>Use React components first, then drop to sdk/node/browser entrypoints when needed.</p>
 
         <h3><a href="https://github.com/RetricSu/fiber-pay/blob/master/packages/runtime/README.md" target="_blank" rel="noreferrer">Node + Runtime orchestration</a></h3>
-        <p>Manage fnn lifecycle and runtime job loops for durable automation tasks.</p>
+        <p>Manage <code>fnn</code> lifecycle and runtime job loops for durable automation tasks.</p>
       </section>
 
       <hr />
