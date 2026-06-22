@@ -3,13 +3,13 @@
  * Handles downloading, installing, and managing the Fiber Network Node (fnn) binary
  */
 
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { DEFAULT_FIBER_VERSION } from '../constants.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // =============================================================================
 // Types
@@ -77,6 +77,54 @@ const BINARY_PATTERNS: Record<Platform, Record<Arch, string>> = {
 };
 
 // =============================================================================
+// Version parsing
+// =============================================================================
+
+/**
+ * Parse a full semver version (including pre-release and build metadata)
+ * from a `fnn --version` output line.
+ *
+ * Output format: "fnn Fiber v0.7.1 (f761b6d 2026-01-14)"
+ * or pre-release:  "fnn Fiber v0.9.0-rc4 (abc1234 2026-06-20)"
+ *
+ * Returns the version without the leading `v` (e.g. "0.7.1", "0.9.0-rc4",
+ * "0.7.1+build.1"), or `null` when no version-like token is found.
+ */
+export function parseBinaryVersion(output: string): string | null {
+  const match = output.match(/v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Path safety validation — defense-in-depth against command injection.
+ *
+ * The primary mitigation is `execFile` (which never spawns a shell), so user
+ * paths are passed directly to the OS and never interpreted by `/bin/sh`.
+ * This check additionally rejects shell metacharacters and control characters
+ * so a misconfigured install directory can never reach a command argument,
+ * even if a future change reintroduces a shell-based call.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — reject null and control characters in install paths
+const UNSAFE_PATH_PATTERN = /[\0-\x1f`$|&;<>()!^]/;
+
+function assertSafePath(p: string, field: string): void {
+  if (UNSAFE_PATH_PATTERN.test(p)) {
+    throw new Error(
+      `Unsafe ${field}: contains shell metacharacters or control characters. Refusing to use path: ${p}`,
+    );
+  }
+}
+
+/**
+ * Escape a string for safe embedding inside a PowerShell single-quoted string.
+ * In PowerShell, the only special character inside single quotes is the single
+ * quote itself, escaped by doubling it (`'` → `''`).
+ */
+function escapePsSingleQuotes(s: string): string {
+  return s.replace(/'/g, "''");
+}
+
+// =============================================================================
 // Binary Manager
 // =============================================================================
 
@@ -85,6 +133,7 @@ export class BinaryManager {
 
   constructor(installDir?: string) {
     this.installDir = installDir || DEFAULT_INSTALL_DIR;
+    assertSafePath(this.installDir, 'installDir');
   }
 
   /**
@@ -145,11 +194,9 @@ export class BinaryManager {
 
     if (exists) {
       try {
-        const { stdout } = await execAsync(`"${binaryPath}" --version`);
+        const { stdout } = await execFileAsync(binaryPath, ['--version']);
         // Output format: "fnn Fiber v0.7.1 (f761b6d 2026-01-14)"
-        // Extract the version number
-        const versionMatch = stdout.match(/v(\d+\.\d+\.\d+)/);
-        version = versionMatch ? versionMatch[1] : stdout.trim();
+        version = parseBinaryVersion(stdout) ?? stdout.trim();
         ready = true;
       } catch {
         // Binary exists but may not be executable
@@ -242,7 +289,7 @@ export class BinaryManager {
     }
 
     try {
-      await execAsync('arch -x86_64 /usr/bin/true');
+      await execFileAsync('arch', ['-x86_64', '/usr/bin/true']);
     } catch {
       throw new Error(
         'Apple Silicon fallback selected x86_64 binary, but Rosetta 2 is not available. ' +
@@ -259,10 +306,21 @@ export class BinaryManager {
 
     const binaryPath = this.getBinaryPath();
 
-    // Check if already installed
+    // Resolve release tag and target version early so the already-installed
+    // check below can decide whether the existing binary actually satisfies
+    // the requested version.
+    onProgress({ phase: 'fetching', message: 'Resolving release tag...' });
+    const tag = this.normalizeTag(version || DEFAULT_FIBER_VERSION);
+    const targetVersion = tag.startsWith('v') ? tag.slice(1) : tag;
+
+    onProgress({ phase: 'fetching', message: `Found release: ${tag}` });
+
+    // Check if already installed — only skip the download when the installed
+    // version matches the requested version. A mismatch must not silently keep
+    // whatever binary happens to be on disk.
     if (!force && existsSync(binaryPath)) {
       const info = await this.getBinaryInfo();
-      if (info.ready) {
+      if (info.ready && info.version === targetVersion) {
         onProgress({ phase: 'installing', message: `Binary already installed at ${binaryPath}` });
         return info;
       }
@@ -272,12 +330,6 @@ export class BinaryManager {
     if (!existsSync(this.installDir)) {
       mkdirSync(this.installDir, { recursive: true });
     }
-
-    // Resolve release tag
-    onProgress({ phase: 'fetching', message: 'Resolving release tag...' });
-    const tag = this.normalizeTag(version || DEFAULT_FIBER_VERSION);
-
-    onProgress({ phase: 'fetching', message: `Found release: ${tag}` });
 
     // Build asset candidates
     const candidates = this.buildAssetCandidates(tag);
@@ -380,7 +432,14 @@ export class BinaryManager {
 
     onProgress({ phase: 'installing', message: `Installed to ${binaryPath}` });
 
-    return this.getBinaryInfo();
+    const installedInfo = await this.getBinaryInfo();
+    if (installedInfo.version !== targetVersion) {
+      throw new Error(
+        `Version mismatch after install: requested v${targetVersion} but binary reports v${installedInfo.version}`,
+      );
+    }
+
+    return installedInfo;
   }
 
   /**
@@ -401,7 +460,7 @@ export class BinaryManager {
 
     // Extract using tar command
     try {
-      await execAsync(`tar -xzf "${archivePath}" -C "${tempDir}"`);
+      await execFileAsync('tar', ['-xzf', archivePath, '-C', tempDir]);
     } catch (primaryError) {
       // Fallback: use Node's built-in zlib to avoid external `gunzip` dependency
       try {
@@ -409,7 +468,7 @@ export class BinaryManager {
         const tarPath = `${tempDir}/archive.tar`;
         const tarBuffer = gunzipSync(buffer);
         await writeFile(tarPath, tarBuffer);
-        await execAsync(`tar -xf "${tarPath}" -C "${tempDir}"`);
+        await execFileAsync('tar', ['-xf', tarPath, '-C', tempDir]);
       } catch (fallbackError) {
         const primaryMessage =
           primaryError instanceof Error ? primaryError.message : String(primaryError);
@@ -489,11 +548,13 @@ export class BinaryManager {
     // Extract using unzip command
     const { platform } = this.getPlatformInfo();
     if (platform === 'win32') {
-      await execAsync(
-        `powershell -command "Expand-Archive -Path '${archivePath}' -DestinationPath '${tempDir}'"`,
-      );
+      await execFileAsync('powershell', [
+        '-NoProfile',
+        '-Command',
+        `Expand-Archive -Path '${escapePsSingleQuotes(archivePath)}' -DestinationPath '${escapePsSingleQuotes(tempDir)}'`,
+      ]);
     } else {
-      await execAsync(`unzip -o "${archivePath}" -d "${tempDir}"`);
+      await execFileAsync('unzip', ['-o', archivePath, '-d', tempDir]);
     }
 
     // Find and move the binary
