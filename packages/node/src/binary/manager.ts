@@ -3,13 +3,13 @@
  * Handles downloading, installing, and managing the Fiber Network Node (fnn) binary
  */
 
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { DEFAULT_FIBER_VERSION } from '../constants.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // =============================================================================
 // Types
@@ -95,6 +95,35 @@ export function parseBinaryVersion(output: string): string | null {
   return match ? match[1] : null;
 }
 
+/**
+ * Path safety validation — defense-in-depth against command injection.
+ *
+ * The primary mitigation is `execFile` (which never spawns a shell), so user
+ * paths are passed directly to the OS and never interpreted by `/bin/sh`.
+ * This check additionally rejects shell metacharacters and control characters
+ * so a misconfigured install directory can never reach a command argument,
+ * even if a future change reintroduces a shell-based call.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — reject null and control characters in install paths
+const UNSAFE_PATH_PATTERN = /[\0-\x1f`$|&;<>()!^]/;
+
+function assertSafePath(p: string, field: string): void {
+  if (UNSAFE_PATH_PATTERN.test(p)) {
+    throw new Error(
+      `Unsafe ${field}: contains shell metacharacters or control characters. Refusing to use path: ${p}`,
+    );
+  }
+}
+
+/**
+ * Escape a string for safe embedding inside a PowerShell single-quoted string.
+ * In PowerShell, the only special character inside single quotes is the single
+ * quote itself, escaped by doubling it (`'` → `''`).
+ */
+function escapePsSingleQuotes(s: string): string {
+  return s.replace(/'/g, "''");
+}
+
 // =============================================================================
 // Binary Manager
 // =============================================================================
@@ -104,6 +133,7 @@ export class BinaryManager {
 
   constructor(installDir?: string) {
     this.installDir = installDir || DEFAULT_INSTALL_DIR;
+    assertSafePath(this.installDir, 'installDir');
   }
 
   /**
@@ -164,7 +194,7 @@ export class BinaryManager {
 
     if (exists) {
       try {
-        const { stdout } = await execAsync(`"${binaryPath}" --version`);
+        const { stdout } = await execFileAsync(binaryPath, ['--version']);
         // Output format: "fnn Fiber v0.7.1 (f761b6d 2026-01-14)"
         version = parseBinaryVersion(stdout) ?? stdout.trim();
         ready = true;
@@ -259,7 +289,7 @@ export class BinaryManager {
     }
 
     try {
-      await execAsync('arch -x86_64 /usr/bin/true');
+      await execFileAsync('arch', ['-x86_64', '/usr/bin/true']);
     } catch {
       throw new Error(
         'Apple Silicon fallback selected x86_64 binary, but Rosetta 2 is not available. ' +
@@ -430,7 +460,7 @@ export class BinaryManager {
 
     // Extract using tar command
     try {
-      await execAsync(`tar -xzf "${archivePath}" -C "${tempDir}"`);
+      await execFileAsync('tar', ['-xzf', archivePath, '-C', tempDir]);
     } catch (primaryError) {
       // Fallback: use Node's built-in zlib to avoid external `gunzip` dependency
       try {
@@ -438,7 +468,7 @@ export class BinaryManager {
         const tarPath = `${tempDir}/archive.tar`;
         const tarBuffer = gunzipSync(buffer);
         await writeFile(tarPath, tarBuffer);
-        await execAsync(`tar -xf "${tarPath}" -C "${tempDir}"`);
+        await execFileAsync('tar', ['-xf', tarPath, '-C', tempDir]);
       } catch (fallbackError) {
         const primaryMessage =
           primaryError instanceof Error ? primaryError.message : String(primaryError);
@@ -518,11 +548,13 @@ export class BinaryManager {
     // Extract using unzip command
     const { platform } = this.getPlatformInfo();
     if (platform === 'win32') {
-      await execAsync(
-        `powershell -command "Expand-Archive -Path '${archivePath}' -DestinationPath '${tempDir}'"`,
-      );
+      await execFileAsync('powershell', [
+        '-NoProfile',
+        '-Command',
+        `Expand-Archive -Path '${escapePsSingleQuotes(archivePath)}' -DestinationPath '${escapePsSingleQuotes(tempDir)}'`,
+      ]);
     } else {
-      await execAsync(`unzip -o "${archivePath}" -d "${tempDir}"`);
+      await execFileAsync('unzip', ['-o', archivePath, '-d', tempDir]);
     }
 
     // Find and move the binary
