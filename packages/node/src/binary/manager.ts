@@ -77,6 +77,25 @@ const BINARY_PATTERNS: Record<Platform, Record<Arch, string>> = {
 };
 
 // =============================================================================
+// Version parsing
+// =============================================================================
+
+/**
+ * Parse a full semver version (including pre-release and build metadata)
+ * from a `fnn --version` output line.
+ *
+ * Output format: "fnn Fiber v0.7.1 (f761b6d 2026-01-14)"
+ * or pre-release:  "fnn Fiber v0.9.0-rc4 (abc1234 2026-06-20)"
+ *
+ * Returns the version without the leading `v` (e.g. "0.7.1", "0.9.0-rc4",
+ * "0.7.1+build.1"), or `null` when no version-like token is found.
+ */
+export function parseBinaryVersion(output: string): string | null {
+  const match = output.match(/v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)/);
+  return match ? match[1] : null;
+}
+
+// =============================================================================
 // Binary Manager
 // =============================================================================
 
@@ -147,9 +166,7 @@ export class BinaryManager {
       try {
         const { stdout } = await execAsync(`"${binaryPath}" --version`);
         // Output format: "fnn Fiber v0.7.1 (f761b6d 2026-01-14)"
-        // Extract the version number
-        const versionMatch = stdout.match(/v(\d+\.\d+\.\d+)/);
-        version = versionMatch ? versionMatch[1] : stdout.trim();
+        version = parseBinaryVersion(stdout) ?? stdout.trim();
         ready = true;
       } catch {
         // Binary exists but may not be executable
@@ -259,10 +276,21 @@ export class BinaryManager {
 
     const binaryPath = this.getBinaryPath();
 
-    // Check if already installed
+    // Resolve release tag and target version early so the already-installed
+    // check below can decide whether the existing binary actually satisfies
+    // the requested version.
+    onProgress({ phase: 'fetching', message: 'Resolving release tag...' });
+    const tag = this.normalizeTag(version || DEFAULT_FIBER_VERSION);
+    const targetVersion = tag.startsWith('v') ? tag.slice(1) : tag;
+
+    onProgress({ phase: 'fetching', message: `Found release: ${tag}` });
+
+    // Check if already installed — only skip the download when the installed
+    // version matches the requested version. A mismatch must not silently keep
+    // whatever binary happens to be on disk.
     if (!force && existsSync(binaryPath)) {
       const info = await this.getBinaryInfo();
-      if (info.ready) {
+      if (info.ready && info.version === targetVersion) {
         onProgress({ phase: 'installing', message: `Binary already installed at ${binaryPath}` });
         return info;
       }
@@ -272,12 +300,6 @@ export class BinaryManager {
     if (!existsSync(this.installDir)) {
       mkdirSync(this.installDir, { recursive: true });
     }
-
-    // Resolve release tag
-    onProgress({ phase: 'fetching', message: 'Resolving release tag...' });
-    const tag = this.normalizeTag(version || DEFAULT_FIBER_VERSION);
-
-    onProgress({ phase: 'fetching', message: `Found release: ${tag}` });
 
     // Build asset candidates
     const candidates = this.buildAssetCandidates(tag);
@@ -380,7 +402,14 @@ export class BinaryManager {
 
     onProgress({ phase: 'installing', message: `Installed to ${binaryPath}` });
 
-    return this.getBinaryInfo();
+    const installedInfo = await this.getBinaryInfo();
+    if (installedInfo.version !== targetVersion) {
+      throw new Error(
+        `Version mismatch after install: requested v${targetVersion} but binary reports v${installedInfo.version}`,
+      );
+    }
+
+    return installedInfo;
   }
 
   /**
