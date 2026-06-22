@@ -65,7 +65,7 @@ Recommended integration strategy:
 ## One-line import
 
 ```tsx
-import { ConnectButton, FiberPayQuickCard, useFiberNode, useFiberPayment } from '@fiber-pay/react';
+import { ConnectButton, FiberNodeButton, FiberPayQuickCard, NodeInfoPanel, useFiberNode, useFiberPayment } from '@fiber-pay/react';
 ```
 
 ## Quick start
@@ -118,6 +118,113 @@ import { Fiber } from '@nervosnetwork/fiber-js';
 export function HeaderWallet() {
   const fiber = useFiberNode({ network: 'testnet', wasmFactory: () => new Fiber() });
   return <ConnectButton fiber={fiber} strategy="passkey" />;
+}
+```
+
+## NodeInfoPanel
+
+`NodeInfoPanel` is a **display-only** component that shows Fiber browser node metadata, real-time stats, and an optional QR code for deposits. It is the complement to `ConnectButton`/`FiberNodeButton` — while those handle connection management and operations, `NodeInfoPanel` provides the dashboard view.
+
+```tsx
+import { NodeInfoPanel, useFiberNode } from '@fiber-pay/react';
+
+export function NodeDashboard() {
+  const fiber = useFiberNode({ network: 'testnet', walletId: 'dashboard' });
+
+  return (
+    <NodeInfoPanel node={fiber.node} network="testnet" showQrCode />
+  );
+}
+```
+
+> **Note:** `NodeInfoPanel` does **not** manage the node lifecycle. It expects a running `FiberBrowserNode` instance passed via the `node` prop — use `useFiberNode` or `ConnectButton`/`FiberNodeButton` for connection management.
+
+### What it shows
+
+| Info | Detail |
+|------|--------|
+| **Node state badge** | Visual status indicator (idle, starting, running, error, etc.) |
+| **Pubkey** | Full display with **copy-to-clipboard button** |
+| **CKB Address** | Derived from the node's lock script, displayed with **copy button** |
+| **Peers / Channels count** | Compact stat cards |
+| **CKB Balance** | Queried from chain via RPC (updated every 15s) |
+| **QR Code** | Optional — shows CKB address for "Scan to deposit CKB" (`showQrCode` prop) |
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `node` | `FiberBrowserNode \| null` | — | The running node instance. Pass `null` for idle state. |
+| `network` | `"testnet" \| "mainnet"` | — | Network for address derivation and RPC URL. |
+| `pollInterval` | `number` | `15000` | Stats refresh interval in milliseconds. |
+| `showQrCode` | `boolean` | `false` | Show a QR code of the CKB address (requires `qrcode.react`). |
+| `renderQrCode` | `(value: string) => ReactNode` | — | Override QR rendering with your own library. |
+| `className` | `string` | — | Additional CSS class name(s). |
+| `style` | `CSSProperties` | — | Inline styles. |
+
+### Role comparison
+
+| Capability | ConnectButton | FiberNodeButton | NodeInfoPanel |
+|------------|:---:|:---:|:---:|
+| Connect / Disconnect | ✅ | ✅ | ❌ |
+| Create invoices / Pay | ❌ | ✅ | ❌ |
+| Channel management | ❌ | ✅ | ❌ |
+| Diagnostics (graph/peers) | ❌ | ✅ | ❌ |
+| **Pubkey with copy** | ❌ | ❌ | ✅ |
+| **CKB Address + copy** | ❌ | ❌ | ✅ |
+| **QR code for deposit** | ❌ | ❌ | ✅ |
+| **CKB balance** | ❌ | ❌ | ✅ |
+
+### Combining with other components
+
+`NodeInfoPanel` is designed to compose with `ConnectButton` and `FiberNodeButton` through the shared `useFiberNode` hook:
+
+**Standalone layout** — ConnectButton in the header, NodeInfoPanel in a sidebar:
+```tsx
+import { ConnectButton, NodeInfoPanel, useFiberNode } from '@fiber-pay/react';
+
+export function WalletLayout() {
+  const fiber = useFiberNode({ network: 'testnet', walletId: 'main-wallet' });
+
+  return (
+    <div style={{ display: 'flex', gap: 16 }}>
+      <header>
+        <ConnectButton fiber={fiber} strategy="passkey" />
+      </header>
+      <aside>
+        <NodeInfoPanel node={fiber.node} network="testnet" showQrCode />
+      </aside>
+    </div>
+  );
+}
+```
+
+**As a custom tab in FiberNodeButton** — add a "Deposit" tab inside the existing dropdown (see [Tab customization](#tab-customization) below for more options):
+
+```tsx
+import { FiberNodeButton, NodeInfoPanel, useFiberNode } from '@fiber-pay/react';
+
+export function WalletWithDeposit() {
+  const fiber = useFiberNode({ network: 'testnet', walletId: 'wallet-deposit' });
+
+  return (
+    <FiberNodeButton
+      fiber={fiber}
+      strategy="passkey"
+      tabs={[
+        { id: 'workbench' },
+        { id: 'channels' },
+        {
+          id: 'deposit',
+          label: 'Deposit',
+          render: ({ fiber: { node } }) => (
+            <NodeInfoPanel node={node} network="testnet" showQrCode />
+          ),
+        },
+        { id: 'diagnostics' },
+      ]}
+    />
+  );
 }
 ```
 
@@ -222,6 +329,8 @@ export function WalletEntry() {
 - `renderTabContent(tabId, context)`: override tab body rendering
 - `renderAction(context)`: replace default action button UI/behavior for selected actions (context includes `state`)
 - `t(key, fallback, vars?)`: localize labels and copy
+
+> **Tip:** Use a custom tab to embed `NodeInfoPanel` (see [its section](#nodeinfopanel) above) for a deposit/recharge UI inside `FiberNodeButton`'s dropdown — no extra layout needed.
 
 Render precedence for a tab body is:
 1. `renderTabContent(tabId, context)` when it returns a value other than `undefined`
