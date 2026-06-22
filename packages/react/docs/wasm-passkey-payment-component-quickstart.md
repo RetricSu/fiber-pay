@@ -18,7 +18,7 @@ import { FiberPayQuickCard } from '@fiber-pay/react';
 
 ## What You Get Today
 
-- `@fiber-pay/react`: official React hooks and starter component (`useFiberNode`, `useFiberPayment`, `FiberPayQuickCard`)
+- `@fiber-pay/react`: official React hooks and starter components (`useFiberNode`, `useFiberPayment`, `ConnectButton`, `FiberNodeButton`, `FiberPayQuickCard`, `NodeInfoPanel`)
 - `@fiber-pay/sdk/browser`: low-level browser API when you need deeper control
 
 ## 1) Install

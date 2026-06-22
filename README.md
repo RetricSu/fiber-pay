@@ -39,7 +39,7 @@ Package maturity note:
 | --- | --- |
 | `@fiber-pay/cli` | Stable operator interface and automation-first command surface |
 | `@fiber-pay/sdk` | Typed protocol/client primitives for app integration |
-| `@fiber-pay/react` | React hooks/components for browser WASM + passkey payment flows |
+| `@fiber-pay/react` | React hooks/components for browser WASM + passkey payment flows (`ConnectButton`, `FiberNodeButton`, `FiberPayQuickCard`, `NodeInfoPanel`, `useFiberNode`, `useFiberPayment`) |
 | `@fiber-pay/runtime` | Runtime orchestration (jobs, monitoring, retry loops) |
 | `@fiber-pay/node` | Local `fnn` binary lifecycle management |
 | `@fiber-pay/agent` | Experimental package, not recommended for production yet |
