@@ -1,11 +1,6 @@
-import { basename, dirname, normalize } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ResolvedBinaryPath } from '../src/lib/binary-path.js';
-import {
-  getMigrateBinaryPathForBinary,
-  getNodeUpgradeMode,
-  type NodeUpgradeMode,
-} from '../src/lib/node-upgrade.js';
+import { getNodeUpgradeMode, type NodeUpgradeMode } from '../src/lib/node-upgrade.js';
 
 function createResolvedBinary(overrides: Partial<ResolvedBinaryPath> = {}): ResolvedBinaryPath {
   return {
@@ -27,7 +22,7 @@ describe('node upgrade mode', () => {
     expect(mode).toBe('managed-download');
   });
 
-  it('uses custom-migrate-only mode for configured binary paths', () => {
+  it('uses custom-binary mode for configured binary paths', () => {
     const resolved = createResolvedBinary({
       source: 'configured-path',
       binaryPath: '/opt/fiber/custom/my-fnn',
@@ -37,20 +32,6 @@ describe('node upgrade mode', () => {
 
     const mode: NodeUpgradeMode = getNodeUpgradeMode(resolved);
 
-    expect(mode).toBe('custom-migrate-only');
-  });
-
-  it('resolves fnn-migrate path from configured binary directory', () => {
-    const binaryPath = '/opt/fiber/custom/my-fnn';
-    const migratePath = getMigrateBinaryPathForBinary(binaryPath);
-
-    expect(normalize(dirname(migratePath))).toBe(normalize(dirname(binaryPath)));
-    expect(basename(migratePath)).toBe(process.platform === 'win32' ? 'fnn-migrate.exe' : 'fnn-migrate');
-  });
-
-  it('rejects bare command names for migrate path derivation', () => {
-    expect(() => getMigrateBinaryPathForBinary('fnn')).toThrow(
-      /must include an explicit directory path/i,
-    );
+    expect(mode).toBe('custom-binary');
   });
 });

@@ -174,15 +174,6 @@ export class BinaryManager {
   }
 
   /**
-   * Get the path where the fnn-migrate binary should be installed
-   */
-  getMigrateBinaryPath(): string {
-    const { platform } = this.getPlatformInfo();
-    const binaryName = platform === 'win32' ? 'fnn-migrate.exe' : 'fnn-migrate';
-    return join(this.installDir, binaryName);
-  }
-
-  /**
    * Check if the binary is installed and get its info
    */
   async getBinaryInfo(): Promise<BinaryInfo> {
@@ -415,9 +406,9 @@ export class BinaryManager {
     onProgress({ phase: 'extracting', message: 'Extracting binary...' });
 
     if (selected.name.endsWith('.tar.gz') || selected.name.endsWith('.tgz')) {
-      await this.extractTarGz(buffer, binaryPath);
+      await this.extractTarGz(buffer, 'fnn', binaryPath);
     } else if (selected.name.endsWith('.zip')) {
-      await this.extractZip(buffer, binaryPath);
+      await this.extractZip(buffer, 'fnn', binaryPath);
     } else {
       // Direct binary
       const { writeFile } = await import('node:fs/promises');
@@ -445,7 +436,11 @@ export class BinaryManager {
   /**
    * Extract tar.gz archive
    */
-  private async extractTarGz(buffer: Buffer, targetPath: string): Promise<void> {
+  private async extractTarGz(
+    buffer: Buffer,
+    binaryName: string,
+    targetPath: string,
+  ): Promise<void> {
     const { writeFile, readdir, rename, rm } = await import('node:fs/promises');
     const tempDir = `${targetPath}.extract`;
 
@@ -482,48 +477,19 @@ export class BinaryManager {
 
     // Find the binary in extracted files
     const files = await readdir(tempDir, { recursive: true });
-    const binaryFile = this.findBinaryInExtractedFiles(files, 'fnn');
+    const binaryFile = this.findBinaryInExtractedFiles(files, binaryName);
 
     if (binaryFile) {
       const sourcePath = join(tempDir, String(binaryFile));
       await rename(sourcePath, targetPath);
     } else {
-      // If no fnn found, maybe the archive contains a single binary
+      // If no binary found, maybe the archive contains a single binary
       const extractedFiles = await readdir(tempDir);
       const possibleBinary = extractedFiles.find(
         (f) => f !== 'archive.tar.gz' && !f.startsWith('.'),
       );
       if (possibleBinary) {
         await rename(join(tempDir, possibleBinary), targetPath);
-      }
-    }
-
-    // Also extract fnn-migrate if present in the archive
-    const migrateFile = this.findBinaryInExtractedFiles(files, 'fnn-migrate');
-
-    if (migrateFile) {
-      const migrateSourcePath = join(tempDir, String(migrateFile));
-      const migrateTargetPath = this.getMigrateBinaryPath();
-      try {
-        // Proactively remove existing fnn-migrate so rename doesn't fail
-        if (existsSync(migrateTargetPath)) {
-          try {
-            unlinkSync(migrateTargetPath);
-          } catch {
-            // If we can't remove the existing file, the rename will likely fail below
-          }
-        }
-        await rename(migrateSourcePath, migrateTargetPath);
-        const { platform } = this.getPlatformInfo();
-        if (platform !== 'win32') {
-          chmodSync(migrateTargetPath, 0o755);
-        }
-      } catch (error) {
-        // fnn-migrate is optional; don't fail the main install, but warn
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn(
-          `Warning: failed to install fnn-migrate helper. Migrations may be unavailable or stale. Error: ${message}`,
-        );
       }
     }
 
@@ -534,7 +500,7 @@ export class BinaryManager {
   /**
    * Extract zip archive (primarily for Windows)
    */
-  private async extractZip(buffer: Buffer, targetPath: string): Promise<void> {
+  private async extractZip(buffer: Buffer, binaryName: string, targetPath: string): Promise<void> {
     const { writeFile, readdir, rename, rm } = await import('node:fs/promises');
     const tempDir = `${targetPath}.extract`;
 
@@ -559,38 +525,10 @@ export class BinaryManager {
 
     // Find and move the binary
     const files = await readdir(tempDir, { recursive: true });
-    const binaryFile = this.findBinaryInExtractedFiles(files, 'fnn');
+    const binaryFile = this.findBinaryInExtractedFiles(files, binaryName);
 
     if (binaryFile) {
       await rename(join(tempDir, String(binaryFile)), targetPath);
-    }
-
-    // Also extract fnn-migrate if present
-    const migrateFile = this.findBinaryInExtractedFiles(files, 'fnn-migrate');
-
-    if (migrateFile) {
-      const migrateTargetPath = this.getMigrateBinaryPath();
-      try {
-        // Proactively remove existing fnn-migrate so rename doesn't fail
-        if (existsSync(migrateTargetPath)) {
-          try {
-            unlinkSync(migrateTargetPath);
-          } catch {
-            // If we can't remove the existing file, the rename will likely fail below
-          }
-        }
-        await rename(join(tempDir, String(migrateFile)), migrateTargetPath);
-        const { platform } = this.getPlatformInfo();
-        if (platform !== 'win32') {
-          chmodSync(migrateTargetPath, 0o755);
-        }
-      } catch (error) {
-        // fnn-migrate is optional; don't fail the main install, but warn
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn(
-          `Warning: failed to install fnn-migrate helper. Migrations may be unavailable or stale. Error: ${message}`,
-        );
-      }
     }
 
     await rm(tempDir, { recursive: true, force: true });
@@ -607,11 +545,60 @@ export class BinaryManager {
   }
 
   /**
+   * Download an old release archive and extract only its `fnn-migrate` binary.
+   * Used for the v0.8.x → v0.9.0 data-migration bridge.
+   */
+  async downloadLegacyMigrateBinary(version: string, targetDir: string): Promise<string> {
+    const { platform } = this.getPlatformInfo();
+    const migrateName = platform === 'win32' ? 'fnn-migrate.exe' : 'fnn-migrate';
+    const targetPath = join(targetDir, migrateName);
+
+    if (!existsSync(targetDir)) {
+      mkdirSync(targetDir, { recursive: true });
+    }
+
+    const tag = this.normalizeTag(version);
+    const candidates = this.buildAssetCandidates(tag);
+
+    let response: Response | undefined;
+    let selected: AssetCandidate | undefined;
+    for (const candidate of candidates) {
+      const res = await fetch(candidate.url, { headers: { 'User-Agent': 'fiber-pay' } });
+      if (res.ok) {
+        response = res;
+        selected = candidate;
+        break;
+      }
+    }
+
+    if (!response || !selected) {
+      throw new Error(`Failed to download legacy migrate archive for ${tag}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    if (selected.name.endsWith('.tar.gz') || selected.name.endsWith('.tgz')) {
+      await this.extractTarGz(buffer, 'fnn-migrate', targetPath);
+    } else if (selected.name.endsWith('.zip')) {
+      await this.extractZip(buffer, 'fnn-migrate', targetPath);
+    } else {
+      throw new Error(`Unsupported legacy archive format: ${selected.name}`);
+    }
+
+    if (platform !== 'win32') {
+      chmodSync(targetPath, 0o755);
+    }
+
+    return targetPath;
+  }
+
+  /**
    * Find a named binary in a list of extracted file paths.
    */
   private findBinaryInExtractedFiles(
     files: (string | Buffer)[],
-    binaryName: 'fnn' | 'fnn-migrate',
+    binaryName: string,
   ): string | Buffer | undefined {
     return files.find((f) => {
       const name = String(f);

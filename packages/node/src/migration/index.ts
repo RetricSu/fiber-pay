@@ -1,2 +1,3 @@
-export type { MigrationCheckResult, MigrationOptions, MigrationResult } from './manager.js';
-export { MigrationManager } from './manager.js';
+export type { LegacyMigrationOptions, LegacyMigrationResult } from './legacy.js';
+export { LegacyMigration } from './legacy.js';
+export { resolveStorePath, storeExists } from './store.js';

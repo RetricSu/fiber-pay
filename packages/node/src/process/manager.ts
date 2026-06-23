@@ -188,9 +188,14 @@ export class ProcessManager extends EventEmitter {
 
     this.process = spawn(this.config.binaryPath, args, {
       env,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
       detached: false,
     });
+
+    // Auto-confirm fnn's "Continue? [y/N]" migration prompt. fnn only reads
+    // stdin when it has pending migrations, so this is harmless for normal starts.
+    this.process.stdin?.write('y\n');
+    this.process.stdin?.end();
 
     // Handle stdout
     this.process.stdout?.on('data', (data: Buffer) => {
