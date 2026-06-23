@@ -4,12 +4,12 @@ Covers upgrading the Fiber node binary and migrating the on-disk database betwee
 
 ## Overview
 
-Fiber's database schema may change between versions. The `fnn-migrate` binary (shipped alongside `fnn` in release archives) handles schema migration. fiber-pay automates the full upgrade flow via `fiber-pay node upgrade`.
+Fiber's database schema may change between versions. Starting with `fnn v0.9.0-rc4`, the separate `fnn-migrate` binary is no longer shipped in release archives; migration logic is built into `fnn` itself and runs automatically when the node starts. fiber-pay handles the full upgrade flow via `fiber-pay node upgrade`.
 
 `fiber-pay node upgrade` is migration-first:
 
-- Managed binary mode (default profile-managed path): download/replace `fnn` when needed, then run migration checks.
-- Custom binary mode (`--binary-path` or profile `binaryPath`): skip binary download and run migration flow only.
+- Managed binary mode (default profile-managed path): download/replace `fnn` when needed, then run the legacy migration step if the store exists.
+- Custom binary mode (`--binary-path` or profile `binaryPath`): skip binary download and run the legacy migration step only.
 
 ## Upgrade flow
 
@@ -17,13 +17,12 @@ Fiber's database schema may change between versions. The `fnn-migrate` binary (s
 # 1. Stop the node
 fiber-pay node stop
 
-# 2. Upgrade binary + migrate store
+# 2. Upgrade binary + prepare store
 fiber-pay node upgrade                    # latest version
-fiber-pay node upgrade --version v0.8.0   # specific version
-fiber-pay node upgrade --force-migrate    # force migration check/attempt
+fiber-pay node upgrade --version v0.9.0-rc4   # specific version
 
 # custom binary path: migration-only (no auto-download)
-fiber-pay --binary-path /opt/fiber/custom/fnn node upgrade --force-migrate
+fiber-pay --binary-path /opt/fiber/custom/fnn node upgrade
 
 # 3. Restart
 fiber-pay node start
@@ -34,32 +33,35 @@ fiber-pay node start
 | Flag | Effect |
 |------|--------|
 | `--version <ver>` | Pin target version instead of latest |
-| `--no-backup` | Skip store backup before migration |
-| `--check-only` | Dry-run: report migration status without executing |
-| `--force-migrate` | Force migration attempt even if compatibility check reports incompatible data |
+| `--no-backup` | Skip store backup before legacy migration |
+| `--check-only` | Dry-run: report whether legacy migration would run |
 | `--json` | Machine-readable output |
 
-## Startup guard
+## Migration model in v0.9.0-rc4
 
-`fiber-pay node start` automatically checks store compatibility before launching fnn. If migration is needed, it exits with `MIGRATION_REQUIRED` and directs the user to run `fiber-pay node upgrade --force-migrate`.
+- `fnn v0.9.0-rc4` no longer ships a separate `fnn-migrate` binary.
+- `fiber-pay node upgrade` automatically downloads the `v0.8.1` release archive and runs its `fnn-migrate` against the store when a legacy store is present. This brings old stores up to the v0.9.0 epoch.
+- `fiber-pay node start` pipes `y` to `fnn` stdin so the built-in migration prompt (`Continue? [y/N]`) is confirmed automatically.
+- Do not invoke `fnn-migrate` as a standalone binary; it is only used internally as a legacy bridge.
 
-If `fnn-migrate` is unavailable, startup guard pre-check can be skipped for that start attempt. In that case, the node may still fail later if the on-disk store is incompatible.
+## Startup behavior
+
+`fiber-pay node start` no longer runs a pre-start migration guard. Instead, it relies on `fnn`'s built-in migration. If the store is too old for `fnn v0.9.0-rc4` to open, the node exits with `NODE_STARTUP_EXITED` and the error message directs you to run `fiber-pay node upgrade` first.
 
 ## Custom binary behavior
 
 - `node upgrade` does not overwrite custom binaries.
-- Migration still runs against the current store when present.
+- Legacy migration still runs against the current store when present.
 - `binaryPath` must be an explicit file path (absolute like `/opt/fiber/fnn` or relative like `./fnn`), not a bare command name like `fnn`.
-- `fnn-migrate` is resolved from the configured binary directory. If missing, the command exits with an actionable error.
 
 ## When auto-migration fails
 
-Some breaking changes require closing all channels first. The error message includes step-by-step manual instructions and a link to the upstream [Migration Guide](https://github.com/nervosnetwork/fiber/wiki/Fiber-Breaking-Change-Migration-Guide).
+Some breaking changes may require closing all channels first. If the legacy migration fails, the error message includes the migration output and, if a backup was created, the backup path.
 
 Recommended operator sequence:
 
 1. Back up the current store directory first (default: `<dataDir>/fiber/store`).
-2. Run `fiber-pay node upgrade --force-migrate`.
+2. Run `fiber-pay node upgrade`.
 3. If migration still fails, close channels using the old fnn version, then remove the store and restart with a fresh store.
 4. If backup was created, roll back by restoring the backup directory.
 
@@ -67,31 +69,27 @@ Recommended operator sequence:
 
 - Backup created at `<dataDir>/fiber/store.bak-<timestamp>` by default
 - Rollback: delete the current store directory and restore the backup in its place
-- `--force-migrate` follows the same backup behavior (unless `--no-backup` is explicitly set)
+- `--no-backup` skips the backup (use with caution)
 
 ## Programmatic API (`@fiber-pay/node`)
 
 ```typescript
-import { BinaryManager, MigrationManager } from '@fiber-pay/node';
+import { BinaryManager, LegacyMigration, resolveStorePath, storeExists } from '@fiber-pay/node';
 import * as os from 'os';
 
 const dataDir = `${os.homedir()}/.fiber-pay`;
 const bm = new BinaryManager(`${dataDir}/bin`);
-const migrateBin = bm.getMigrateBinaryPath();  // path to fnn-migrate
 
-const mm = new MigrationManager(migrateBin);
-const storePath = MigrationManager.resolveStorePath(dataDir);
+// Download only the fnn binary (no fnn-migrate extracted)
+const info = await bm.download({ version: 'v0.9.0-rc4' });
 
-// Check
-const check = await mm.check(storePath);
-// check.needed / check.valid / check.message
-
-// Migrate (with backup)
-const result = await mm.migrate({ storePath });
-// result.success / result.backupPath / result.message
-
-// Rollback
-mm.rollback(storePath, result.backupPath!);
+// Run legacy migration if needed
+if (storeExists(dataDir)) {
+  const legacy = new LegacyMigration('v0.8.1');
+  const storePath = resolveStorePath(dataDir);
+  const result = await legacy.migrate({ storePath });
+  // result.success / result.backupPath / result.message
+}
 ```
 
 ## File layout
@@ -100,7 +98,6 @@ mm.rollback(storePath, result.backupPath!);
 <dataDir>/
   bin/
     fnn              # Fiber node binary
-    fnn-migrate      # Migration tool binary
   fiber/
     store/           # Node database (managed by fnn)
     store.bak-*/     # Timestamped backups (created by upgrade)

@@ -33,6 +33,8 @@ import type {
   GraphNodesResult,
   ListChannelsParams,
   ListChannelsResult,
+  ListPaymentsParams,
+  ListPaymentsResult,
   ListPeersResult,
   NewInvoiceParams,
   NewInvoiceResult,
@@ -268,6 +270,10 @@ export class FiberWasmAdapter {
 
   async getPayment(params: GetPaymentParams): Promise<GetPaymentResult> {
     return this.invoke<GetPaymentResult>('get_payment', [params]);
+  }
+
+  async listPayments(params?: ListPaymentsParams): Promise<ListPaymentsResult> {
+    return this.invoke<ListPaymentsResult>('list_payments', [params ?? {}]);
   }
 
   async buildRouter(params: BuildRouterParams): Promise<BuildRouterResult> {

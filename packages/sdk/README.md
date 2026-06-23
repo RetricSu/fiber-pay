@@ -151,4 +151,4 @@ See [packages/cli/docs/l402-agent-guide.md](../cli/docs/l402-agent-guide.md) for
 ## Compatibility
 
 - Node.js `>=20`
-- Fiber target: `v0.8.1`
+- Fiber target: `v0.9.0-rc4`

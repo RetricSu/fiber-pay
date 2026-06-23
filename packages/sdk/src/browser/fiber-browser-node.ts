@@ -50,6 +50,8 @@ import type {
   GraphNodesResult,
   ListChannelsParams,
   ListChannelsResult,
+  ListPaymentsParams,
+  ListPaymentsResult,
   ListPeersResult,
   NewInvoiceParams,
   NewInvoiceResult,
@@ -337,6 +339,10 @@ export class FiberBrowserNode implements IFiberClient {
 
   async getPayment(params: GetPaymentParams): Promise<GetPaymentResult> {
     return this.ensureRunning().getPayment(params);
+  }
+
+  async listPayments(params?: ListPaymentsParams): Promise<ListPaymentsResult> {
+    return this.ensureRunning().listPayments(params);
   }
 
   async buildRouter(params: BuildRouterParams): Promise<BuildRouterResult> {
