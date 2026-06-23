@@ -119,6 +119,15 @@ export async function runNodeUpgradeCommand(
 
   if (!json) console.log(`📦 Target version: ${targetTag}`);
 
+  if (options.checkOnly) {
+    await runLegacyMigrationIfNeeded({
+      dataDir: config.dataDir,
+      json,
+      checkOnly: true,
+      backup: false,
+    });
+  }
+
   // Check current version
   const currentInfo = await binaryManager.getBinaryInfo();
 
@@ -227,16 +236,32 @@ async function runLegacyMigrationIfNeeded(
   const { dataDir, json, checkOnly, backup } = opts;
 
   if (!storeExists(dataDir)) {
+    if (checkOnly) {
+      if (json) {
+        printJsonSuccess({
+          action: 'check-only',
+          message: 'No store detected. No migration needed.',
+        });
+      } else {
+        console.log('📋 No store detected. No migration needed.');
+      }
+      process.exit(0);
+    }
     return { ran: false };
   }
 
   const storePath = resolveStorePath(dataDir);
 
   if (checkOnly) {
-    if (!json) {
-      console.log('📋 Store exists. Legacy migration will run if needed during upgrade.');
+    if (json) {
+      printJsonSuccess({
+        action: 'check-only',
+        message: 'Store exists. Legacy migration would run if needed.',
+      });
+    } else {
+      console.log('📋 Store exists. Legacy migration would run if needed.');
     }
-    return { ran: false };
+    process.exit(0);
   }
 
   if (!json) {

@@ -200,8 +200,11 @@ export class ProcessManager extends EventEmitter {
 
     // Auto-confirm fnn's "Continue? [y/N]" migration prompt. fnn only reads
     // stdin when it has pending migrations, so this is harmless for normal starts.
-    this.process.stdin?.write('y\n');
-    this.process.stdin?.end();
+    if (this.process.stdin) {
+      this.process.stdin.on('error', () => {});
+      this.process.stdin.write('y\n');
+      this.process.stdin.end();
+    }
 
     // Handle stdout
     this.process.stdout?.on('data', (data: Buffer) => {

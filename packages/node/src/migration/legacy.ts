@@ -96,7 +96,7 @@ export class LegacyMigration {
   private async ensureMigrateBinary(): Promise<string> {
     return this.binaryManager.downloadLegacyMigrateBinary(
       this.legacyVersion,
-      this.binaryManager.getBinaryPath(),
+      dirname(this.binaryManager.getBinaryPath()),
     );
   }
 
