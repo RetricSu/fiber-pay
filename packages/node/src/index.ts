@@ -19,13 +19,8 @@ export {
   getDefaultBinaryPath,
   getFiberBinaryInfo,
 } from './binary/index.js';
-export type {
-  MigrationCheckResult,
-  MigrationOptions,
-  MigrationResult,
-} from './migration/index.js';
-// Migration management
-export { MigrationManager } from './migration/index.js';
+export type { LegacyMigrationOptions, LegacyMigrationResult } from './migration/index.js';
+export { LegacyMigration, resolveStorePath, storeExists } from './migration/index.js';
 
 // Process management
 export { ProcessManager } from './process/index.js';

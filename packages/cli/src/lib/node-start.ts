@@ -13,7 +13,6 @@ import { autoConnectBootnodes, extractBootnodeAddrs } from './bootnode.js';
 import { type CliConfig, ensureNodeConfigFile, loadProfileConfig } from './config.js';
 import { printJsonError, printJsonEvent } from './format.js';
 import { appendToTodayLog, flushPendingLogs, resolveLogDirForDate } from './log-files.js';
-import { runMigrationGuard } from './node-migration.js';
 import {
   getBinaryVersion,
   startRuntimeDaemonFromNode,
@@ -187,21 +186,6 @@ export async function runNodeStartCommand(
     console.log(`🧩 Version: ${binaryVersion}`);
   }
 
-  // Check if database migration is needed before starting the node
-  const guardResult = await runMigrationGuard({ dataDir: config.dataDir, binaryPath, json });
-  if (guardResult.checked) {
-    emitStage('migration_check', 'ok', {
-      storePath: `${config.dataDir}/store`,
-      needed: false,
-    });
-  } else {
-    emitStage('migration_check', 'ok', {
-      storePath: `${config.dataDir}/store`,
-      skipped: true,
-      reason: guardResult.skippedReason,
-    });
-  }
-
   const nodeConfig: FiberNodeConfig = {
     binaryPath,
     dataDir: config.dataDir,
@@ -276,20 +260,24 @@ export async function runNodeStartCommand(
 
   if (earlyStop || processManager.getState() === 'stopped') {
     const details = formatStopDetails(earlyStop);
-    emitStage('process_started', 'error', {
-      code: 'NODE_STARTUP_EXITED',
-      details,
-    });
+    const stderrTail = processManager.getStderr(12).join('').trim();
+    const isDbTooOld = stderrTail.includes('Database version') && stderrTail.includes('too old');
+    emitStage('process_started', 'error', { code: 'NODE_STARTUP_EXITED', details });
     if (json) {
       printJsonError({
         code: 'NODE_STARTUP_EXITED',
         message: `Fiber node exited during startup${details}`,
         recoverable: true,
-        suggestion: 'Inspect fnn logs and verify config ports are free before retrying.',
+        suggestion: isDbTooOld
+          ? 'The store is too old for fnn v0.9.0-rc4. Run `fiber-pay node upgrade` first.'
+          : 'Inspect fnn logs and verify config ports are free before retrying.',
         details: earlyStop ?? undefined,
       });
     } else {
       console.error(`❌ Fiber node exited during startup${details}`);
+      if (isDbTooOld) {
+        console.error('   The store must be migrated first. Run: fiber-pay node upgrade');
+      }
     }
     removePidFile(config.dataDir);
     if (runtimeDaemon) {

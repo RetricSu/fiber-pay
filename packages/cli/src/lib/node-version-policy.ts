@@ -1,4 +1,5 @@
 import type { BinaryManager } from '@fiber-pay/node';
+import { DEFAULT_FIBER_VERSION } from '@fiber-pay/node';
 import type { ProfileConfig } from './config.js';
 
 export type ManagedStartVersionSource = 'profile' | 'default';
@@ -8,7 +9,7 @@ export interface ManagedStartVersionDecision {
   source: ManagedStartVersionSource;
 }
 
-export type ManagedUpgradeVersionSource = 'requested' | 'latest';
+export type ManagedUpgradeVersionSource = 'requested' | 'default';
 
 export interface ManagedUpgradeVersionDecision {
   targetTag: string;
@@ -31,20 +32,20 @@ export function normalizeTargetVersion(
   };
 }
 
-export async function resolveManagedUpgradeVersion(
+export function resolveManagedUpgradeVersion(
   binaryManager: BinaryManager,
   requestedVersion?: string,
-): Promise<ManagedUpgradeVersionDecision> {
+): ManagedUpgradeVersionDecision {
   if (requestedVersion) {
     const normalized = normalizeTargetVersion(binaryManager, requestedVersion);
     return { ...normalized, source: 'requested' };
   }
 
-  const targetTag = await binaryManager.getLatestTag();
+  const targetTag = binaryManager.normalizeTag(DEFAULT_FIBER_VERSION);
   return {
     targetTag,
     targetVersion: stripVersionPrefix(targetTag),
-    source: 'latest',
+    source: 'default',
   };
 }
 

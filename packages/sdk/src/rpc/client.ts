@@ -34,6 +34,8 @@ import type {
   JsonRpcResponse,
   ListChannelsParams,
   ListChannelsResult,
+  ListPaymentsParams,
+  ListPaymentsResult,
   ListPeersResult,
   // Invoice methods
   NewInvoiceParams,
@@ -297,6 +299,13 @@ export class FiberRpcClient implements IFiberClient {
    */
   async getPayment(params: GetPaymentParams): Promise<GetPaymentResult> {
     return this.call<GetPaymentResult>('get_payment', [params]);
+  }
+
+  /**
+   * List payments
+   */
+  async listPayments(params?: ListPaymentsParams): Promise<ListPaymentsResult> {
+    return this.call<ListPaymentsResult>('list_payments', params ? [params] : [{}]);
   }
 
   // ===========================================================================

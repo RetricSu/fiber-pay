@@ -1,8 +1,8 @@
 /**
- * Fiber Network Node RPC Types (Fiber v0.8.1)
+ * Fiber Network Node RPC Types (Fiber v0.9.0-rc4)
  *
  * The types in this file are intended to align with the upstream RPC spec:
- * https://github.com/nervosnetwork/fiber/blob/v0.8.1/crates/fiber-lib/src/rpc/README.md
+ * https://github.com/nervosnetwork/fiber/blob/v0.9.0-rc4/crates/fiber-lib/src/rpc/README.md
  */
 
 // =============================================================================
@@ -221,6 +221,17 @@ export interface PaymentInfo {
   fee: HexString;
   custom_records?: PaymentCustomRecords;
   routers?: SessionRoute[];
+}
+
+export interface ListPaymentsParams {
+  payment_hash?: PaymentHash;
+  limit?: HexString;
+  after?: HexString;
+}
+
+export interface ListPaymentsResult {
+  payments: PaymentInfo[];
+  last_cursor: HexString;
 }
 
 export interface HopHint {

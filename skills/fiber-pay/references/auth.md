@@ -4,8 +4,8 @@ This guide documents how `fiber-pay` works with Fiber RPC Biscuit authentication
 
 Upstream reference:
 
-- Fiber Biscuit auth doc: [docs/biscuit-auth.md](https://github.com/nervosnetwork/fiber/blob/v0.8.0/docs/biscuit-auth.md)
-- Fiber RPC reference: [crates/fiber-lib/src/rpc/README.md](https://github.com/nervosnetwork/fiber/blob/v0.8.0/crates/fiber-lib/src/rpc/README.md)
+- Fiber Biscuit auth doc: [docs/biscuit-auth.md](https://github.com/nervosnetwork/fiber/blob/v0.9.0-rc4/docs/biscuit-auth.md)
+- Fiber RPC reference: [crates/fiber-lib/src/rpc/README.md](https://github.com/nervosnetwork/fiber/blob/v0.9.0-rc4/crates/fiber-lib/src/rpc/README.md)
 
 ## Scope
 

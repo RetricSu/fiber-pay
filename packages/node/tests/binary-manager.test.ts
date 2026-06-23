@@ -1,6 +1,10 @@
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { execFile } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { promisify } from 'node:util';
 import { BinaryManager, parseBinaryVersion } from '../src/binary/manager.js';
+
+const execFileAsync = promisify(execFile);
 
 describe('BinaryManager asset candidate selection', () => {
   it('prefers native macOS arm64 and includes x64 fallback for Apple Silicon', () => {
@@ -276,5 +280,85 @@ describe('BinaryManager download error handling', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockFetchResponse()));
 
     await expect(manager.download({ version: '0.9.0-rc4' })).rejects.toThrow(/extract boom/);
+  });
+});
+
+function createFetchResponseFromBuffer(buffer: Buffer): Response {
+  const chunks: Uint8Array[] = [];
+  const chunkSize = 1024;
+  for (let i = 0; i < buffer.length; i += chunkSize) {
+    chunks.push(new Uint8Array(buffer.subarray(i, i + chunkSize)));
+  }
+
+  let readIndex = 0;
+  return {
+    ok: true,
+    headers: { get: (name: string) => (name.toLowerCase() === 'content-length' ? String(buffer.length) : null) },
+    body: {
+      getReader: () => ({
+        read: () => {
+          if (readIndex < chunks.length) {
+            const value = chunks[readIndex];
+            readIndex += 1;
+            return Promise.resolve({ done: false, value });
+          }
+          return Promise.resolve({ done: true });
+        },
+      }),
+    },
+  } as unknown as Response;
+}
+
+async function buildTarGz(sourceDir: string): Promise<Buffer> {
+  const { readFileSync } = await import('node:fs');
+  const archivePath = `${sourceDir}.tar.gz`;
+  await execFileAsync('tar', ['-czf', archivePath, '-C', sourceDir, '.']);
+  return readFileSync(archivePath);
+}
+
+describe('BinaryManager archive extraction', () => {
+  const tmpDir = '/tmp/fiber-pay-extract-test';
+  let manager: BinaryManager;
+  let binaryPath: string;
+
+  beforeEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+    mkdirSync(tmpDir, { recursive: true });
+    manager = new BinaryManager(tmpDir);
+    vi.spyOn(manager, 'getPlatformInfo').mockReturnValue({ platform: 'linux', arch: 'x64' });
+    binaryPath = manager.getBinaryPath();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('does not extract fnn-migrate from new archives', async () => {
+    const sourceDir = `${tmpDir}/archive`;
+    mkdirSync(sourceDir, { recursive: true });
+    createFakeBinary(`${sourceDir}/fnn`, '#!/bin/sh\necho "fnn Fiber v0.9.0-rc4"');
+    createFakeBinary(`${sourceDir}/fnn-migrate`, '#!/bin/sh\necho "migrate"');
+    const archiveBuffer = await buildTarGz(sourceDir);
+
+    vi.spyOn(manager, 'getBinaryInfo').mockResolvedValue({
+      path: binaryPath,
+      version: '0.9.0-rc4',
+      ready: true,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(createFetchResponseFromBuffer(archiveBuffer)),
+    );
+
+    const info = await manager.download({ version: '0.9.0-rc4', force: true });
+    expect(info.ready).toBe(true);
+    expect(info.version).toBe('0.9.0-rc4');
+
+    const { existsSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    expect(existsSync(binaryPath)).toBe(true);
+    expect(existsSync(join(tmpDir, 'fnn-migrate'))).toBe(false);
   });
 });
