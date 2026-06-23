@@ -38,16 +38,13 @@ describe('node version policy', () => {
     expect(decision.source).toBe('requested');
   });
 
-  it('resolves managed upgrade version from latest when not requested', async () => {
-    const manager = {
-      getLatestTag: async () => 'v0.9.0',
-      normalizeTag: (version: string) => (version.startsWith('v') ? version : `v${version}`),
-    } as unknown as BinaryManager;
+  it('resolves managed upgrade version from bundled default when not requested', () => {
+    const manager = new BinaryManager('/tmp/fiber-pay-test-bin');
 
-    const decision = await resolveManagedUpgradeVersion(manager);
+    const decision = resolveManagedUpgradeVersion(manager);
 
-    expect(decision.targetTag).toBe('v0.9.0');
-    expect(decision.targetVersion).toBe('0.9.0');
-    expect(decision.source).toBe('latest');
+    expect(decision.targetTag).toBe('v0.9.0-rc4');
+    expect(decision.targetVersion).toBe('0.9.0-rc4');
+    expect(decision.source).toBe('default');
   });
 });

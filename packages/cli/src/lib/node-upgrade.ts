@@ -113,8 +113,8 @@ export async function runNodeUpgradeCommand(
   const upgradeVersion = await resolveManagedUpgradeVersion(binaryManager, options.version);
   const targetTag = upgradeVersion.targetTag;
   const targetVersion = upgradeVersion.targetVersion;
-  if (upgradeVersion.source === 'latest' && !json) {
-    console.log('🔍 Resolving latest Fiber release...');
+  if (upgradeVersion.source === 'default' && !json) {
+    console.log('🔍 Using bundled default Fiber version...');
   }
 
   if (!json) console.log(`📦 Target version: ${targetTag}`);
