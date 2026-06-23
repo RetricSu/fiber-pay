@@ -41,6 +41,8 @@ import type {
   GraphNodesResult,
   ListChannelsParams,
   ListChannelsResult,
+  ListPaymentsParams,
+  ListPaymentsResult,
   ListPeersResult,
   NewInvoiceParams,
   NewInvoiceResult,
@@ -129,6 +131,9 @@ export interface IFiberClient {
 
   /** Get payment status. */
   getPayment(params: GetPaymentParams): Promise<GetPaymentResult>;
+
+  /** List payments. */
+  listPayments(params?: ListPaymentsParams): Promise<ListPaymentsResult>;
 
   /** Build a custom route for payment. */
   buildRouter(params: BuildRouterParams): Promise<BuildRouterResult>;

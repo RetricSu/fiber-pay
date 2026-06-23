@@ -341,6 +341,28 @@ describe('FiberRpcClient - New Methods', () => {
   });
 
   // ===========================================================================
+  // listPayments
+  // ===========================================================================
+
+  describe('listPayments', () => {
+    it('calls list_payments', async () => {
+      const fetchMock = mockFetch({
+        payments: [],
+        last_cursor: '0x0',
+      });
+      globalThis.fetch = fetchMock;
+
+      const result = await client.listPayments({ limit: '0x64' });
+      expect(result.payments).toEqual([]);
+      expect(result.last_cursor).toBe('0x0');
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.method).toBe('list_payments');
+      expect(body.params).toEqual([{ limit: '0x64' }]);
+    });
+  });
+
+  // ===========================================================================
   // new_invoice with payment_hash (hold invoice)
   // ===========================================================================
 

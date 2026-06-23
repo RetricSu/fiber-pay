@@ -45,6 +45,12 @@ export interface FiberNodeConfig {
       args: string;
     };
   }>;
+  /** Whether to enable peer reconnect backoff (fnn v0.9.0-rc4+). */
+  enablePeerReconnectBackoff?: boolean;
+  /** Maximum number of pending channel openings globally (fnn v0.9.0-rc4+). */
+  pendingChannelsNumberLimit?: number;
+  /** Gossip policy configuration (fnn v0.9.0-rc4+). Passed through as-is. */
+  gossipPolicy?: Record<string, unknown>;
 }
 
 export interface ProcessManagerEvents {
@@ -405,6 +411,20 @@ export class ProcessManager extends EventEmitter {
 
     if (this.config.udtWhitelist?.length) {
       (config.ckb as Record<string, unknown>).udt_whitelist = this.config.udtWhitelist;
+    }
+
+    if (this.config.enablePeerReconnectBackoff !== undefined) {
+      (config.fiber as Record<string, unknown>).enable_peer_reconnect_backoff =
+        this.config.enablePeerReconnectBackoff;
+    }
+
+    if (this.config.pendingChannelsNumberLimit !== undefined) {
+      (config.fiber as Record<string, unknown>).pending_channels_number_limit =
+        this.config.pendingChannelsNumberLimit;
+    }
+
+    if (this.config.gossipPolicy) {
+      (config.fiber as Record<string, unknown>).gossip_policy = this.config.gossipPolicy;
     }
 
     const configDir = dirname(this.configPath);
