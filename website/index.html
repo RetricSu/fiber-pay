@@ -65,34 +65,34 @@
           <li>Hooks: <code>useFiberNode</code> and <code>useFiberPayment</code> for controlled app state.</li>
         </ul>
 
-        <pre><code>import { FiberPayQuickCard, FiberNodeButton, useFiberNode } from '@fiber-pay/react';
+        <pre><code><span class="token-keyword">import</span> { <span class="token-function">FiberPayQuickCard</span>, <span class="token-function">FiberNodeButton</span>, <span class="token-function">useFiberNode</span> } <span class="token-keyword">from</span> <span class="token-string">'@fiber-pay/react'</span>;
 
-export function WalletPanel() {
-  const fiber = useFiberNode({ network: 'testnet', walletId: 'demo-wallet' });
+<span class="token-keyword">export</span> <span class="token-keyword">function</span> <span class="token-function">WalletPanel</span>() {
+  <span class="token-keyword">const</span> fiber = <span class="token-function">useFiberNode</span>({ network: <span class="token-string">'testnet'</span>, walletId: <span class="token-string">'demo-wallet'</span> });
 
-  return (
+  <span class="token-keyword">return</span> (
     &lt;&gt;
-      &lt;FiberNodeButton
+      &lt;<span class="token-tag">FiberNodeButton</span>
         fiber={fiber}
-        strategy="passkey"
-        tabs={[{ id: 'workbench' }, { id: 'channels' }]}
-        t={(key, fallback) =&gt; key === 'tabs.workbench' ? 'Workbench' : fallback}
+        strategy=<span class="token-string">"passkey"</span>
+        tabs={[{ id: <span class="token-string">'workbench'</span> }, { id: <span class="token-string">'channels'</span> }]}
+        t={(key, fallback) =&gt; key === <span class="token-string">'tabs.workbench'</span> ? <span class="token-string">'Workbench'</span> : fallback}
       /&gt;
-      &lt;FiberPayQuickCard fiber={fiber} network="testnet" /&gt;
+      &lt;<span class="token-tag">FiberPayQuickCard</span> fiber={fiber} network=<span class="token-string">"testnet"</span> /&gt;
     &lt;/&gt;
   );
 }</code></pre>
 
         <details>
           <summary>Advanced: low-level SDK API (<code>FiberRpcClient</code>)</summary>
-          <pre><code>import { FiberRpcClient } from '@fiber-pay/sdk';
+          <pre><code><span class="token-keyword">import</span> { <span class="token-function">FiberRpcClient</span> } <span class="token-keyword">from</span> <span class="token-string">'@fiber-pay/sdk'</span>;
 
-const client = new FiberRpcClient({
-  url: 'http://127.0.0.1:8227',
+<span class="token-keyword">const</span> client = <span class="token-keyword">new</span> <span class="token-function">FiberRpcClient</span>({
+  url: <span class="token-string">'http://127.0.0.1:8227'</span>,
   biscuitToken: process.env.FIBER_RPC_BISCUIT_TOKEN,
 });
 
-const info = await client.nodeInfo();
+<span class="token-keyword">const</span> info = <span class="token-keyword">await</span> client.nodeInfo();
 console.log(info.pubkey);</code></pre>
         </details>
       </section>
@@ -112,19 +112,19 @@ console.log(info.pubkey);</code></pre>
           <li><code>l402 proxy</code> for monetizing existing HTTP APIs with a lightweight paywall.</li>
         </ul>
 
-        <pre><code>npm install -g @fiber-pay/cli
+        <pre><code><span class="token-function">npm</span> install -g <span class="token-string">@fiber-pay/cli</span>
 
-# 1) start local Fiber node
-fiber-pay --profile demo node start --json
+<span class="token-comment"># 1) start local Fiber node</span>
+<span class="token-function">fiber-pay</span> --profile demo node start --json
 
-# 2) open a channel
-fiber-pay --profile demo channel open --peer &lt;pubkeyOrMultiaddr&gt; --funding 1000 --json
+<span class="token-comment"># 2) open a channel</span>
+<span class="token-function">fiber-pay</span> --profile demo channel open --peer &lt;pubkeyOrMultiaddr&gt; --funding <span class="token-number">1000</span> --json
 
-# 3) inspect channel state
-fiber-pay --profile demo channel list --json
+<span class="token-comment"># 3) inspect channel state</span>
+<span class="token-function">fiber-pay</span> --profile demo channel list --json
 
-# 4) monetize any HTTP API with L402
-fiber-pay l402 proxy --target http://localhost:3000 --price 0.1 --root-key &lt;hex&gt;</code></pre>
+<span class="token-comment"># 4) monetize any HTTP API with L402</span>
+<span class="token-function">fiber-pay</span> l402 proxy --target <span class="token-string">http://localhost:3000</span> --price <span class="token-number">0.1</span> --root-key &lt;hex&gt;</code></pre>
 
         
         <p>
@@ -139,19 +139,19 @@ fiber-pay l402 proxy --target http://localhost:3000 --price 0.1 --root-key &lt;h
             <li><code>job list</code>, <code>job get</code>, and <code>job trace</code> for following background work and retries.</li>
             <li><code>binary</code> and <code>config</code> to manage local Fiber binaries and multiple-profile settings.</li>
           </ul>
-          <pre><code># inspect recent runtime activity
-fiber-pay logs --tail 100
+          <pre><code><span class="token-comment"># inspect recent runtime activity</span>
+<span class="token-function">fiber-pay</span> logs --tail <span class="token-number">100</span>
 
-# start the runtime monitor and inspect status
-fiber-pay runtime start
-fiber-pay runtime status
+<span class="token-comment"># start the runtime monitor and inspect status</span>
+<span class="token-function">fiber-pay</span> runtime start
+<span class="token-function">fiber-pay</span> runtime status
 
-# inspect jobs emitted by automation or agent workflows
-fiber-pay job list --json
+<span class="token-comment"># inspect jobs emitted by automation or agent workflows</span>
+<span class="token-function">fiber-pay</span> job list --json
 
-# manage the local Fiber binary and profile config
-fiber-pay binary info
-fiber-pay config list</code></pre>
+<span class="token-comment"># manage the local Fiber binary and profile config</span>
+<span class="token-function">fiber-pay</span> binary info
+<span class="token-function">fiber-pay</span> config list</code></pre>
       </section>
 
       <hr />
