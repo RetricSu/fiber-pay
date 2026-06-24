@@ -8,6 +8,7 @@ This document is the single source of truth for project development and maintain
 	- [Table of contents](#table-of-contents)
 	- [Prerequisites and baseline checks](#prerequisites-and-baseline-checks)
 	- [Maintainer baseline (human + AI)](#maintainer-baseline-human--ai)
+	- [Project website and deployment](#project-website-and-deployment)
 	- [Required validation policy](#required-validation-policy)
 		- [Commit gate (local hook)](#commit-gate-local-hook)
 		- [CI gate](#ci-gate)
@@ -47,6 +48,12 @@ Always follow these rules for any change:
 2. Prefer `--json` output for CLI/runtime automation flows.
 3. Keep command semantics stable; do not introduce undocumented flags.
 4. If docs and code disagree, treat current code behavior as authoritative, then update docs.
+
+## Project website and deployment
+
+- GitHub Pages landing site: https://retricsu.github.io/fiber-pay/
+- Site source: [website/index.html](../website/index.html)
+- Deployment workflow: [.github/workflows/pages.yml](../.github/workflows/pages.yml)
 
 ## Required validation policy
 
