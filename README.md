@@ -4,23 +4,19 @@ AI-friendly toolchain for CKB Lightning on Fiber Network.
 
 Fiber target: `v0.9.0-rc4`
 
+https://retricsu.github.io/fiber-pay/
+
 ## Start Here: CLI + SDK
 
-`fiber-pay` has two primary integration surfaces:
+`fiber-pay` has three primary integration surfaces:
 
 - `@fiber-pay/cli`: operations and automation for humans and agents (profiles, node/channel/payment lifecycle, runtime jobs, L402 proxy, `agent serve` / `agent call`)
 - `@fiber-pay/sdk`: application-facing typed APIs (universal + node + browser entrypoints)
-
-`@fiber-pay/react` is the higher-level React layer built on top of `@fiber-pay/sdk/browser`, intended for fast browser UI integration.
+- `@fiber-pay/react` is the higher-level React layer built on top of `@fiber-pay/sdk/browser`, intended for fast browser UI integration.
 
 Package maturity note:
-`@fiber-pay/agent` is currently experimental and not recommended for production use yet (limited validation coverage and ongoing hardening).
 
-## Project Website
-
-- GitHub Pages landing site: https://retricsu.github.io/fiber-pay/
-- Site source: [website/index.html](website/index.html)
-- Deployment workflow: [pages.yml](.github/workflows/pages.yml)
+- `@fiber-pay/agent` is currently experimental and not recommended for production use yet (limited validation coverage and ongoing hardening).
 
 ## Quickstart by Goal
 

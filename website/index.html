@@ -28,9 +28,9 @@
 
     <main id="top">
       <section class="hero">
-        <h1>SDK and CLI tool for Fiber Network</h1>
+        <h1>SDK and CLI toolchain for Fiber Network</h1>
         <p class="tagline">
-          Integrate Fiber payments with one React component. Start Fiber node with one CLI command.
+          Integrate Fiber payments with one React component. </br>Start Fiber node with one CLI command.
         </p>
         <p>
           fiber-pay is an AI-friendly toolchain for CKB Lightning on Fiber Network. Build
@@ -39,14 +39,14 @@
         </p>
         <p>
           <a href="#sdk">Get started with the React SDK</a> ·
-          <a href="#cli">Run the AI agent CLI flow</a> ·
+          <a href="#cli">Try the CLI workflows</a> ·
           <a href="https://github.com/RetricSu/fiber-pay/tree/master/examples" target="_blank" rel="noreferrer">Browse examples</a>
         </p>
 
         <ul>
           <li><strong>React plug-and-play.</strong> <code>FiberPayQuickCard</code> and <code>FiberNodeButton</code> for rapid payment UI integration.</li>
-          <li><strong>AI agent native.</strong> <code>agent serve</code>, <code>agent call</code>, and <code>L402</code> gateway flows built into the CLI.</li>
-          <li><strong>One-command node startup.</strong> <code>node start</code> handles local Fiber node lifecycle with automation-friendly output.</li>
+          <li><strong>CLI Node and channel operations.</strong> Start, inspect, and manage Fiber node state with the CLI.</li>
+          <li><strong>L402 paywall in one command.</strong> Use <code>fiber-pay l402 proxy</code> to turn an HTTP endpoint into a paid, token-gated experience.</li>
         </ul>
       </section>
 
@@ -100,16 +100,16 @@ console.log(info.pubkey);</code></pre>
       <hr />
 
       <section id="cli">
-        <h2>AI Agent CLI</h2>
+        <h2>CLI for Fiber operations and L402 paywalls</h2>
         <p>
-          fiber-pay CLI is designed for AI agents and automation scripts, not just manual
-          shell usage. Use it to bootstrap nodes, expose paid local agents via L402,
-          and call remote paid agents from another profile.
+          The CLI is most useful for everyday Fiber operations: launch a local node, inspect
+          network state, open or list channels, and put a simple paywall in front of any HTTP API
+          with <code>l402 proxy</code>.
         </p>
         <ul>
-          <li>One-command node startup and runtime inspection.</li>
-          <li><code>agent serve</code> and <code>agent call</code> for paid AI workflows.</li>
-          <li><code>l402 proxy</code> for monetizing existing HTTP APIs.</li>
+          <li>One-command node startup and status checks with <code>node start</code> and <code>node info</code>.</li>
+          <li>Channel lifecycle helpers with <code>channel open</code> and <code>channel list</code>.</li>
+          <li><code>l402 proxy</code> for monetizing existing HTTP APIs with a lightweight paywall.</li>
         </ul>
 
         <pre><code>npm install -g @fiber-pay/cli
@@ -117,14 +117,41 @@ console.log(info.pubkey);</code></pre>
 # 1) start local Fiber node
 fiber-pay --profile demo node start --json
 
-# 2) publish a paid AI agent service
-fiber-pay --profile demo agent serve --agent codex --price 0.1
+# 2) open a channel
+fiber-pay --profile demo channel open --peer &lt;pubkeyOrMultiaddr&gt; --funding 1000 --json
 
-# 3) consume remote agent from another profile
-fiber-pay --profile user agent call http://127.0.0.1:8402 --prompt "review this code"
+# 3) inspect channel state
+fiber-pay --profile demo channel list --json
 
 # 4) monetize any HTTP API with L402
-fiber-pay l402 proxy --target http://localhost:3000 --price 0.1</code></pre>
+fiber-pay l402 proxy --target http://localhost:3000 --price 0.1 --root-key &lt;hex&gt;</code></pre>
+
+        
+        <p>
+          For more experimental agent-native flows, <code>agent serve</code> and <code>agent call</code> are still available, but they are best treated as advanced use cases rather than the main entry point.
+        </p>
+
+          <p>
+            The CLI is also built for automation and agent-style workflows:
+          </p>
+          <ul>
+            <li><code>logs</code> and <code>runtime</code> for debugging, streaming, and health checks.</li>
+            <li><code>job list</code>, <code>job get</code>, and <code>job trace</code> for following background work and retries.</li>
+            <li><code>binary</code> and <code>config</code> to manage local Fiber binaries and multiple-profile settings.</li>
+          </ul>
+          <pre><code># inspect recent runtime activity
+fiber-pay logs --tail 100
+
+# start the runtime monitor and inspect status
+fiber-pay runtime start
+fiber-pay runtime status
+
+# inspect jobs emitted by automation or agent workflows
+fiber-pay job list --json
+
+# manage the local Fiber binary and profile config
+fiber-pay binary info
+fiber-pay config list</code></pre>
       </section>
 
       <hr />
