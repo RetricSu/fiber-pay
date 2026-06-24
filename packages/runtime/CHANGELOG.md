@@ -1,5 +1,12 @@
 # @fiber-pay/runtime
 
+## 0.2.7
+
+### Patch Changes
+
+- Updated dependencies [ec536f4]
+  - @fiber-pay/sdk@0.2.7
+
 ## 0.2.6
 
 ### Patch Changes

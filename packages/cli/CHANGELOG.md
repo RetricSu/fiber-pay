@@ -1,5 +1,24 @@
 # @fiber-pay/cli
 
+## 0.2.7
+
+### Patch Changes
+
+- ec536f4: Upgrade default Fiber target to fnn v0.9.0-rc4
+
+  - Remove support for the standalone `fnn-migrate` binary shipped with new fnn releases.
+  - Add a legacy migration path that uses the v0.8.1 `fnn-migrate` to bring old stores up to the v0.9.0 epoch.
+  - `node start` now auto-confirms fnn's built-in migration prompt.
+  - SDK gains `listPayments` and node config gains v0.9.0-rc4 optional fields.
+  - `fiber-pay node upgrade` now targets the bundled default Fiber version (`v0.9.0-rc4`) when `--version` is omitted, instead of resolving the GitHub latest release.
+  - Remove the dangling `--force-migrate` option from `fiber-pay node upgrade`.
+
+- Updated dependencies [42793f4]
+- Updated dependencies [ec536f4]
+  - @fiber-pay/node@0.2.7
+  - @fiber-pay/sdk@0.2.7
+  - @fiber-pay/runtime@0.2.7
+
 ## 0.2.6
 
 ### Patch Changes
