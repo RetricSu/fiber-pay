@@ -1,13 +1,14 @@
 {
-  "name": "fiber-wasm-smoke-test",
+  "name": "fiber-wasm-dual-node-e2e",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "smoke:ci": "node ./ci-smoke.mjs"
+    "e2e:ci": "node ./ci-e2e.mjs"
   },
   "dependencies": {
+    "@fiber-pay/sdk": "workspace:*",
     "@nervosnetwork/fiber-js": "catalog:"
   },
   "devDependencies": {

@@ -123,7 +123,15 @@ export type {
   UpdateChannelParams,
 } from '../types/rpc.js';
 export { ChannelState } from '../types/rpc.js';
-export { ckbToShannons, fromHex, shannonsToCkb, toHex } from '../utils.js';
+export {
+  buildMultiaddr,
+  buildMultiaddrFromNodeId,
+  ckbToShannons,
+  fromHex,
+  nodeIdToPeerId,
+  shannonsToCkb,
+  toHex,
+} from '../utils.js';
 export {
   type CccExternalFundingResolved,
   type CccFundingSignerLike,

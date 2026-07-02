@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fiber WASM Dual-Node E2E</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'SF Mono', 'Menlo', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 24px;
+    }
+    h1 { color: #58a6ff; margin-bottom: 16px; font-size: 18px; }
+    #log {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      font-size: 13px;
+      line-height: 1.6;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .ok { color: #3fb950; }
+    .err { color: #f85149; }
+    .info { color: #8b949e; }
+    .highlight { color: #d2a8ff; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Fiber WASM Dual-Node E2E (Testnet)</h1>
+  <div id="log"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
