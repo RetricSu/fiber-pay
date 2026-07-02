@@ -12,9 +12,12 @@ function getPnpmCommand() {
   return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 }
 
-async function waitForServer(url, timeoutMs) {
+async function waitForServer(url, timeoutMs, server) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
+    if (server && server.exitCode !== null) {
+      throw new Error(`Dev server process exited early with code ${server.exitCode}`);
+    }
     try {
       const response = await fetch(url, { redirect: 'manual' });
       if (response.ok || response.status === 304) {
@@ -36,7 +39,7 @@ async function run() {
 
   let browser;
   try {
-    await waitForServer(URL, SERVER_TIMEOUT_MS);
+    await waitForServer(URL, SERVER_TIMEOUT_MS, server);
 
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();

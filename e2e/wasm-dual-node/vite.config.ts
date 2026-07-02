@@ -31,6 +31,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      // Resolve the public SDK browser entry from source so the E2E runs without
+      // a prebuilt dist/ (mirrors the wasm-smoke setup and keeps CI self-contained).
+      '@fiber-pay/sdk/browser': resolve(__dirname, '../../packages/sdk/src/browser/index.ts'),
       '@sdk': resolve(__dirname, '../../packages/sdk/src'),
     },
   },

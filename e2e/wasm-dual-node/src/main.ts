@@ -26,8 +26,10 @@ import {
   FiberBrowserNode,
   buildMultiaddr,
   nodeIdToPeerId,
+  ckbToShannons,
+  formatShannonsAsCkb,
+  getLockBalanceShannons,
 } from '@fiber-pay/sdk/browser';
-import { formatShannonsAsCkb, getLockBalanceShannons } from '@sdk/browser/ckb-balance';
 
 // =============================================================================
 // Configuration — mirrors e2e-testnet-dual-node.mjs
