@@ -1,7 +1,6 @@
-name: WASM Smoke
+name: E2E WASM Dual Node Testnet
 
 on:
-  pull_request:
   workflow_dispatch:
     inputs:
       fiber_js_version:
@@ -10,17 +9,17 @@ on:
         default: ''
 
 concurrency:
-  group: wasm-smoke-${{ github.workflow }}-${{ github.ref }}
+  group: e2e-wasm-dual-node-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  wasm-smoke:
-    name: wasm-smoke-ubuntu
+  e2e-wasm-dual-node:
+    name: e2e-wasm-dual-node-testnet
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -38,7 +37,7 @@ jobs:
 
       - name: Override fiber-js version
         if: github.event.inputs.fiber_js_version != ''
-        run: pnpm --filter fiber-wasm-smoke-test add @nervosnetwork/fiber-js@${{ github.event.inputs.fiber_js_version }}
+        run: pnpm --filter fiber-wasm-dual-node-e2e add @nervosnetwork/fiber-js@${{ github.event.inputs.fiber_js_version }}
 
       - name: Install dependencies
         if: github.event.inputs.fiber_js_version == ''
@@ -49,7 +48,7 @@ jobs:
         run: pnpm install
 
       - name: Install Playwright Chromium
-        run: pnpm --filter fiber-wasm-smoke-test exec playwright install --with-deps chromium
+        run: pnpm --filter fiber-wasm-dual-node-e2e exec playwright install --with-deps chromium
 
-      - name: Run WASM smoke
-        run: pnpm --filter fiber-wasm-smoke-test smoke:ci
+      - name: Run WASM dual-node testnet E2E
+        run: pnpm --filter fiber-wasm-dual-node-e2e e2e:ci

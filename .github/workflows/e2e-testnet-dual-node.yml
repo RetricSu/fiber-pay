@@ -2,6 +2,11 @@ name: E2E Testnet Dual Node
 
 on:
   workflow_dispatch:
+    inputs:
+      fiber_binary_version:
+        description: 'Override Fiber binary version (e.g. v0.9.0-rc4). Leave empty to use default.'
+        required: false
+        default: ''
 
 jobs:
   e2e-testnet-dual-node:
@@ -37,6 +42,7 @@ jobs:
           CHANNEL_FUNDING_CKB: '200'
           INVOICE_AMOUNT_CKB: '1'
           STOP_NODES_ON_EXIT: '1'
+          FIBER_BINARY_VERSION: ${{ github.event.inputs.fiber_binary_version != '' && github.event.inputs.fiber_binary_version || 'v0.8.1' }}
         run: pnpm e2e
 
       - name: Upload E2E artifacts

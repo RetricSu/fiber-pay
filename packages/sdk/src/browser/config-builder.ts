@@ -41,6 +41,10 @@ export interface BrowserNodeConfig {
   databasePrefix?: string;
   /** Whether to announce the listening address (usually false for browser) */
   announceListeningAddr?: boolean;
+  /** Custom P2P listening address (optional, defaults to /ip4/127.0.0.1/tcp/8228) */
+  p2pListeningAddr?: string;
+  /** Custom RPC listening address (optional, defaults to 127.0.0.1:8227) */
+  rpcListeningAddr?: string;
 }
 
 // =============================================================================
@@ -159,14 +163,14 @@ export class ConfigBuilder {
 
     const configObj: Record<string, unknown> = {
       fiber: {
-        listening_addr: '/ip4/127.0.0.1/tcp/8228',
+        listening_addr: config.p2pListeningAddr ?? '/ip4/127.0.0.1/tcp/8228',
         bootnode_addrs: bootnodes,
         announce_listening_addr: config.announceListeningAddr ?? false,
         chain: config.network,
         scripts: [...FIBER_SCRIPTS],
       },
       rpc: {
-        listening_addr: '127.0.0.1:8227',
+        listening_addr: config.rpcListeningAddr ?? '127.0.0.1:8227',
       },
       ckb: {
         rpc_url: ckbRpcUrl,
