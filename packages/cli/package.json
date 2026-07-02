@@ -39,7 +39,7 @@
     "commander": "^13.1.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "http-proxy-middleware": "^3.0.5",
+    "http-proxy-middleware": "^3.0.7",
     "qrcode": "^1.5.4",
     "yaml": "^2.8.2"
   },
