@@ -5,6 +5,7 @@ import {
   ensureHexPrefix,
   type HexString,
   nodeIdToPeerId,
+  toHex,
 } from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import { sleep } from '../lib/async.js';
@@ -20,6 +21,11 @@ import {
   printJsonSuccess,
   truncateMiddle,
 } from '../lib/format.js';
+import {
+  parseFundingAmount,
+  parseUdtTypeScript,
+  type UdtTypeScript,
+} from '../lib/parse-options.js';
 import { createReadyRpcClient, resolveRpcEndpoint } from '../lib/rpc.js';
 import { tryCreateRuntimeChannelJob } from '../lib/runtime-jobs.js';
 import { registerChannelRebalanceCommand } from './rebalance.js';
@@ -262,8 +268,12 @@ export function createChannelCommand(config: CliConfig): Command {
   channel
     .command('open')
     .requiredOption('--peer <pubkeyOrMultiaddr>')
-    .requiredOption('--funding <ckb>')
+    .requiredOption('--funding <amount>')
     .option('--private')
+    .option(
+      '--funding-udt-type-script <json>',
+      'JSON object with code_hash, hash_type, and args to open a UDT channel',
+    )
     .option(
       '--idempotency-key <key>',
       'Reuse this key only when retrying the exact same open intent',
@@ -273,7 +283,51 @@ export function createChannelCommand(config: CliConfig): Command {
       const rpc = await createReadyRpcClient(config);
       const json = Boolean(options.json);
       const peerInput = options.peer as string;
-      const fundingCkb = parseFloat(options.funding);
+
+      let fundingUdtTypeScript: UdtTypeScript | undefined;
+      try {
+        fundingUdtTypeScript = parseUdtTypeScript(
+          options.fundingUdtTypeScript as string | undefined,
+          '--funding-udt-type-script',
+        );
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (json) {
+          printJsonError({
+            code: 'CHANNEL_OPEN_INPUT_INVALID',
+            message: msg,
+            recoverable: true,
+            suggestion:
+              'Provide a valid JSON script, e.g. {"code_hash":"0x...","hash_type":"type","args":"0x..."}',
+          });
+        } else {
+          console.error(`Error: ${msg}`);
+        }
+        process.exit(1);
+      }
+
+      const isUdt = fundingUdtTypeScript !== undefined;
+      const fundingLabel = isUdt ? 'UDT' : 'CKB';
+
+      let fundingAmount: bigint;
+      try {
+        fundingAmount = parseFundingAmount(options.funding as string, isUdt);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (json) {
+          printJsonError({
+            code: 'CHANNEL_OPEN_INPUT_INVALID',
+            message: msg,
+            recoverable: true,
+            suggestion: isUdt
+              ? 'Provide the UDT amount as an integer in the smallest unit.'
+              : 'Provide the CKB amount as a non-negative number.',
+          });
+        } else {
+          console.error(`Error: ${msg}`);
+        }
+        process.exit(1);
+      }
 
       let peerPubkey = peerInput;
       if (peerInput.includes('/')) {
@@ -288,17 +342,20 @@ export function createChannelCommand(config: CliConfig): Command {
           ? options.idempotencyKey.trim()
           : `open:${peerPubkey}:${randomUUID()}`;
 
+      const openChannelParams = {
+        pubkey: peerPubkey as HexString,
+        funding_amount: toHex(fundingAmount),
+        public: !options.private,
+        ...(fundingUdtTypeScript ? { funding_udt_type_script: fundingUdtTypeScript } : {}),
+      };
+
       const endpoint = resolveRpcEndpoint(config);
       if (endpoint.target === 'runtime-proxy') {
         const created = await tryCreateRuntimeChannelJob(endpoint.url, {
           params: {
             action: 'open',
             peerId: peerPubkey,
-            openChannelParams: {
-              pubkey: peerPubkey,
-              funding_amount: ckbToShannons(fundingCkb),
-              public: !options.private,
-            },
+            openChannelParams,
             waitForReady: false,
           },
           options: {
@@ -312,7 +369,9 @@ export function createChannelCommand(config: CliConfig): Command {
             jobId: created.id,
             jobState: created.state,
             peer: peerPubkey,
-            fundingCkb,
+            fundingAmount: fundingAmount.toString(),
+            fundingLabel,
+            ...(fundingUdtTypeScript ? { fundingUdtTypeScript } : {}),
             idempotencyKey,
           };
 
@@ -323,23 +382,24 @@ export function createChannelCommand(config: CliConfig): Command {
             console.log(`  Job:                  ${payload.jobId}`);
             console.log(`  Job State:            ${payload.jobState}`);
             console.log(`  Peer:                 ${payload.peer}`);
-            console.log(`  Funding:              ${payload.fundingCkb} CKB`);
+            console.log(`  Funding:              ${payload.fundingAmount} ${payload.fundingLabel}`);
+            if (fundingUdtTypeScript) {
+              console.log(`  UDT Type Script:      ${JSON.stringify(fundingUdtTypeScript)}`);
+            }
             console.log(`  Idempotency Key:      ${payload.idempotencyKey}`);
           }
           return;
         }
       }
 
-      const result = await rpc.openChannel({
-        pubkey: peerPubkey as HexString,
-        funding_amount: ckbToShannons(fundingCkb),
-        public: !options.private,
-      });
+      const result = await rpc.openChannel(openChannelParams);
 
       const payload = {
         temporaryChannelId: result.temporary_channel_id,
         peer: peerPubkey,
-        fundingCkb,
+        fundingAmount: fundingAmount.toString(),
+        fundingLabel,
+        ...(fundingUdtTypeScript ? { fundingUdtTypeScript } : {}),
       };
       if (json) {
         printJsonSuccess(payload);
@@ -347,7 +407,10 @@ export function createChannelCommand(config: CliConfig): Command {
         console.log('Channel open initiated');
         console.log(`  Temporary Channel ID: ${payload.temporaryChannelId}`);
         console.log(`  Peer:                 ${payload.peer}`);
-        console.log(`  Funding:              ${payload.fundingCkb} CKB`);
+        console.log(`  Funding:              ${payload.fundingAmount} ${payload.fundingLabel}`);
+        if (fundingUdtTypeScript) {
+          console.log(`  UDT Type Script:      ${JSON.stringify(fundingUdtTypeScript)}`);
+        }
       }
     });
 

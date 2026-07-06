@@ -49,6 +49,16 @@ fiber-pay channel watch --until CHANNEL_READY --json
 fiber-pay channel list --state CHANNEL_READY --json
 ```
 
+To open a UDT channel, add `--funding-udt-type-script` with the CKB type script JSON and provide the funding amount as raw UDT units:
+
+```bash
+fiber-pay channel open \
+  --peer <peer-address> \
+  --funding <UDT-amount> \
+  --funding-udt-type-script '{"code_hash":"0x...","hash_type":"type","args":"0x..."}' \
+  --json
+```
+
 ## 4) Receive then send payment
 
 Create an invoice (receiver side):
