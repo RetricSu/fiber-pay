@@ -72,10 +72,14 @@ export function parseUdtTypeScript(
 export function parseFundingAmount(value: string, isUdt: boolean): bigint {
   if (isUdt) {
     try {
-      return BigInt(value);
+      const amount = BigInt(value);
+      if (amount < 0n) {
+        throw new Error();
+      }
+      return amount;
     } catch {
       throw new Error(
-        `Invalid UDT funding amount: ${value}. Expected an integer in the smallest UDT unit.`,
+        `Invalid UDT funding amount: ${value}. Expected a non-negative integer in the smallest UDT unit.`,
       );
     }
   }

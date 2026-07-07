@@ -97,6 +97,11 @@ describe('parseFundingAmount', () => {
     expect(() => parseFundingAmount('1.5', true)).toThrow('UDT funding amount');
   });
 
+  it('throws on negative UDT amount', () => {
+    expect(() => parseFundingAmount('-1', true)).toThrow('UDT funding amount');
+    expect(() => parseFundingAmount('-100', true)).toThrow('UDT funding amount');
+  });
+
   it('throws on non-numeric UDT amount', () => {
     expect(() => parseFundingAmount('abc', true)).toThrow('UDT funding amount');
   });
