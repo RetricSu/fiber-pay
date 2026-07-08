@@ -1,8 +1,8 @@
-import type { Script, UdtCfgInfos } from '@fiber-pay/sdk';
-import { parseUdtTypeScript } from './parse-options.js';
+import type { UdtCfgInfos } from '@fiber-pay/sdk';
+import { parseUdtTypeScript, type UdtTypeScript } from './parse-options.js';
 
 export interface UdtResolution {
-  script?: Script;
+  script?: UdtTypeScript;
   unit: 'CKB' | 'UDT';
   name?: string;
 }
