@@ -6,6 +6,4 @@ export type UdtTypeScript = {
   args: HexString;
 };
 
-export type UdtAsset =
-  | { kind: 'ckb' }
-  | { kind: 'udt'; script: UdtTypeScript; name?: string };
+export type UdtAsset = { kind: 'ckb' } | { kind: 'udt'; script: UdtTypeScript; name?: string };

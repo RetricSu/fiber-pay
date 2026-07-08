@@ -1,12 +1,12 @@
+import type { Channel, Script } from '../types/rpc.js';
 import { shannonsToCkb, toHex } from '../utils.js';
-import type { Channel } from '../types/rpc.js';
 
 export interface FormattedChannelBalances {
-  local: string;
-  remote: string;
-  capacity: string;
+  local: string | number;
+  remote: string | number;
+  capacity: string | number;
   unit: 'CKB' | 'UDT';
-  fundingUdtTypeScript: Record<string, unknown> | undefined;
+  fundingUdtTypeScript: Script | undefined;
 }
 
 /**
