@@ -158,6 +158,8 @@ export function formatChannel(channel: Channel): Record<string, unknown> {
   const capacity = local + remote;
   const localPct = capacity > 0n ? Number((local * 100n) / capacity) : 0;
   const remotePct = capacity > 0n ? 100 - localPct : 0;
+  const isUdt = channel.funding_udt_type_script !== null;
+  const unit = isUdt ? 'UDT' : 'CKB';
 
   return {
     channelId: channel.channel_id,
@@ -167,9 +169,14 @@ export function formatChannel(channel: Channel): Record<string, unknown> {
     state: channel.state.state_name,
     stateLabel: stateLabel(channel.state.state_name),
     stateFlags: channel.state.state_flags,
-    localBalanceCkb: shannonsToCkb(channel.local_balance),
-    remoteBalanceCkb: shannonsToCkb(channel.remote_balance),
-    capacityCkb: shannonsToCkb(toHex(capacity)),
+    localBalance: isUdt ? local.toString() : shannonsToCkb(channel.local_balance),
+    remoteBalance: isUdt ? remote.toString() : shannonsToCkb(channel.remote_balance),
+    capacity: isUdt ? capacity.toString() : shannonsToCkb(toHex(capacity)),
+    localBalanceCkb: isUdt ? undefined : shannonsToCkb(channel.local_balance),
+    remoteBalanceCkb: isUdt ? undefined : shannonsToCkb(channel.remote_balance),
+    capacityCkb: isUdt ? undefined : shannonsToCkb(toHex(capacity)),
+    unit,
+    fundingUdtTypeScript: channel.funding_udt_type_script ?? undefined,
     balanceRatio: `${localPct}/${remotePct}`,
     pendingTlcs: channel.pending_tlcs.length,
     enabled: channel.enabled,
@@ -179,13 +186,33 @@ export function formatChannel(channel: Channel): Record<string, unknown> {
 }
 
 export function getChannelSummary(channels: Channel[]): Record<string, unknown> {
-  let totalLocal = 0n;
-  let totalRemote = 0n;
+  let totalLocalCkb = 0n;
+  let totalRemoteCkb = 0n;
+  const udtTotals = new Map<
+    string,
+    { local: bigint; remote: bigint; script: NonNullable<Channel['funding_udt_type_script']> }
+  >();
   let active = 0;
 
   for (const channel of channels) {
-    totalLocal += BigInt(channel.local_balance);
-    totalRemote += BigInt(channel.remote_balance || '0x0');
+    const local = BigInt(channel.local_balance);
+    const remote = BigInt(channel.remote_balance || '0x0');
+
+    if (channel.funding_udt_type_script) {
+      const key = `${channel.funding_udt_type_script.code_hash}:${channel.funding_udt_type_script.hash_type}:${channel.funding_udt_type_script.args}`;
+      const entry = udtTotals.get(key) ?? {
+        local: 0n,
+        remote: 0n,
+        script: channel.funding_udt_type_script,
+      };
+      entry.local += local;
+      entry.remote += remote;
+      udtTotals.set(key, entry);
+    } else {
+      totalLocalCkb += local;
+      totalRemoteCkb += remote;
+    }
+
     if (channel.state.state_name === ChannelState.ChannelReady) {
       active++;
     }
@@ -194,9 +221,15 @@ export function getChannelSummary(channels: Channel[]): Record<string, unknown> 
   return {
     count: channels.length,
     activeCount: active,
-    totalLocalCkb: shannonsToCkb(toHex(totalLocal)),
-    totalRemoteCkb: shannonsToCkb(toHex(totalRemote)),
-    totalCapacityCkb: shannonsToCkb(toHex(totalLocal + totalRemote)),
+    totalLocalCkb: shannonsToCkb(toHex(totalLocalCkb)),
+    totalRemoteCkb: shannonsToCkb(toHex(totalRemoteCkb)),
+    totalCapacityCkb: shannonsToCkb(toHex(totalLocalCkb + totalRemoteCkb)),
+    udtTotals: Array.from(udtTotals.values()).map((entry) => ({
+      localBalance: entry.local.toString(),
+      remoteBalance: entry.remote.toString(),
+      capacity: (entry.local + entry.remote).toString(),
+      fundingUdtTypeScript: entry.script,
+    })),
   };
 }
 
@@ -279,9 +312,18 @@ export function printJsonEvent(event: string, data: unknown, ts = new Date().toI
 }
 
 export function printChannelDetailHuman(channel: Channel): void {
-  const local = shannonsToCkb(channel.local_balance);
-  const remote = shannonsToCkb(channel.remote_balance);
-  const capacity = local + remote;
+  const isUdt = channel.funding_udt_type_script !== null;
+  const unit = isUdt ? 'UDT' : 'CKB';
+  const local = isUdt
+    ? BigInt(channel.local_balance).toString()
+    : shannonsToCkb(channel.local_balance);
+  const remote = isUdt
+    ? BigInt(channel.remote_balance).toString()
+    : shannonsToCkb(channel.remote_balance);
+  const capacity =
+    typeof local === 'number' || typeof remote === 'number'
+      ? (local as number) + (remote as number)
+      : (BigInt(channel.local_balance) + BigInt(channel.remote_balance)).toString();
 
   console.log('Channel');
   console.log(`  ID:            ${channel.channel_id}`);
@@ -292,8 +334,11 @@ export function printChannelDetailHuman(channel: Channel): void {
   console.log(`  Enabled:       ${channel.enabled ? 'yes' : 'no'}`);
   console.log(`  Public:        ${channel.is_public ? 'yes' : 'no'}`);
   console.log(
-    `  Balance:       local ${local} CKB | remote ${remote} CKB | capacity ${capacity} CKB`,
+    `  Balance:       local ${local} ${unit} | remote ${remote} ${unit} | capacity ${capacity} ${unit}`,
   );
+  if (isUdt) {
+    console.log(`  UDT Type Script: ${JSON.stringify(channel.funding_udt_type_script)}`);
+  }
   console.log(`  Pending TLCs:  ${channel.pending_tlcs.length}`);
   console.log(`  Age:           ${formatAge(parseHexTimestampMs(channel.created_at))}`);
   console.log(
@@ -365,28 +410,51 @@ export function printChannelListHuman(channels: Channel[]): void {
     totalLocalCkb: number;
     totalRemoteCkb: number;
     totalCapacityCkb: number;
+    udtTotals: Array<{
+      localBalance: string;
+      remoteBalance: string;
+      capacity: string;
+      fundingUdtTypeScript: NonNullable<Channel['funding_udt_type_script']>;
+    }>;
   };
 
   console.log(`Channels: ${summary.count} total, ${summary.activeCount} ready`);
   console.log(
     `Liquidity: local ${summary.totalLocalCkb} CKB | remote ${summary.totalRemoteCkb} CKB | capacity ${summary.totalCapacityCkb} CKB`,
   );
+  if (summary.udtTotals.length > 0) {
+    for (const udt of summary.udtTotals) {
+      console.log(
+        `UDT: local ${udt.localBalance} | remote ${udt.remoteBalance} | capacity ${udt.capacity}`,
+      );
+    }
+  }
   console.log('');
   console.log(
-    'ID                     PEER                   STATE                     LOCAL      REMOTE     TLC',
+    'ID                     PEER                   STATE                     LOCAL      REMOTE     UNIT TLC',
   );
   console.log(
-    '---------------------------------------------------------------------------------------------------',
+    '------------------------------------------------------------------------------------------------------',
   );
 
   for (const channel of channels) {
     const id = truncateMiddle(channel.channel_id, 10, 8).padEnd(22, ' ');
     const peer = truncateMiddle(channel.pubkey, 10, 8).padEnd(22, ' ');
     const state = channel.state.state_name.padEnd(24, ' ');
-    const local = `${shannonsToCkb(channel.local_balance)}`.padStart(8, ' ');
-    const remote = `${shannonsToCkb(channel.remote_balance)}`.padStart(8, ' ');
+    const isUdt = channel.funding_udt_type_script !== null;
+    const unit = isUdt ? 'UDT' : 'CKB';
+    const local =
+      `${isUdt ? BigInt(channel.local_balance).toString() : shannonsToCkb(channel.local_balance)}`.padStart(
+        8,
+        ' ',
+      );
+    const remote =
+      `${isUdt ? BigInt(channel.remote_balance).toString() : shannonsToCkb(channel.remote_balance)}`.padStart(
+        8,
+        ' ',
+      );
     const tlcs = `${channel.pending_tlcs.length}`.padStart(4, ' ');
-    console.log(`${id} ${peer} ${state} ${local} ${remote} ${tlcs}`);
+    console.log(`${id} ${peer} ${state} ${local} ${remote} ${unit.padEnd(4)} ${tlcs}`);
   }
 }
 
