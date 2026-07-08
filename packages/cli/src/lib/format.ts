@@ -2,6 +2,7 @@ import {
   type Channel,
   ChannelState,
   type CkbInvoice,
+  formatChannelBalances,
   type GetPaymentResult,
   shannonsToCkb,
   toHex,
@@ -158,8 +159,7 @@ export function formatChannel(channel: Channel): Record<string, unknown> {
   const capacity = local + remote;
   const localPct = capacity > 0n ? Number((local * 100n) / capacity) : 0;
   const remotePct = capacity > 0n ? 100 - localPct : 0;
-  const isUdt = channel.funding_udt_type_script !== null;
-  const unit = isUdt ? 'UDT' : 'CKB';
+  const balances = formatChannelBalances(channel);
 
   return {
     channelId: channel.channel_id,
@@ -169,14 +169,14 @@ export function formatChannel(channel: Channel): Record<string, unknown> {
     state: channel.state.state_name,
     stateLabel: stateLabel(channel.state.state_name),
     stateFlags: channel.state.state_flags,
-    localBalance: isUdt ? local.toString() : shannonsToCkb(channel.local_balance),
-    remoteBalance: isUdt ? remote.toString() : shannonsToCkb(channel.remote_balance),
-    capacity: isUdt ? capacity.toString() : shannonsToCkb(toHex(capacity)),
-    localBalanceCkb: isUdt ? undefined : shannonsToCkb(channel.local_balance),
-    remoteBalanceCkb: isUdt ? undefined : shannonsToCkb(channel.remote_balance),
-    capacityCkb: isUdt ? undefined : shannonsToCkb(toHex(capacity)),
-    unit,
-    fundingUdtTypeScript: channel.funding_udt_type_script ?? undefined,
+    localBalance: balances.local,
+    remoteBalance: balances.remote,
+    capacity: balances.capacity,
+    localBalanceCkb: balances.unit === 'UDT' ? undefined : shannonsToCkb(channel.local_balance),
+    remoteBalanceCkb: balances.unit === 'UDT' ? undefined : shannonsToCkb(channel.remote_balance),
+    capacityCkb: balances.unit === 'UDT' ? undefined : shannonsToCkb(toHex(capacity)),
+    unit: balances.unit,
+    fundingUdtTypeScript: balances.fundingUdtTypeScript,
     balanceRatio: `${localPct}/${remotePct}`,
     pendingTlcs: channel.pending_tlcs.length,
     enabled: channel.enabled,
