@@ -1,5 +1,5 @@
-import type { RouterHop } from '@fiber-pay/sdk';
-import { type HexString, shannonsToCkb, toHex } from '@fiber-pay/sdk';
+import type { RouterHop, UdtAsset, UdtTypeScript } from '@fiber-pay/sdk';
+import { type HexString, resolveUdtAsset, shannonsToCkb, toHex } from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import { sleep } from '../lib/async.js';
 import type { CliConfig } from '../lib/config.js';
@@ -10,18 +10,13 @@ import {
   printJsonSuccess,
   printPaymentDetailHuman,
 } from '../lib/format.js';
-import {
-  parseFundingAmount,
-  parsePaymentAmount,
-  type UdtTypeScript,
-} from '../lib/parse-options.js';
+import { parseFundingAmount, parsePaymentAmount } from '../lib/parse-options.js';
 import { createReadyRpcClient, resolveRpcEndpoint } from '../lib/rpc.js';
 import {
   type RuntimeJobRecord,
   tryCreateRuntimePaymentJob,
   waitForRuntimeJobTerminal,
 } from '../lib/runtime-jobs.js';
-import { resolveUdtTypeScript } from '../lib/udt.js';
 import { registerPaymentRebalanceCommand } from './rebalance.js';
 
 export function createPaymentCommand(config: CliConfig): Command {
@@ -47,14 +42,15 @@ export function createPaymentCommand(config: CliConfig): Command {
 
       let udtTypeScript: UdtTypeScript | undefined;
       let unit = 'CKB';
+      let paymentAsset: UdtAsset = { kind: 'ckb' };
       try {
-        const resolved = await resolveUdtTypeScript({
+        paymentAsset = await resolveUdtAsset({
           rawScript: options.udtTypeScript as string | undefined,
           name: options.udtName as string | undefined,
           rpc,
         });
-        udtTypeScript = resolved.script;
-        unit = resolved.name ?? resolved.unit;
+        udtTypeScript = paymentAsset.kind === 'udt' ? paymentAsset.script : undefined;
+        unit = paymentAsset.kind === 'udt' ? (paymentAsset.name ?? 'UDT') : 'CKB';
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (json) {
@@ -435,13 +431,14 @@ export function createPaymentCommand(config: CliConfig): Command {
       }
 
       let udtTypeScript: UdtTypeScript | undefined;
+      let routeAsset: UdtAsset = { kind: 'ckb' };
       try {
-        const resolved = await resolveUdtTypeScript({
+        routeAsset = await resolveUdtAsset({
           rawScript: options.udtTypeScript as string | undefined,
           name: options.udtName as string | undefined,
           rpc,
         });
-        udtTypeScript = resolved.script;
+        udtTypeScript = routeAsset.kind === 'udt' ? routeAsset.script : undefined;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid UDT option';
         if (json) {
@@ -553,13 +550,14 @@ export function createPaymentCommand(config: CliConfig): Command {
       }
 
       let udtTypeScript: UdtTypeScript | undefined;
+      let sendRouteAsset: UdtAsset = { kind: 'ckb' };
       try {
-        const resolved = await resolveUdtTypeScript({
+        sendRouteAsset = await resolveUdtAsset({
           rawScript: options.udtTypeScript as string | undefined,
           name: options.udtName as string | undefined,
           rpc,
         });
-        udtTypeScript = resolved.script;
+        udtTypeScript = sendRouteAsset.kind === 'udt' ? sendRouteAsset.script : undefined;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid UDT option';
         if (json) {
