@@ -527,6 +527,8 @@ export function createPaymentCommand(config: CliConfig): Command {
     .option('--keysend', 'Keysend mode')
     .option('--allow-self-payment', 'Allow self-payment for circular route rebalancing')
     .option('--dry-run', 'Simulate—do not actually send')
+    .option('--udt-type-script <json>', 'UDT type script as JSON CKB Script')
+    .option('--udt-name <name>', 'UDT name from node_info.udt_cfg_infos')
     .option('--json')
     .action(async (options) => {
       const rpc = await createReadyRpcClient(config);
@@ -550,6 +552,32 @@ export function createPaymentCommand(config: CliConfig): Command {
         process.exit(1);
       }
 
+      let udtTypeScript: UdtTypeScript | undefined;
+      try {
+        const resolved = await resolveUdtTypeScript({
+          rawScript: options.udtTypeScript as string | undefined,
+          name: options.udtName as string | undefined,
+          rpc,
+        });
+        udtTypeScript = resolved.script;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid UDT option';
+        if (json) {
+          printJsonError({
+            code: 'PAYMENT_SEND_ROUTE_INPUT_INVALID',
+            message,
+            recoverable: true,
+            suggestion:
+              'Provide a valid JSON script or UDT name, e.g. {"code_hash":"0x...","hash_type":"type","args":"0x..."} or --udt-name RUSD',
+          });
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
+      const isUdt = udtTypeScript !== undefined;
+      const unit = isUdt ? 'UDT' : 'CKB';
+
       const result = await rpc.sendPaymentWithRouter({
         router,
         invoice: options.invoice as string | undefined,
@@ -557,6 +585,7 @@ export function createPaymentCommand(config: CliConfig): Command {
         keysend: options.keysend ? true : undefined,
         allow_self_payment: options.allowSelfPayment ? true : undefined,
         dry_run: options.dryRun ? true : undefined,
+        ...(udtTypeScript ? { udt_type_script: udtTypeScript } : {}),
       });
 
       const payload = {
@@ -568,6 +597,8 @@ export function createPaymentCommand(config: CliConfig): Command {
               ? 'failed'
               : 'pending',
         feeCkb: shannonsToCkb(result.fee),
+        unit,
+        udtTypeScript,
         failureReason: result.failed_error,
         dryRun: Boolean(options.dryRun),
       };
@@ -579,6 +610,10 @@ export function createPaymentCommand(config: CliConfig): Command {
         console.log(`  Hash:   ${payload.paymentHash}`);
         console.log(`  Status: ${payload.status}`);
         console.log(`  Fee:    ${payload.feeCkb} CKB`);
+        console.log(`  Unit:   ${payload.unit}`);
+        if (payload.udtTypeScript) {
+          console.log(`  UDT Type Script: ${JSON.stringify(payload.udtTypeScript)}`);
+        }
         if (payload.failureReason) {
           console.log(`  Error:  ${payload.failureReason}`);
         }

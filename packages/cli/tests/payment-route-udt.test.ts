@@ -13,6 +13,13 @@ const buildRouter = vi.fn().mockResolvedValue({
   ],
 });
 
+const sendPaymentWithRouter = vi.fn().mockResolvedValue({
+  payment_hash: '0xdeadbeef',
+  status: 'Success',
+  fee: '0x0',
+  failed_error: undefined,
+});
+
 const nodeInfo = vi.fn().mockResolvedValue({
   udt_cfg_infos: [
     {
@@ -28,6 +35,7 @@ vi.mock('../src/lib/rpc.js', () => ({
     Promise.resolve({
       nodeInfo,
       buildRouter,
+      sendPaymentWithRouter,
     }),
   ),
   resolveRpcEndpoint: vi.fn().mockReturnValue({ target: 'node-rpc', url: 'http://localhost' }),
@@ -59,6 +67,7 @@ function captureLogs(): { output: string[]; restore: () => void } {
 describe('payment route UDT', () => {
   beforeEach(() => {
     buildRouter.mockClear();
+    sendPaymentWithRouter.mockClear();
     nodeInfo.mockClear();
   });
 
@@ -194,5 +203,95 @@ describe('payment route UDT', () => {
 
     const joined = output.join('\n');
     expect(joined).toContain('Amount:     1000 UDT');
+  });
+
+  it('send-route resolves a UDT by name and forwards udt_type_script', async () => {
+    const payment = createPaymentCommand(makeConfig());
+    await payment.parseAsync([
+      'node',
+      'script',
+      'send-route',
+      '--router',
+      JSON.stringify([
+        {
+          target: '0xaaa',
+          channel_outpoint: { tx_hash: '0xtx1', index: '0x0' },
+          amount_received: '0x3e8',
+          incoming_tlc_expiry: '0x123',
+        },
+      ]),
+      '--udt-name',
+      'RUSD',
+      '--json',
+    ]);
+
+    expect(nodeInfo).toHaveBeenCalledTimes(1);
+    expect(sendPaymentWithRouter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        udt_type_script: { code_hash: '0x1234', hash_type: 'type', args: '0x5678' },
+      }),
+    );
+  });
+
+  it('send-route accepts a raw udt-type-script', async () => {
+    const payment = createPaymentCommand(makeConfig());
+    await payment.parseAsync([
+      'node',
+      'script',
+      'send-route',
+      '--router',
+      JSON.stringify([{ target: '0xaaa', channel_outpoint: { tx_hash: '0xtx1', index: '0x0' } }]),
+      '--udt-type-script',
+      '{"code_hash":"0xabcd","hash_type":"data","args":"0x"}',
+      '--json',
+    ]);
+
+    expect(nodeInfo).not.toHaveBeenCalled();
+    expect(sendPaymentWithRouter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        udt_type_script: { code_hash: '0xabcd', hash_type: 'data', args: '0x' },
+      }),
+    );
+  });
+
+  it('send-route JSON output includes unit and udtTypeScript', async () => {
+    const { output, restore } = captureLogs();
+    const payment = createPaymentCommand(makeConfig());
+    await payment.parseAsync([
+      'node',
+      'script',
+      'send-route',
+      '--router',
+      JSON.stringify([{ target: '0xaaa', channel_outpoint: { tx_hash: '0xtx1', index: '0x0' } }]),
+      '--udt-name',
+      'RUSD',
+      '--json',
+    ]);
+    restore();
+
+    const json = JSON.parse(output.join('\n'));
+    expect(json.success).toBe(true);
+    expect(json.data.unit).toBe('UDT');
+    expect(json.data.udtTypeScript).toEqual({
+      code_hash: '0x1234',
+      hash_type: 'type',
+      args: '0x5678',
+    });
+  });
+
+  it('send-route omits udt_type_script when no UDT option is provided', async () => {
+    const payment = createPaymentCommand(makeConfig());
+    await payment.parseAsync([
+      'node',
+      'script',
+      'send-route',
+      '--router',
+      JSON.stringify([{ target: '0xaaa', channel_outpoint: { tx_hash: '0xtx1', index: '0x0' } }]),
+      '--json',
+    ]);
+
+    expect(nodeInfo).not.toHaveBeenCalled();
+    const [params] = sendPaymentWithRouter.mock.calls[0];
+    expect(params).not.toHaveProperty('udt_type_script');
   });
 });
