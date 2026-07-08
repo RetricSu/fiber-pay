@@ -1,4 +1,4 @@
-import { ckbToShannons, type HexString } from '@fiber-pay/sdk';
+import type { HexString } from '@fiber-pay/sdk';
 
 export function parseIntegerOption(value: string | undefined, name: string): number | undefined {
   if (value === undefined) {
@@ -70,18 +70,35 @@ export function parseUdtTypeScript(
 }
 
 export function parsePaymentAmount(value: string, isUdt: boolean): bigint {
+  if (value.trim() !== value || value.trim().length === 0) {
+    throw new Error(
+      `Invalid ${isUdt ? 'UDT' : 'CKB'} amount: "${value}". Expected a positive ${isUdt ? 'integer' : 'number'}.`,
+    );
+  }
+
   if (isUdt) {
-    const trimmed = value.trim();
-    if (!/^\d+$/.test(trimmed)) {
+    if (!/^\d+$/.test(value)) {
       throw new Error(`Invalid UDT amount "${value}": expected a non-negative integer`);
     }
-    const amount = BigInt(trimmed);
+    const amount = BigInt(value);
     if (amount <= 0n) {
       throw new Error('UDT amount must be greater than 0');
     }
     return amount;
   }
-  return BigInt(ckbToShannons(parseFloat(value)));
+
+  if (!/^\d+(\.\d{1,8})?$/.test(value)) {
+    throw new Error(
+      `Invalid CKB amount: "${value}". Expected a positive number with at most 8 decimal places.`,
+    );
+  }
+  const [integerPart, fractionalPart = ''] = value.split('.');
+  const shannonsPerCkb = 10n ** 8n;
+  const amount = BigInt(integerPart) * shannonsPerCkb + BigInt(fractionalPart.padEnd(8, '0'));
+  if (amount <= 0n) {
+    throw new Error('CKB amount must be greater than 0');
+  }
+  return amount;
 }
 
 export function parseFundingAmount(value: string, isUdt: boolean): bigint {

@@ -46,7 +46,7 @@ export function createPaymentCommand(config: CliConfig): Command {
       const recipientNodeId = options.to;
 
       let udtTypeScript: UdtTypeScript | undefined;
-      let unit: 'CKB' | 'UDT' = 'CKB';
+      let unit = 'CKB';
       try {
         const resolved = await resolveUdtTypeScript({
           rawScript: options.udtTypeScript as string | undefined,
@@ -54,7 +54,7 @@ export function createPaymentCommand(config: CliConfig): Command {
           rpc,
         });
         udtTypeScript = resolved.script;
-        unit = resolved.unit;
+        unit = resolved.name ?? resolved.unit;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (json) {
@@ -76,7 +76,7 @@ export function createPaymentCommand(config: CliConfig): Command {
       let amountRaw: bigint | undefined;
       if (options.amount) {
         try {
-          amountRaw = parseFundingAmount(options.amount, isUdt);
+          amountRaw = parsePaymentAmount(options.amount, isUdt);
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
           if (json) {
@@ -85,8 +85,8 @@ export function createPaymentCommand(config: CliConfig): Command {
               message: msg,
               recoverable: true,
               suggestion: isUdt
-                ? 'Provide the UDT amount as an integer in the smallest unit.'
-                : 'Provide the CKB amount as a non-negative number.',
+                ? 'Provide a positive integer UDT amount, e.g. --amount 1000'
+                : 'Provide a positive CKB amount, e.g. --amount 10',
             });
           } else {
             console.error(`Error: ${msg}`);

@@ -30,6 +30,7 @@ export function createInvoiceCommand(config: CliConfig): Command {
       const json = Boolean(options.json);
 
       let udtTypeScript: UdtTypeScript | undefined;
+      let udtName: string | undefined;
       try {
         const resolved = await resolveUdtTypeScript({
           rawScript: options.udtTypeScript as string | undefined,
@@ -37,6 +38,7 @@ export function createInvoiceCommand(config: CliConfig): Command {
           rpc,
         });
         udtTypeScript = resolved.script;
+        udtName = resolved.name;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid UDT option';
         if (json) {
@@ -89,10 +91,9 @@ export function createInvoiceCommand(config: CliConfig): Command {
         process.exit(1);
       }
 
-      const amountCkb = isUdt ? undefined : parseFloat(amountInput);
       const expirySeconds = (options.expiry ? parseInt(options.expiry, 10) : 60) * 60;
       const currency = config.network === 'mainnet' ? 'Fibb' : 'Fibt';
-      const unit = isUdt ? 'UDT' : 'CKB';
+      const unit = udtName ?? (isUdt ? 'UDT' : 'CKB');
 
       const endpoint = resolveRpcEndpoint(config);
       if (endpoint.target === 'runtime-proxy') {
@@ -127,7 +128,7 @@ export function createInvoiceCommand(config: CliConfig): Command {
             jobId: job.id,
             invoice: result.invoiceAddress,
             paymentHash: result.paymentHash,
-            amount: isUdt ? amount.toString() : amountCkb,
+            amount: isUdt ? amount.toString() : shannonsToCkb(toHex(amount)),
             unit,
             udtTypeScript,
             expiresAt: new Date(Date.now() + expirySeconds * 1000).toISOString(),
@@ -163,7 +164,7 @@ export function createInvoiceCommand(config: CliConfig): Command {
       const payload = {
         invoice: result.invoice_address,
         paymentHash: result.invoice.data.payment_hash,
-        amount: isUdt ? amount.toString() : amountCkb,
+        amount: isUdt ? amount.toString() : shannonsToCkb(toHex(amount)),
         unit,
         udtTypeScript,
         expiresAt: new Date(Date.now() + expirySeconds * 1000).toISOString(),

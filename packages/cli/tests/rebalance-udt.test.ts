@@ -228,7 +228,7 @@ describe('payment rebalance UDT', () => {
 
     const json = JSON.parse(output.join('\n'));
     expect(json.success).toBe(true);
-    expect(json.data.unit).toBe('UDT');
+    expect(json.data.unit).toBe('RUSD');
     expect(json.data.amount).toBe('1000');
     expect(json.data.udtTypeScript).toEqual({
       code_hash: '0x1234',

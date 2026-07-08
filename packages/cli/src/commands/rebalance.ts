@@ -14,6 +14,7 @@ interface RebalanceExecutionParams {
   json: boolean;
   errorCode: 'PAYMENT_REBALANCE_INPUT_INVALID' | 'CHANNEL_REBALANCE_INPUT_INVALID';
   udtTypeScript?: UdtTypeScript;
+  udtName?: string;
 }
 
 async function executeRebalance(
@@ -110,7 +111,7 @@ async function executeRebalance(
         ...(params.udtTypeScript ? { udt_type_script: params.udtTypeScript } : {}),
       });
 
-  const unit = isUdt ? 'UDT' : 'CKB';
+  const unit = params.udtName ?? (isUdt ? 'UDT' : 'CKB');
   const payload = {
     mode: isManual ? 'manual' : 'auto',
     selfPubkey,
@@ -194,6 +195,7 @@ export function registerPaymentRebalanceCommand(parent: Command, config: CliConf
 
       const rpc = await createReadyRpcClient(config);
       let udtTypeScript: UdtTypeScript | undefined;
+      let udtName: string | undefined;
       try {
         const resolved = await resolveUdtTypeScript({
           rawScript: options.udtTypeScript as string | undefined,
@@ -201,6 +203,7 @@ export function registerPaymentRebalanceCommand(parent: Command, config: CliConf
           rpc,
         });
         udtTypeScript = resolved.script;
+        udtName = resolved.name;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid UDT option';
         if (options.json) {
@@ -225,6 +228,7 @@ export function registerPaymentRebalanceCommand(parent: Command, config: CliConf
         json: Boolean(options.json),
         errorCode: 'PAYMENT_REBALANCE_INPUT_INVALID',
         udtTypeScript,
+        udtName,
       });
     });
 }
@@ -337,6 +341,7 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
 
       const rpc = await createReadyRpcClient(config);
       let udtTypeScript: UdtTypeScript | undefined;
+      let udtName: string | undefined;
       try {
         const resolved = await resolveUdtTypeScript({
           rawScript: options.udtTypeScript as string | undefined,
@@ -344,6 +349,7 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
           rpc,
         });
         udtTypeScript = resolved.script;
+        udtName = resolved.name;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid UDT option';
         if (json) {
@@ -368,6 +374,7 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
         json,
         errorCode: 'CHANNEL_REBALANCE_INPUT_INVALID',
         udtTypeScript,
+        udtName,
       });
     });
 }

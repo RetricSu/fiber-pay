@@ -291,7 +291,7 @@ export function createChannelCommand(config: CliConfig): Command {
           rpc,
         });
         fundingUdtTypeScript = resolved.script;
-        fundingLabel = resolved.unit;
+        fundingLabel = resolved.name ?? resolved.unit;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (json) {

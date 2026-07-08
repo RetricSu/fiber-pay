@@ -163,7 +163,22 @@ describe('parsePaymentAmount', () => {
     expect(() => parsePaymentAmount('1.5', true)).toThrow('Invalid UDT amount');
   });
 
-  it('throws on non-numeric CKB amount', () => {
-    expect(() => parsePaymentAmount('abc', false)).toThrow();
+  it('throws on non-positive CKB amount', () => {
+    expect(() => parsePaymentAmount('0', false)).toThrow('greater than 0');
+    expect(() => parsePaymentAmount('-1', false)).toThrow('Invalid CKB amount');
+  });
+
+  it('rejects malformed or over-precise CKB amounts', () => {
+    expect(() => parsePaymentAmount('', false)).toThrow('Invalid CKB amount');
+    expect(() => parsePaymentAmount('   ', false)).toThrow('Invalid CKB amount');
+    expect(() => parsePaymentAmount(' 1.5', false)).toThrow('Invalid CKB amount');
+    expect(() => parsePaymentAmount('1.5 ', false)).toThrow('Invalid CKB amount');
+    expect(() => parsePaymentAmount('1.2.3', false)).toThrow('Invalid CKB amount');
+    expect(() => parsePaymentAmount('1e2', false)).toThrow('Invalid CKB amount');
+    expect(() => parsePaymentAmount('0.000000007', false)).toThrow('Invalid CKB amount');
+  });
+
+  it('parses tiny CKB amounts exactly without floating-point error', () => {
+    expect(parsePaymentAmount('0.00000007', false)).toBe(7n);
   });
 });

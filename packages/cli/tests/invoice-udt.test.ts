@@ -167,7 +167,7 @@ describe('invoice create UDT', () => {
 
     const json = JSON.parse(output.join('\n'));
     expect(json.success).toBe(true);
-    expect(json.data.unit).toBe('UDT');
+    expect(json.data.unit).toBe('RUSD');
     expect(json.data.amount).toBe('1000');
     expect(json.data.udtTypeScript).toEqual({
       code_hash: '0x1234',
@@ -203,7 +203,7 @@ describe('invoice create UDT', () => {
     restore();
 
     const joined = output.join('\n');
-    expect(joined).toContain('Amount:       1000 UDT');
+    expect(joined).toContain('Amount:       1000 RUSD');
     expect(joined).toContain('UDT Type Script:');
     expect(joined).toContain('"code_hash":"0x1234"');
     expect(joined).toContain('"hash_type":"type"');

@@ -137,7 +137,7 @@ describe('channel open UDT resolution', () => {
 
     const json = JSON.parse(output.join('\n'));
     expect(json.success).toBe(true);
-    expect(json.data.fundingLabel).toBe('UDT');
+    expect(json.data.fundingLabel).toBe('RUSD');
     expect(json.data.fundingUdtTypeScript).toEqual({
       code_hash: '0x1234',
       hash_type: 'type',
@@ -180,7 +180,7 @@ describe('channel open UDT resolution', () => {
     restore();
 
     const joined = output.join('\n');
-    expect(joined).toContain('Funding:              1000 UDT');
+    expect(joined).toContain('Funding:              1000 RUSD');
     expect(joined).toContain('UDT Type Script:');
     expect(joined).toContain('"code_hash":"0x1234"');
     expect(joined).toContain('"hash_type":"type"');
