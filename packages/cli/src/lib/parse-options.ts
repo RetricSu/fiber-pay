@@ -1,4 +1,4 @@
-import type { HexString } from '@fiber-pay/sdk';
+import { ckbToShannons, type HexString } from '@fiber-pay/sdk';
 
 export function parseIntegerOption(value: string | undefined, name: string): number | undefined {
   if (value === undefined) {
@@ -67,6 +67,21 @@ export function parseUdtTypeScript(
     hash_type: script.hash_type as UdtTypeScript['hash_type'],
     args: script.args as HexString,
   };
+}
+
+export function parsePaymentAmount(value: string, isUdt: boolean): bigint {
+  if (isUdt) {
+    const trimmed = value.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      throw new Error(`Invalid UDT amount "${value}": expected a non-negative integer`);
+    }
+    const amount = BigInt(trimmed);
+    if (amount <= 0n) {
+      throw new Error('UDT amount must be greater than 0');
+    }
+    return amount;
+  }
+  return BigInt(ckbToShannons(parseFloat(value)));
 }
 
 export function parseFundingAmount(value: string, isUdt: boolean): bigint {

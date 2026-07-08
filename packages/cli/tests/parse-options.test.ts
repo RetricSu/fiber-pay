@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { parseFundingAmount, parseUdtTypeScript } from '../src/lib/parse-options.js';
+import {
+  parseFundingAmount,
+  parsePaymentAmount,
+  parseUdtTypeScript,
+} from '../src/lib/parse-options.js';
 
 describe('parseUdtTypeScript', () => {
   it('returns undefined when value is undefined', () => {
@@ -136,5 +140,30 @@ describe('parseFundingAmount', () => {
     expect(() => parseFundingAmount('1.2.3', false)).toThrow('CKB funding amount');
     expect(() => parseFundingAmount('1e2', false)).toThrow('CKB funding amount');
     expect(() => parseFundingAmount('0.123456789', false)).toThrow('CKB funding amount');
+  });
+});
+
+describe('parsePaymentAmount', () => {
+  it('converts CKB amount to shannons', () => {
+    expect(parsePaymentAmount('1.5', false)).toBe(150_000_000n);
+    expect(parsePaymentAmount('100', false)).toBe(10_000_000_000n);
+  });
+
+  it('parses UDT amount as raw integer', () => {
+    expect(parsePaymentAmount('1000', true)).toBe(1000n);
+    expect(parsePaymentAmount('12345678901234567890', true)).toBe(12345678901234567890n);
+  });
+
+  it('throws on non-positive UDT amount', () => {
+    expect(() => parsePaymentAmount('0', true)).toThrow('greater than 0');
+    expect(() => parsePaymentAmount('-1', true)).toThrow('Invalid UDT amount');
+  });
+
+  it('throws on decimal UDT amount', () => {
+    expect(() => parsePaymentAmount('1.5', true)).toThrow('Invalid UDT amount');
+  });
+
+  it('throws on non-numeric CKB amount', () => {
+    expect(() => parsePaymentAmount('abc', false)).toThrow();
   });
 });
