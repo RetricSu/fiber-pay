@@ -1,5 +1,5 @@
 import type { RouterHop } from '@fiber-pay/sdk';
-import { ckbToShannons, type HexString, shannonsToCkb, toHex } from '@fiber-pay/sdk';
+import { type HexString, shannonsToCkb, toHex } from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import { sleep } from '../lib/async.js';
 import type { CliConfig } from '../lib/config.js';
@@ -10,7 +10,11 @@ import {
   printJsonSuccess,
   printPaymentDetailHuman,
 } from '../lib/format.js';
-import { parseFundingAmount, type UdtTypeScript } from '../lib/parse-options.js';
+import {
+  parseFundingAmount,
+  parsePaymentAmount,
+  type UdtTypeScript,
+} from '../lib/parse-options.js';
 import { createReadyRpcClient, resolveRpcEndpoint } from '../lib/rpc.js';
 import {
   type RuntimeJobRecord,
@@ -406,7 +410,9 @@ export function createPaymentCommand(config: CliConfig): Command {
     .command('route')
     .description('Build a payment route through specified hops')
     .requiredOption('--hops <pubkeys>', 'Comma-separated list of node pubkeys forming the route')
-    .option('--amount <ckb>', 'Amount in CKB to route')
+    .option('--amount <amount>', 'Amount to route (CKB or UDT raw units)')
+    .option('--udt-type-script <json>', 'UDT type script as JSON CKB Script')
+    .option('--udt-name <name>', 'UDT name from node_info.udt_cfg_infos')
     .option('--json')
     .action(async (options) => {
       const rpc = await createReadyRpcClient(config);
@@ -428,16 +434,70 @@ export function createPaymentCommand(config: CliConfig): Command {
         process.exit(1);
       }
 
+      let udtTypeScript: UdtTypeScript | undefined;
+      try {
+        const resolved = await resolveUdtTypeScript({
+          rawScript: options.udtTypeScript as string | undefined,
+          name: options.udtName as string | undefined,
+          rpc,
+        });
+        udtTypeScript = resolved.script;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid UDT option';
+        if (json) {
+          printJsonError({
+            code: 'PAYMENT_ROUTE_INPUT_INVALID',
+            message,
+            recoverable: true,
+            suggestion:
+              'Provide a valid JSON script or UDT name, e.g. {"code_hash":"0x...","hash_type":"type","args":"0x..."} or --udt-name RUSD',
+          });
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
+
+      const isUdt = udtTypeScript !== undefined;
+
+      let amount: bigint | undefined;
+      if (options.amount) {
+        try {
+          amount = parsePaymentAmount(options.amount, isUdt);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Invalid amount';
+          if (json) {
+            printJsonError({
+              code: 'PAYMENT_ROUTE_INPUT_INVALID',
+              message,
+              recoverable: true,
+              suggestion: isUdt
+                ? 'Provide a positive integer UDT amount, e.g. --amount 1000'
+                : 'Provide a positive CKB amount, e.g. --amount 10',
+            });
+          } else {
+            console.error(`Error: ${message}`);
+          }
+          process.exit(1);
+        }
+      }
+
       const hopsInfo = pubkeys.map((pubkey: string) => ({ pubkey: pubkey as HexString }));
-      const amount = options.amount ? ckbToShannons(parseFloat(options.amount)) : undefined;
 
       const result = await rpc.buildRouter({
         hops_info: hopsInfo,
-        amount,
+        amount: amount !== undefined ? toHex(amount) : undefined,
+        ...(udtTypeScript ? { udt_type_script: udtTypeScript } : {}),
       });
 
+      const unit = isUdt ? 'UDT' : 'CKB';
+
       if (json) {
-        printJsonSuccess({ routerHops: result.router_hops });
+        printJsonSuccess({
+          routerHops: result.router_hops,
+          unit,
+          udtTypeScript,
+        });
       } else {
         console.log(`Route built: ${result.router_hops.length} hop(s)`);
         for (let i = 0; i < result.router_hops.length; i++) {
@@ -447,7 +507,9 @@ export function createPaymentCommand(config: CliConfig): Command {
           console.log(
             `    Outpoint:   ${hop.channel_outpoint.tx_hash}:${hop.channel_outpoint.index}`,
           );
-          console.log(`    Amount:     ${shannonsToCkb(hop.amount_received)} CKB`);
+          console.log(
+            `    Amount:     ${isUdt ? BigInt(hop.amount_received).toString() : shannonsToCkb(hop.amount_received)} ${unit}`,
+          );
           console.log(`    Expiry:     ${hop.incoming_tlc_expiry}`);
         }
       }
