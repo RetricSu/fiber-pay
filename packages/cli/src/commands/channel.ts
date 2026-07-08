@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
   type ChannelState,
-  ckbToShannons,
   ensureHexPrefix,
   type HexString,
   nodeIdToPeerId,
@@ -422,7 +421,25 @@ export function createChannelCommand(config: CliConfig): Command {
     .action(async (temporaryChannelId, options) => {
       const rpc = await createReadyRpcClient(config);
       const json = Boolean(options.json);
-      const fundingCkb = parseFloat(options.funding);
+      const fundingLabel = 'CKB';
+
+      let fundingAmount: bigint;
+      try {
+        fundingAmount = parseFundingAmount(options.funding as string, false);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (json) {
+          printJsonError({
+            code: 'CHANNEL_ACCEPT_INPUT_INVALID',
+            message: msg,
+            recoverable: true,
+            suggestion: 'Provide the CKB amount as a non-negative number.',
+          });
+        } else {
+          console.error(`Error: ${msg}`);
+        }
+        process.exit(1);
+      }
 
       const endpoint = resolveRpcEndpoint(config);
       if (endpoint.target === 'runtime-proxy') {
@@ -431,7 +448,7 @@ export function createChannelCommand(config: CliConfig): Command {
             action: 'accept',
             acceptChannelParams: {
               temporary_channel_id: temporaryChannelId as HexString,
-              funding_amount: ckbToShannons(fundingCkb),
+              funding_amount: toHex(fundingAmount),
             },
           },
           options: {
@@ -444,7 +461,8 @@ export function createChannelCommand(config: CliConfig): Command {
             jobId: created.id,
             jobState: created.state,
             temporaryChannelId,
-            fundingCkb,
+            fundingAmount: fundingAmount.toString(),
+            fundingLabel,
           };
 
           if (json) {
@@ -454,7 +472,7 @@ export function createChannelCommand(config: CliConfig): Command {
             console.log(`  Job:                  ${payload.jobId}`);
             console.log(`  Job State:            ${payload.jobState}`);
             console.log(`  Temporary Channel ID: ${payload.temporaryChannelId}`);
-            console.log(`  Funding:              ${payload.fundingCkb} CKB`);
+            console.log(`  Funding:              ${payload.fundingAmount} ${payload.fundingLabel}`);
           }
           return;
         }
@@ -462,17 +480,22 @@ export function createChannelCommand(config: CliConfig): Command {
 
       const result = await rpc.acceptChannel({
         temporary_channel_id: temporaryChannelId as HexString,
-        funding_amount: ckbToShannons(fundingCkb),
+        funding_amount: toHex(fundingAmount),
       });
 
-      const payload = { channelId: result.channel_id, temporaryChannelId, fundingCkb };
+      const payload = {
+        channelId: result.channel_id,
+        temporaryChannelId,
+        fundingAmount: fundingAmount.toString(),
+        fundingLabel,
+      };
       if (json) {
         printJsonSuccess(payload);
       } else {
         console.log('Channel accepted');
         console.log(`  Channel ID:           ${payload.channelId}`);
         console.log(`  Temporary Channel ID: ${payload.temporaryChannelId}`);
-        console.log(`  Funding:              ${payload.fundingCkb} CKB`);
+        console.log(`  Funding:              ${payload.fundingAmount} ${payload.fundingLabel}`);
       }
     });
 

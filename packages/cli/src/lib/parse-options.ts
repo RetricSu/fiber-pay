@@ -70,23 +70,32 @@ export function parseUdtTypeScript(
 }
 
 export function parseFundingAmount(value: string, isUdt: boolean): bigint {
+  if (value.trim() !== value || value.trim().length === 0) {
+    throw new Error(
+      `Invalid ${isUdt ? 'UDT' : 'CKB'} funding amount: ${value}. Expected a non-negative ${isUdt ? 'integer' : 'number'}.`,
+    );
+  }
+
   if (isUdt) {
-    try {
-      const amount = BigInt(value);
-      if (amount < 0n) {
-        throw new Error();
-      }
-      return amount;
-    } catch {
+    if (!/^-?\d+$/.test(value)) {
       throw new Error(
         `Invalid UDT funding amount: ${value}. Expected a non-negative integer in the smallest UDT unit.`,
       );
     }
+    const amount = BigInt(value);
+    if (amount < 0n) {
+      throw new Error(
+        `Invalid UDT funding amount: ${value}. Expected a non-negative integer in the smallest UDT unit.`,
+      );
+    }
+    return amount;
   }
 
-  const parsed = parseFloat(value);
-  if (Number.isNaN(parsed) || parsed < 0) {
+  // CKB is parsed as a fixed-point decimal with at most 8 decimal places (shannons).
+  if (!/^\d+(\.\d{1,8})?$/.test(value)) {
     throw new Error(`Invalid CKB funding amount: ${value}. Expected a non-negative number.`);
   }
-  return BigInt(Math.floor(parsed * 1e8));
+  const [integerPart, fractionalPart = ''] = value.split('.');
+  const shannonsPerCkb = 10n ** 8n;
+  return BigInt(integerPart) * shannonsPerCkb + BigInt(fractionalPart.padEnd(8, '0'));
 }
