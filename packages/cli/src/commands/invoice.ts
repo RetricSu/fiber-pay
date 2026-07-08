@@ -1,4 +1,4 @@
-import { ckbToShannons, type HexString, randomBytes32, shannonsToCkb, toHex } from '@fiber-pay/sdk';
+import { type HexString, randomBytes32, shannonsToCkb, toHex } from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import type { CliConfig } from '../lib/config.js';
 import {
@@ -8,8 +8,10 @@ import {
   printJsonError,
   printJsonSuccess,
 } from '../lib/format.js';
+import { parsePaymentAmount, type UdtTypeScript } from '../lib/parse-options.js';
 import { createReadyRpcClient, resolveRpcEndpoint } from '../lib/rpc.js';
 import { tryCreateRuntimeInvoiceJob, waitForRuntimeJobTerminal } from '../lib/runtime-jobs.js';
+import { resolveUdtTypeScript } from '../lib/udt.js';
 
 export function createInvoiceCommand(config: CliConfig): Command {
   const invoice = new Command('invoice').description('Invoice lifecycle and status commands');
@@ -17,7 +19,9 @@ export function createInvoiceCommand(config: CliConfig): Command {
   invoice
     .command('create')
     .argument('[amount]')
-    .option('--amount <ckb>')
+    .option('--amount <amount>')
+    .option('--udt-type-script <json>', 'UDT type script as JSON CKB Script')
+    .option('--udt-name <name>', 'UDT name from node_info.udt_cfg_infos')
     .option('--description <text>')
     .option('--expiry <minutes>')
     .option('--json')
@@ -25,27 +29,71 @@ export function createInvoiceCommand(config: CliConfig): Command {
       const rpc = await createReadyRpcClient(config);
       const json = Boolean(options.json);
 
-      const amountCkb = options.amount
-        ? parseFloat(options.amount)
-        : amountArg
-          ? parseFloat(amountArg)
-          : 0;
-      if (!amountCkb) {
-        if (options.json) {
+      let udtTypeScript: UdtTypeScript | undefined;
+      let udtName: string | undefined;
+      try {
+        const resolved = await resolveUdtTypeScript({
+          rawScript: options.udtTypeScript as string | undefined,
+          name: options.udtName as string | undefined,
+          rpc,
+        });
+        udtTypeScript = resolved.script;
+        udtName = resolved.name;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid UDT option';
+        if (json) {
           printJsonError({
             code: 'INVOICE_CREATE_INPUT_INVALID',
-            message: 'Amount required. Usage: invoice create --amount <CKB>',
+            message,
             recoverable: true,
-            suggestion: 'Provide a valid positive amount via `--amount <CKB>`.',
+            suggestion:
+              'Provide a valid JSON script or UDT name, e.g. {"code_hash":"0x...","hash_type":"type","args":"0x..."} or --udt-name RUSD',
           });
         } else {
-          console.error('Error: Amount required. Usage: invoice create --amount <CKB>');
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
+
+      const isUdt = udtTypeScript !== undefined;
+      const amountInput = options.amount ?? amountArg;
+      if (!amountInput) {
+        if (json) {
+          printJsonError({
+            code: 'INVOICE_CREATE_INPUT_INVALID',
+            message: 'Amount required. Usage: invoice create --amount <amount>',
+            recoverable: true,
+            suggestion: 'Provide a valid positive amount via `--amount <amount>`.',
+          });
+        } else {
+          console.error('Error: Amount required. Usage: invoice create --amount <amount>');
+        }
+        process.exit(1);
+      }
+
+      let amount: bigint;
+      try {
+        amount = parsePaymentAmount(amountInput, isUdt);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid amount';
+        if (json) {
+          printJsonError({
+            code: 'INVOICE_CREATE_INPUT_INVALID',
+            message,
+            recoverable: true,
+            suggestion: isUdt
+              ? 'Provide a positive integer UDT amount, e.g. --amount 1000'
+              : 'Provide a positive CKB amount, e.g. --amount 10',
+          });
+        } else {
+          console.error(`Error: ${message}`);
         }
         process.exit(1);
       }
 
       const expirySeconds = (options.expiry ? parseInt(options.expiry, 10) : 60) * 60;
       const currency = config.network === 'mainnet' ? 'Fibb' : 'Fibt';
+      const unit = udtName ?? (isUdt ? 'UDT' : 'CKB');
 
       const endpoint = resolveRpcEndpoint(config);
       if (endpoint.target === 'runtime-proxy') {
@@ -53,11 +101,12 @@ export function createInvoiceCommand(config: CliConfig): Command {
           params: {
             action: 'create',
             newInvoiceParams: {
-              amount: ckbToShannons(amountCkb),
+              amount: toHex(amount),
               currency,
               description: options.description,
               expiry: toHex(expirySeconds),
               payment_preimage: randomBytes32(),
+              ...(udtTypeScript ? { udt_type_script: udtTypeScript } : {}),
             },
             waitForTerminal: false,
           },
@@ -79,7 +128,9 @@ export function createInvoiceCommand(config: CliConfig): Command {
             jobId: job.id,
             invoice: result.invoiceAddress,
             paymentHash: result.paymentHash,
-            amountCkb,
+            amount: isUdt ? amount.toString() : shannonsToCkb(toHex(amount)),
+            unit,
+            udtTypeScript,
             expiresAt: new Date(Date.now() + expirySeconds * 1000).toISOString(),
             status: (result.status ?? 'Open').toLowerCase(),
           };
@@ -90,7 +141,10 @@ export function createInvoiceCommand(config: CliConfig): Command {
             console.log('Invoice created');
             console.log(`  Job:          ${payload.jobId}`);
             console.log(`  Payment Hash: ${payload.paymentHash ?? 'n/a'}`);
-            console.log(`  Amount:       ${payload.amountCkb} CKB`);
+            console.log(`  Amount:       ${payload.amount} ${payload.unit}`);
+            if (udtTypeScript) {
+              console.log(`  UDT Type Script: ${JSON.stringify(udtTypeScript)}`);
+            }
             console.log(`  Expires At:   ${payload.expiresAt}`);
             console.log(`  Invoice:      ${payload.invoice ?? 'n/a'}`);
           }
@@ -99,17 +153,20 @@ export function createInvoiceCommand(config: CliConfig): Command {
       }
 
       const result = await rpc.newInvoice({
-        amount: ckbToShannons(amountCkb),
+        amount: toHex(amount),
         currency,
         description: options.description,
         expiry: toHex(expirySeconds),
         payment_preimage: randomBytes32(),
+        ...(udtTypeScript ? { udt_type_script: udtTypeScript } : {}),
       });
 
       const payload = {
         invoice: result.invoice_address,
         paymentHash: result.invoice.data.payment_hash,
-        amountCkb,
+        amount: isUdt ? amount.toString() : shannonsToCkb(toHex(amount)),
+        unit,
+        udtTypeScript,
         expiresAt: new Date(Date.now() + expirySeconds * 1000).toISOString(),
         status: 'open',
       };
@@ -119,7 +176,10 @@ export function createInvoiceCommand(config: CliConfig): Command {
       } else {
         console.log('Invoice created');
         console.log(`  Payment Hash: ${payload.paymentHash}`);
-        console.log(`  Amount:       ${payload.amountCkb} CKB`);
+        console.log(`  Amount:       ${payload.amount} ${payload.unit}`);
+        if (udtTypeScript) {
+          console.log(`  UDT Type Script: ${JSON.stringify(udtTypeScript)}`);
+        }
         console.log(`  Expires At:   ${payload.expiresAt}`);
         console.log(`  Invoice:      ${payload.invoice}`);
       }

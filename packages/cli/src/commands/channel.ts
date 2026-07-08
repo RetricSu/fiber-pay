@@ -20,13 +20,10 @@ import {
   printJsonSuccess,
   truncateMiddle,
 } from '../lib/format.js';
-import {
-  parseFundingAmount,
-  parseUdtTypeScript,
-  type UdtTypeScript,
-} from '../lib/parse-options.js';
+import { parseFundingAmount, type UdtTypeScript } from '../lib/parse-options.js';
 import { createReadyRpcClient, resolveRpcEndpoint } from '../lib/rpc.js';
 import { tryCreateRuntimeChannelJob } from '../lib/runtime-jobs.js';
+import { resolveUdtTypeScript } from '../lib/udt.js';
 import { registerChannelRebalanceCommand } from './rebalance.js';
 
 function extractPeerIdFromMultiaddr(address: string): string | undefined {
@@ -273,6 +270,7 @@ export function createChannelCommand(config: CliConfig): Command {
       '--funding-udt-type-script <json>',
       'JSON object with code_hash, hash_type, and args to open a UDT channel',
     )
+    .option('--funding-udt-name <name>', 'Name of a UDT from the node config to open a UDT channel')
     .option(
       '--idempotency-key <key>',
       'Reuse this key only when retrying the exact same open intent',
@@ -284,11 +282,16 @@ export function createChannelCommand(config: CliConfig): Command {
       const peerInput = options.peer as string;
 
       let fundingUdtTypeScript: UdtTypeScript | undefined;
+      let fundingLabel = 'CKB';
       try {
-        fundingUdtTypeScript = parseUdtTypeScript(
-          options.fundingUdtTypeScript as string | undefined,
-          '--funding-udt-type-script',
-        );
+        const resolved = await resolveUdtTypeScript({
+          rawScript: options.fundingUdtTypeScript as string | undefined,
+          name: options.fundingUdtName as string | undefined,
+          scriptOptionName: '--funding-udt-type-script',
+          rpc,
+        });
+        fundingUdtTypeScript = resolved.script;
+        fundingLabel = resolved.name ?? resolved.unit;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (json) {
@@ -297,7 +300,7 @@ export function createChannelCommand(config: CliConfig): Command {
             message: msg,
             recoverable: true,
             suggestion:
-              'Provide a valid JSON script, e.g. {"code_hash":"0x...","hash_type":"type","args":"0x..."}',
+              'Provide a valid JSON script or UDT name, e.g. {"code_hash":"0x...","hash_type":"type","args":"0x..."} or --funding-udt-name RUSD',
           });
         } else {
           console.error(`Error: ${msg}`);
@@ -306,7 +309,6 @@ export function createChannelCommand(config: CliConfig): Command {
       }
 
       const isUdt = fundingUdtTypeScript !== undefined;
-      const fundingLabel = isUdt ? 'UDT' : 'CKB';
 
       let fundingAmount: bigint;
       try {

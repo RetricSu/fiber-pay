@@ -1,8 +1,10 @@
-import { ckbToShannons, type HexString, shannonsToCkb } from '@fiber-pay/sdk';
+import { ckbToShannons, type HexString, shannonsToCkb, toHex } from '@fiber-pay/sdk';
 import type { Command } from 'commander';
 import type { CliConfig } from '../lib/config.js';
 import { printJsonError, printJsonSuccess } from '../lib/format.js';
+import { parsePaymentAmount, type UdtTypeScript } from '../lib/parse-options.js';
 import { createReadyRpcClient } from '../lib/rpc.js';
+import { resolveUdtTypeScript } from '../lib/udt.js';
 
 interface RebalanceExecutionParams {
   amountInput: string;
@@ -11,6 +13,8 @@ interface RebalanceExecutionParams {
   dryRun: boolean;
   json: boolean;
   errorCode: 'PAYMENT_REBALANCE_INPUT_INVALID' | 'CHANNEL_REBALANCE_INPUT_INVALID';
+  udtTypeScript?: UdtTypeScript;
+  udtName?: string;
 }
 
 async function executeRebalance(
@@ -18,18 +22,21 @@ async function executeRebalance(
   params: RebalanceExecutionParams,
 ): Promise<void> {
   const rpc = await createReadyRpcClient(config);
-  const amountCkb = parseFloat(params.amountInput);
-  const maxFeeCkb = params.maxFeeInput !== undefined ? parseFloat(params.maxFeeInput) : undefined;
-  const manualHops = params.hops ?? [];
+  const isUdt = params.udtTypeScript !== undefined;
 
-  if (!Number.isFinite(amountCkb) || amountCkb <= 0) {
-    const message = 'Invalid --amount value. Expected a positive CKB amount.';
+  let amount: bigint;
+  try {
+    amount = parsePaymentAmount(params.amountInput, isUdt);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Invalid amount';
     if (params.json) {
       printJsonError({
         code: params.errorCode,
         message,
         recoverable: true,
-        suggestion: 'Provide a positive number, e.g. `--amount 10`.',
+        suggestion: isUdt
+          ? 'Provide a positive integer UDT amount, e.g. --amount 1000'
+          : 'Provide a positive CKB amount, e.g. --amount 10',
         details: { amount: params.amountInput },
       });
     } else {
@@ -37,6 +44,9 @@ async function executeRebalance(
     }
     process.exit(1);
   }
+
+  const maxFeeCkb = params.maxFeeInput !== undefined ? parseFloat(params.maxFeeInput) : undefined;
+  const manualHops = params.hops ?? [];
 
   if (
     maxFeeCkb !== undefined &&
@@ -64,7 +74,6 @@ async function executeRebalance(
   }
 
   const selfPubkey = (await rpc.nodeInfo()).pubkey as HexString;
-  const amount = ckbToShannons(amountCkb);
   const isManual = manualHops.length > 0;
   let routeHopCount: number | undefined;
 
@@ -78,8 +87,9 @@ async function executeRebalance(
         ];
 
         const route = await rpc.buildRouter({
-          amount,
+          amount: toHex(amount),
           hops_info: hopsInfo,
+          ...(params.udtTypeScript ? { udt_type_script: params.udtTypeScript } : {}),
         });
         routeHopCount = route.router_hops.length;
 
@@ -88,21 +98,25 @@ async function executeRebalance(
           keysend: true,
           allow_self_payment: true,
           dry_run: params.dryRun ? true : undefined,
+          ...(params.udtTypeScript ? { udt_type_script: params.udtTypeScript } : {}),
         });
       })()
     : await rpc.sendPayment({
         target_pubkey: selfPubkey,
-        amount,
+        amount: toHex(amount),
         keysend: true,
         allow_self_payment: true,
         max_fee_amount: maxFeeCkb !== undefined ? ckbToShannons(maxFeeCkb) : undefined,
         dry_run: params.dryRun ? true : undefined,
+        ...(params.udtTypeScript ? { udt_type_script: params.udtTypeScript } : {}),
       });
 
+  const unit = params.udtName ?? (isUdt ? 'UDT' : 'CKB');
   const payload = {
     mode: isManual ? 'manual' : 'auto',
     selfPubkey,
-    amountCkb,
+    amount: isUdt ? amount.toString() : shannonsToCkb(toHex(amount)),
+    unit,
     maxFeeCkb: isManual ? undefined : maxFeeCkb,
     routeHopCount,
     paymentHash: result.payment_hash,
@@ -111,6 +125,7 @@ async function executeRebalance(
     feeCkb: shannonsToCkb(result.fee),
     failureReason: result.failed_error,
     dryRun: params.dryRun,
+    udtTypeScript: params.udtTypeScript,
   };
 
   if (params.json) {
@@ -122,7 +137,7 @@ async function executeRebalance(
         : `Rebalance sent (${payload.mode} route)`,
     );
     console.log(`  Self:   ${payload.selfPubkey}`);
-    console.log(`  Amount: ${payload.amountCkb} CKB`);
+    console.log(`  Amount: ${payload.amount} ${payload.unit}`);
     if (payload.mode === 'manual' && payload.routeHopCount !== undefined) {
       console.log(`  Hops:   ${payload.routeHopCount}`);
     }
@@ -142,12 +157,14 @@ export function registerPaymentRebalanceCommand(parent: Command, config: CliConf
   parent
     .command('rebalance')
     .description('Technical rebalance command mapped to payment-layer circular self-payment')
-    .requiredOption('--amount <ckb>', 'Amount in CKB to rebalance')
+    .requiredOption('--amount <amount>', 'Amount to rebalance (CKB or UDT raw units)')
     .option('--max-fee <ckb>', 'Maximum fee in CKB (auto mode only)')
     .option(
       '--hops <pubkeys>',
       'Comma-separated peer pubkeys for manual route mode (self pubkey appended automatically)',
     )
+    .option('--udt-type-script <json>', 'UDT type script as JSON CKB Script')
+    .option('--udt-name <name>', 'UDT name from node_info.udt_cfg_infos')
     .option('--dry-run', 'Simulate route/payment and return estimated result')
     .option('--json')
     .action(async (options) => {
@@ -176,6 +193,33 @@ export function registerPaymentRebalanceCommand(parent: Command, config: CliConf
         process.exit(1);
       }
 
+      const rpc = await createReadyRpcClient(config);
+      let udtTypeScript: UdtTypeScript | undefined;
+      let udtName: string | undefined;
+      try {
+        const resolved = await resolveUdtTypeScript({
+          rawScript: options.udtTypeScript as string | undefined,
+          name: options.udtName as string | undefined,
+          rpc,
+        });
+        udtTypeScript = resolved.script;
+        udtName = resolved.name;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid UDT option';
+        if (options.json) {
+          printJsonError({
+            code: 'PAYMENT_REBALANCE_INPUT_INVALID',
+            message,
+            recoverable: true,
+            suggestion:
+              'Provide a valid JSON script or UDT name, e.g. {"code_hash":"0x...","hash_type":"type","args":"0x..."} or --udt-name RUSD',
+          });
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
+
       await executeRebalance(config, {
         amountInput: options.amount,
         maxFeeInput: options.maxFee,
@@ -183,6 +227,8 @@ export function registerPaymentRebalanceCommand(parent: Command, config: CliConf
         dryRun: Boolean(options.dryRun),
         json: Boolean(options.json),
         errorCode: 'PAYMENT_REBALANCE_INPUT_INVALID',
+        udtTypeScript,
+        udtName,
       });
     });
 }
@@ -191,10 +237,12 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
   parent
     .command('rebalance')
     .description('High-level channel rebalance wrapper using payment-layer orchestration')
-    .requiredOption('--amount <ckb>', 'Amount in CKB to rebalance')
+    .requiredOption('--amount <amount>', 'Amount to rebalance (CKB or UDT raw units)')
     .option('--from-channel <channelId>', 'Source-biased channel id (optional)')
     .option('--to-channel <channelId>', 'Destination-biased channel id (optional)')
     .option('--max-fee <ckb>', 'Maximum fee in CKB (auto mode only)')
+    .option('--udt-type-script <json>', 'UDT type script as JSON CKB Script')
+    .option('--udt-name <name>', 'UDT name from node_info.udt_cfg_infos')
     .option('--dry-run', 'Simulate route/payment and return estimated result')
     .option('--json')
     .action(async (options) => {
@@ -291,6 +339,33 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
         guidedHops = [fromPubkey, toPubkey];
       }
 
+      const rpc = await createReadyRpcClient(config);
+      let udtTypeScript: UdtTypeScript | undefined;
+      let udtName: string | undefined;
+      try {
+        const resolved = await resolveUdtTypeScript({
+          rawScript: options.udtTypeScript as string | undefined,
+          name: options.udtName as string | undefined,
+          rpc,
+        });
+        udtTypeScript = resolved.script;
+        udtName = resolved.name;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid UDT option';
+        if (json) {
+          printJsonError({
+            code: 'CHANNEL_REBALANCE_INPUT_INVALID',
+            message,
+            recoverable: true,
+            suggestion:
+              'Provide a valid JSON script or UDT name, e.g. {"code_hash":"0x...","hash_type":"type","args":"0x..."} or --udt-name RUSD',
+          });
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
+
       await executeRebalance(config, {
         amountInput: options.amount,
         maxFeeInput: options.maxFee,
@@ -298,6 +373,8 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
         dryRun: Boolean(options.dryRun),
         json,
         errorCode: 'CHANNEL_REBALANCE_INPUT_INVALID',
+        udtTypeScript,
+        udtName,
       });
     });
 }
