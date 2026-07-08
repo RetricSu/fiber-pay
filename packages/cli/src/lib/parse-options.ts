@@ -36,12 +36,10 @@ export function parseUdtTypeScript(
   return parseUdtTypeScriptSdk(value, name);
 }
 
-export function parsePaymentAmount(value: string, isUdt: boolean): bigint {
-  const asset: UdtAsset = isUdt ? { kind: 'udt', script: {} as UdtTypeScript } : { kind: 'ckb' };
+export function parsePaymentAmount(value: string, asset: UdtAsset): bigint {
   return parsePaymentAmountSdk(value, asset);
 }
 
-export function parseFundingAmount(value: string, isUdt: boolean): bigint {
-  const asset: UdtAsset = isUdt ? { kind: 'udt', script: {} as UdtTypeScript } : { kind: 'ckb' };
+export function parseFundingAmount(value: string, asset: UdtAsset): bigint {
   return parseFundingAmountSdk(value, asset);
 }

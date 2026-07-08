@@ -81,7 +81,7 @@ export function createInvoiceCommand(config: CliConfig): Command {
 
       let amount: bigint;
       try {
-        amount = parsePaymentAmount(amountInput, isUdt);
+        amount = parsePaymentAmount(amountInput, invoiceAsset);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid amount';
         if (json) {

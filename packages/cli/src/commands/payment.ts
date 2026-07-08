@@ -72,7 +72,7 @@ export function createPaymentCommand(config: CliConfig): Command {
       let amountRaw: bigint | undefined;
       if (options.amount) {
         try {
-          amountRaw = parsePaymentAmount(options.amount, isUdt);
+          amountRaw = parsePaymentAmount(options.amount, paymentAsset);
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
           if (json) {
@@ -94,7 +94,7 @@ export function createPaymentCommand(config: CliConfig): Command {
       let maxFeeRaw: bigint | undefined;
       if (options.maxFee) {
         try {
-          maxFeeRaw = parseFundingAmount(options.maxFee, false);
+          maxFeeRaw = parseFundingAmount(options.maxFee, { kind: 'ckb' });
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
           if (json) {
@@ -460,7 +460,7 @@ export function createPaymentCommand(config: CliConfig): Command {
       let amount: bigint | undefined;
       if (options.amount) {
         try {
-          amount = parsePaymentAmount(options.amount, isUdt);
+          amount = parsePaymentAmount(options.amount, routeAsset);
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Invalid amount';
           if (json) {

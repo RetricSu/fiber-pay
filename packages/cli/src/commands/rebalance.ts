@@ -34,7 +34,7 @@ async function executeRebalance(
 
   let amount: bigint;
   try {
-    amount = parsePaymentAmount(params.amountInput, isUdt);
+    amount = parsePaymentAmount(params.amountInput, params.asset);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Invalid amount';
     if (params.json) {

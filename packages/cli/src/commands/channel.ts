@@ -315,7 +315,7 @@ export function createChannelCommand(config: CliConfig): Command {
 
       let fundingAmount: bigint;
       try {
-        fundingAmount = parseFundingAmount(options.funding as string, isUdt);
+        fundingAmount = parseFundingAmount(options.funding as string, fundingAsset);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (json) {
@@ -430,7 +430,7 @@ export function createChannelCommand(config: CliConfig): Command {
 
       let fundingAmount: bigint;
       try {
-        fundingAmount = parseFundingAmount(options.funding as string, false);
+        fundingAmount = parseFundingAmount(options.funding as string, { kind: 'ckb' });
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (json) {
