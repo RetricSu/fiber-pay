@@ -10,12 +10,16 @@ export interface UdtResolution {
 export interface UdtResolutionOptions {
   rawScript?: string;
   name?: string;
+  scriptOptionName?: string;
   rpc: { nodeInfo(): Promise<{ udt_cfg_infos: UdtCfgInfos }> };
 }
 
 export async function resolveUdtTypeScript(options: UdtResolutionOptions): Promise<UdtResolution> {
   if (options.rawScript !== undefined) {
-    const script = parseUdtTypeScript(options.rawScript, '--udt-type-script');
+    const script = parseUdtTypeScript(
+      options.rawScript,
+      options.scriptOptionName ?? '--udt-type-script',
+    );
     if (script === undefined) {
       return { unit: 'CKB' };
     }

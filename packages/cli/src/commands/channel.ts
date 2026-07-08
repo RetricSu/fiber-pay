@@ -287,6 +287,7 @@ export function createChannelCommand(config: CliConfig): Command {
         const resolved = await resolveUdtTypeScript({
           rawScript: options.fundingUdtTypeScript as string | undefined,
           name: options.fundingUdtName as string | undefined,
+          scriptOptionName: '--funding-udt-type-script',
           rpc,
         });
         fundingUdtTypeScript = resolved.script;

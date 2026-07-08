@@ -37,6 +37,22 @@ describe('resolveUdtTypeScript', () => {
     expect(result.script).toEqual({ code_hash: '0x1234', hash_type: 'type', args: '0xRUSD' });
   });
 
+  it('throws with default option name when raw script is invalid JSON', async () => {
+    await expect(
+      resolveUdtTypeScript({ rawScript: 'not-json', rpc: makeRpc([]) as any }),
+    ).rejects.toThrow('Invalid --udt-type-script: must be a valid JSON object');
+  });
+
+  it('uses custom scriptOptionName in raw script validation errors', async () => {
+    await expect(
+      resolveUdtTypeScript({
+        rawScript: 'not-json',
+        scriptOptionName: '--funding-udt-type-script',
+        rpc: makeRpc([]) as any,
+      }),
+    ).rejects.toThrow('Invalid --funding-udt-type-script: must be a valid JSON object');
+  });
+
   it('throws when named UDT is not found', async () => {
     await expect(
       resolveUdtTypeScript({ name: 'MISSING', rpc: makeRpc(['RUSD']) as any }),

@@ -31,6 +31,20 @@ function makeConfig() {
   };
 }
 
+function captureLogs(): { output: string[]; restore: () => void } {
+  const originalLog = console.log;
+  const output: string[] = [];
+  console.log = (...args: unknown[]) => {
+    output.push(args.map(String).join(' '));
+  };
+  return {
+    output,
+    restore: () => {
+      console.log = originalLog;
+    },
+  };
+}
+
 describe('channel open UDT resolution', () => {
   beforeEach(() => {
     openChannel.mockClear();
@@ -102,5 +116,74 @@ describe('channel open UDT resolution', () => {
     const [params] = openChannel.mock.calls[0];
     expect(params).toHaveProperty('funding_amount', '0x8f0d180');
     expect(params).not.toHaveProperty('funding_udt_type_script');
+  });
+
+  it('JSON output includes fundingLabel UDT and resolved fundingUdtTypeScript', async () => {
+    const { output, restore } = captureLogs();
+    const channel = createChannelCommand(makeConfig());
+    await channel.parseAsync([
+      'node',
+      'script',
+      'open',
+      '--peer',
+      '0xabcd',
+      '--funding',
+      '1000',
+      '--funding-udt-name',
+      'RUSD',
+      '--json',
+    ]);
+    restore();
+
+    const json = JSON.parse(output.join('\n'));
+    expect(json.success).toBe(true);
+    expect(json.data.fundingLabel).toBe('UDT');
+    expect(json.data.fundingUdtTypeScript).toEqual({
+      code_hash: '0x1234',
+      hash_type: 'type',
+      args: '0x5678',
+    });
+  });
+
+  it('human output includes fundingLabel CKB when no UDT option is provided', async () => {
+    const { output, restore } = captureLogs();
+    const channel = createChannelCommand(makeConfig());
+    await channel.parseAsync([
+      'node',
+      'script',
+      'open',
+      '--peer',
+      '0xabcd',
+      '--funding',
+      '1.5',
+    ]);
+    restore();
+
+    const joined = output.join('\n');
+    expect(joined).toContain('Funding:              150000000 CKB');
+  });
+
+  it('human output includes fundingLabel UDT and resolved UDT type script', async () => {
+    const { output, restore } = captureLogs();
+    const channel = createChannelCommand(makeConfig());
+    await channel.parseAsync([
+      'node',
+      'script',
+      'open',
+      '--peer',
+      '0xabcd',
+      '--funding',
+      '1000',
+      '--funding-udt-name',
+      'RUSD',
+    ]);
+    restore();
+
+    const joined = output.join('\n');
+    expect(joined).toContain('Funding:              1000 UDT');
+    expect(joined).toContain('UDT Type Script:');
+    expect(joined).toContain('"code_hash":"0x1234"');
+    expect(joined).toContain('"hash_type":"type"');
+    expect(joined).toContain('"args":"0x5678"');
   });
 });
