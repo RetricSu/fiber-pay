@@ -1,5 +1,5 @@
 import type { RouterHop } from '@fiber-pay/sdk';
-import { ckbToShannons, type HexString, shannonsToCkb } from '@fiber-pay/sdk';
+import { ckbToShannons, type HexString, shannonsToCkb, toHex } from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import { sleep } from '../lib/async.js';
 import type { CliConfig } from '../lib/config.js';
@@ -10,12 +10,14 @@ import {
   printJsonSuccess,
   printPaymentDetailHuman,
 } from '../lib/format.js';
+import { parseFundingAmount, type UdtTypeScript } from '../lib/parse-options.js';
 import { createReadyRpcClient, resolveRpcEndpoint } from '../lib/rpc.js';
 import {
   type RuntimeJobRecord,
   tryCreateRuntimePaymentJob,
   waitForRuntimeJobTerminal,
 } from '../lib/runtime-jobs.js';
+import { resolveUdtTypeScript } from '../lib/udt.js';
 import { registerPaymentRebalanceCommand } from './rebalance.js';
 
 export function createPaymentCommand(config: CliConfig): Command {
@@ -26,8 +28,10 @@ export function createPaymentCommand(config: CliConfig): Command {
     .argument('[invoice]')
     .option('--invoice <invoice>')
     .option('--to <nodeId>')
-    .option('--amount <ckb>')
+    .option('--amount <amount>')
     .option('--max-fee <ckb>')
+    .option('--udt-type-script <json>', 'UDT type script for the payment')
+    .option('--udt-name <name>', 'Name of a UDT from the node config for the payment')
     .option('--wait', 'Wait for runtime job terminal status when runtime proxy is active')
     .option('--timeout <seconds>', 'Wait timeout for --wait mode', '120')
     .option('--json')
@@ -36,8 +40,77 @@ export function createPaymentCommand(config: CliConfig): Command {
       const json = Boolean(options.json);
       const invoice = options.invoice || invoiceArg;
       const recipientNodeId = options.to;
-      const amountCkb = options.amount ? parseFloat(options.amount) : undefined;
-      const maxFeeCkb = options.maxFee ? parseFloat(options.maxFee) : undefined;
+
+      let udtTypeScript: UdtTypeScript | undefined;
+      let unit: 'CKB' | 'UDT' = 'CKB';
+      try {
+        const resolved = await resolveUdtTypeScript({
+          rawScript: options.udtTypeScript as string | undefined,
+          name: options.udtName as string | undefined,
+          rpc,
+        });
+        udtTypeScript = resolved.script;
+        unit = resolved.unit;
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (json) {
+          printJsonError({
+            code: 'PAYMENT_SEND_INPUT_INVALID',
+            message: msg,
+            recoverable: true,
+            suggestion:
+              'Provide a valid JSON script or UDT name, e.g. {"code_hash":"0x...","hash_type":"type","args":"0x..."} or --udt-name RUSD',
+          });
+        } else {
+          console.error(`Error: ${msg}`);
+        }
+        process.exit(1);
+      }
+
+      const isUdt = udtTypeScript !== undefined;
+
+      let amountRaw: bigint | undefined;
+      if (options.amount) {
+        try {
+          amountRaw = parseFundingAmount(options.amount, isUdt);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          if (json) {
+            printJsonError({
+              code: 'PAYMENT_SEND_INPUT_INVALID',
+              message: msg,
+              recoverable: true,
+              suggestion: isUdt
+                ? 'Provide the UDT amount as an integer in the smallest unit.'
+                : 'Provide the CKB amount as a non-negative number.',
+            });
+          } else {
+            console.error(`Error: ${msg}`);
+          }
+          process.exit(1);
+        }
+      }
+
+      let maxFeeRaw: bigint | undefined;
+      if (options.maxFee) {
+        try {
+          maxFeeRaw = parseFundingAmount(options.maxFee, false);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          if (json) {
+            printJsonError({
+              code: 'PAYMENT_SEND_INPUT_INVALID',
+              message: msg,
+              recoverable: true,
+              suggestion: 'Provide the CKB max fee as a non-negative number.',
+            });
+          } else {
+            console.error(`Error: ${msg}`);
+          }
+          process.exit(1);
+        }
+      }
+
       const shouldWait = Boolean(options.wait);
       const timeoutSeconds = parseInt(String(options.timeout ?? '120'), 10);
 
@@ -54,13 +127,13 @@ export function createPaymentCommand(config: CliConfig): Command {
         }
         process.exit(1);
       }
-      if (recipientNodeId && !amountCkb) {
+      if (recipientNodeId && amountRaw === undefined) {
         if (json) {
           printJsonError({
             code: 'PAYMENT_SEND_INPUT_INVALID',
             message: '--amount required when using --to',
             recoverable: true,
-            suggestion: 'Add `--amount <ckb>` when using keysend mode (`--to`).',
+            suggestion: 'Add `--amount <amount>` when using keysend mode (`--to`).',
           });
         } else {
           console.error('Error: --amount required when using --to');
@@ -71,9 +144,10 @@ export function createPaymentCommand(config: CliConfig): Command {
       const paymentParams = {
         invoice,
         target_pubkey: recipientNodeId as HexString | undefined,
-        amount: amountCkb ? ckbToShannons(amountCkb) : undefined,
+        amount: amountRaw !== undefined ? toHex(amountRaw) : undefined,
         keysend: recipientNodeId ? true : undefined,
-        max_fee_amount: maxFeeCkb ? ckbToShannons(maxFeeCkb) : undefined,
+        max_fee_amount: maxFeeRaw !== undefined ? toHex(maxFeeRaw) : undefined,
+        ...(udtTypeScript ? { udt_type_script: udtTypeScript } : {}),
       };
 
       const endpoint = resolveRpcEndpoint(config);
@@ -106,6 +180,9 @@ export function createPaymentCommand(config: CliConfig): Command {
             failureReason: getJobFailure(job),
             jobId: job.id,
             jobState: job.state,
+            unit,
+            amount: amountRaw?.toString(),
+            ...(udtTypeScript ? { udtTypeScript } : {}),
           };
 
           if (json) {
@@ -116,6 +193,12 @@ export function createPaymentCommand(config: CliConfig): Command {
             console.log(`  Hash:   ${payload.paymentHash}`);
             console.log(`  Status: ${payload.status} (${payload.jobState})`);
             console.log(`  Fee:    ${payload.feeCkb} CKB`);
+            if (payload.amount !== undefined) {
+              console.log(`  Amount: ${payload.amount} ${unit}`);
+            }
+            if (udtTypeScript) {
+              console.log(`  UDT Type Script: ${JSON.stringify(udtTypeScript)}`);
+            }
             if (payload.failureReason) {
               console.log(`  Error:  ${payload.failureReason}`);
             }
@@ -137,6 +220,9 @@ export function createPaymentCommand(config: CliConfig): Command {
               : 'pending',
         feeCkb: shannonsToCkb(result.fee),
         failureReason: result.failed_error,
+        unit,
+        amount: amountRaw?.toString(),
+        ...(udtTypeScript ? { udtTypeScript } : {}),
       };
 
       if (json) {
@@ -146,6 +232,12 @@ export function createPaymentCommand(config: CliConfig): Command {
         console.log(`  Hash:   ${payload.paymentHash}`);
         console.log(`  Status: ${payload.status}`);
         console.log(`  Fee:    ${payload.feeCkb} CKB`);
+        if (payload.amount !== undefined) {
+          console.log(`  Amount: ${payload.amount} ${unit}`);
+        }
+        if (udtTypeScript) {
+          console.log(`  UDT Type Script: ${JSON.stringify(udtTypeScript)}`);
+        }
         if (payload.failureReason) {
           console.log(`  Error:  ${payload.failureReason}`);
         }
