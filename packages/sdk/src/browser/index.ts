@@ -123,6 +123,19 @@ export type {
   UpdateChannelParams,
 } from '../types/rpc.js';
 export { ChannelState } from '../types/rpc.js';
+export type {
+  FormattedChannelBalances,
+  ResolveUdtAssetOptions,
+  UdtAsset,
+  UdtTypeScript,
+} from '../udt/index.js';
+export {
+  formatChannelBalances,
+  parseFundingAmount,
+  parsePaymentAmount,
+  parseUdtTypeScript,
+  resolveUdtAsset,
+} from '../udt/index.js';
 export {
   buildMultiaddr,
   buildMultiaddrFromNodeId,
