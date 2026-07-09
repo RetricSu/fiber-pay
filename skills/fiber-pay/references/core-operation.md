@@ -42,6 +42,22 @@ fiber-pay channel open --peer <peer-address> --funding <CKB> --json
 fiber-pay channel watch --until CHANNEL_READY --json
 ```
 
+### UDT channels
+
+To open a UDT (User-Defined Token) channel, provide the CKB type script and the funding amount in raw UDT units:
+
+```bash
+fiber-pay peer connect <peer-multiaddr> --json
+fiber-pay channel open \
+  --peer <peer-address> \
+  --funding <UDT-amount> \
+  --funding-udt-type-script '{"code_hash":"0x...","hash_type":"type","args":"0x..."}' \
+  --json
+fiber-pay channel watch --until CHANNEL_READY --json
+```
+
+UDT channels are displayed with `unit: 'UDT'` in `channel list` output, alongside CKB channels.
+
 Verification checks:
 
 ```bash
@@ -63,6 +79,19 @@ Create invoice:
 
 ```bash
 fiber-pay invoice create --amount <CKB> --description "<desc>" --json
+```
+
+### UDT invoices
+
+Create a UDT-denominated invoice by name (resolves from `node_info.udt_cfg_infos`) or by type script:
+
+```bash
+# By configured UDT name
+fiber-pay invoice create --amount <UDT-amount> --udt-name <name> --json
+
+# By type script
+fiber-pay invoice create --amount <UDT-amount> \
+  --udt-type-script '{"code_hash":"0x...","hash_type":"type","args":"0x..."}' --json
 ```
 
 Track invoice/payment state:
@@ -102,6 +131,16 @@ Use high-level channel command:
 fiber-pay channel rebalance --amount <CKB> --max-fee <CKB> --dry-run --json
 fiber-pay channel rebalance --amount <CKB> --max-fee <CKB> --json
 fiber-pay channel rebalance --amount <CKB> --from-channel <channelA_id> --to-channel <channelB_id> --json
+```
+
+### UDT rebalance
+
+Rebalance also works across UDT channels. Use `--udt-type-script` or `--udt-name` to specify the asset:
+
+```bash
+fiber-pay channel rebalance --amount <UDT-amount> --udt-name <name> --dry-run --json
+fiber-pay channel rebalance --amount <UDT-amount> \
+  --udt-type-script '{"code_hash":"0x...","hash_type":"type","args":"0x..."}' --json
 ```
 
 Direction quick rule:

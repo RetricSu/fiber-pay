@@ -50,6 +50,27 @@ fiber-pay channel rebalance --amount <CKB> --max-fee <CKB> --dry-run --json
 fiber-pay channel rebalance --amount <CKB> --max-fee <CKB> --json
 ```
 
+### UDT rebalance
+
+Rebalance also works across UDT channels. Specify the asset via configured name or type script:
+
+```bash
+# By name (resolves from node_info.udt_cfg_infos)
+fiber-pay channel rebalance --amount <UDT-amount> --udt-name <name> --dry-run --json
+fiber-pay channel rebalance --amount <UDT-amount> --udt-name <name> --json
+
+# By type script
+fiber-pay channel rebalance --amount <UDT-amount> \
+  --udt-type-script '{"code_hash":"0x...","hash_type":"type","args":"0x..."}' --dry-run --json
+fiber-pay channel rebalance --amount <UDT-amount> \
+  --udt-type-script '{"code_hash":"0x...","hash_type":"type","args":"0x..."}' --json
+
+# Guided mode also supports UDT channels
+fiber-pay channel rebalance --amount <UDT-amount> \
+  --from-channel <channelA_id> --to-channel <channelB_id> \
+  --udt-type-script '{"code_hash":"0x...","hash_type":"type","args":"0x..."}' --json
+```
+
 Manual route mode (pin path hops, payment-level technical mode):
 
 ```bash

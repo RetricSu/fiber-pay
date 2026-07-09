@@ -67,6 +67,14 @@ Create an invoice (receiver side):
 fiber-pay invoice create --amount <CKB> --description "<desc>" --json
 ```
 
+Create a UDT invoice by configured name or type script:
+
+```bash
+fiber-pay invoice create --amount <UDT-amount> --udt-name <name> --json
+fiber-pay invoice create --amount <UDT-amount> \
+  --udt-type-script '{"code_hash":"0x...","hash_type":"type","args":"0x..."}' --json
+```
+
 Pay an invoice (sender side):
 
 ```bash
