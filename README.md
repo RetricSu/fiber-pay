@@ -12,7 +12,7 @@ https://retricsu.github.io/fiber-pay/
 
 - `@fiber-pay/cli`: operations and automation for humans and agents (profiles, node/channel/payment lifecycle, runtime jobs, L402 proxy, `agent serve` / `agent call`)
 - `@fiber-pay/sdk`: application-facing typed APIs (universal + node + browser entrypoints)
-- `@fiber-pay/react` is the higher-level React layer built on top of `@fiber-pay/sdk/browser`, intended for fast browser UI integration.
+- `@fiber-pay/react`: the higher-level React layer built on top of `@fiber-pay/sdk/browser`, intended for fast browser UI integration.
 
 Package maturity note:
 
