@@ -8,6 +8,7 @@ import type {
   ListPeersResult,
   NodeInfoResult,
   Script,
+  UdtAsset,
 } from '@fiber-pay/sdk/browser';
 import type { CSSProperties, ReactNode } from 'react';
 import type { ConnectButtonConnectedDropdownContext, ConnectStrategy } from '../connect-button.js';
@@ -89,6 +90,7 @@ export interface FiberNodeButtonTabActions {
 export interface FiberNodeButtonTabContext {
   fiber: UseFiberNodeResult;
   state: FiberNodeButtonPanelState;
+  asset: UdtAsset;
   externalFundingEnabled: boolean;
   t: FiberNodeButtonI18n;
   actions: FiberNodeButtonTabActions;
@@ -136,6 +138,7 @@ export interface FiberNodeButtonExternalFundingConfig {
 
 export interface FiberNodeButtonConnectorSectionContext {
   fiber: UseFiberNodeResult;
+  asset: UdtAsset;
   externalFundingEnabled: boolean;
   isOpeningChannel: boolean;
 }
@@ -150,6 +153,8 @@ export interface FiberNodeButtonProps {
   passkeyUsername?: string;
   wasmFactory?: FiberWasmFactory;
   nodeConfig?: UseFiberNodeOptions['nodeConfig'];
+  /** Asset for channel funding, invoices, and payments. Defaults to CKB. */
+  asset?: UdtAsset;
   className?: string;
   style?: CSSProperties;
   dropdownStyle?: CSSProperties;
@@ -160,6 +165,10 @@ export interface FiberNodeButtonProps {
   initialPeerPubkey?: string;
   initialPeerAddress?: string;
   initialFundingAmountCkb?: string;
+  /** Generic funding amount (CKB or UDT units). Takes precedence over initialFundingAmountCkb. */
+  initialFundingAmount?: string;
+  /** Invoice amount in CKB or UDT units. Defaults to 1 (CKB or UDT). */
+  invoiceAmount?: string;
   externalFunding?: FiberNodeButtonExternalFundingConfig;
   renderConnectorSection?: (context: FiberNodeButtonConnectorSectionContext) => ReactNode;
   tabs?: ReadonlyArray<FiberNodeButtonTabConfig>;
@@ -175,11 +184,14 @@ export interface FiberNodeButtonPanelProps {
   dropdownContext: ConnectButtonConnectedDropdownContext;
   network: 'testnet' | 'mainnet';
   fiber: UseFiberNodeResult;
+  asset: UdtAsset;
   onLog?: (message: string) => void;
   onError?: (error: string) => void;
   initialPeerPubkey: string;
   initialPeerAddress: string;
   initialFundingAmountCkb: string;
+  initialFundingAmount?: string;
+  invoiceAmount?: string;
   externalFunding?: FiberNodeButtonExternalFundingConfig;
   renderConnectorSection?: (context: FiberNodeButtonConnectorSectionContext) => ReactNode;
   tabs?: ReadonlyArray<FiberNodeButtonTabConfig>;

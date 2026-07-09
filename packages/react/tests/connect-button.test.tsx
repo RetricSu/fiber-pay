@@ -128,4 +128,48 @@ describe('ConnectButton', () => {
       expect(onDisconnect).toHaveBeenCalledTimes(1);
     });
   });
+
+  it('renders asset label in default dropdown and passes asset to custom renderer', () => {
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: {} as UseFiberNodeResult['node'],
+      nodeInfo: { pubkey: '0x0123456789abcdef0123456789abcdef' } as UseFiberNodeResult['nodeInfo'],
+    });
+
+    const customRenderer = vi.fn(() => <div>Custom dropdown</div>);
+    const asset = {
+      kind: 'udt' as const,
+      script: {
+        code_hash: '0x'.padEnd(66, '0'),
+        hash_type: 'type' as const,
+        args: '0x00',
+      },
+    };
+
+    const { unmount } = render(
+      <ConnectButton
+        fiber={fiber}
+        strategy="passkey"
+        asset={asset}
+        renderConnectedDropdown={customRenderer}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(customRenderer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        asset,
+        fiber,
+      }),
+    );
+
+    unmount();
+
+    // Default dropdown should also show asset label
+    render(<ConnectButton fiber={fiber} strategy="passkey" asset={asset} />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.getByText('UDT')).toBeTruthy();
+  });
 });

@@ -4,8 +4,8 @@ const SHANNONS_PER_CKB = 100_000_000n;
 const DEFAULT_PAGE_SIZE = 100;
 const DEFAULT_MAX_PAGES = 2000;
 
-interface IndexerCellsResponse {
-  objects?: Array<{ output?: { capacity?: string } }>;
+export interface IndexerCellsResponse {
+  objects?: Array<{ output?: { capacity?: string }; output_data?: string }>;
   last_cursor?: string;
 }
 

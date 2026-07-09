@@ -5,7 +5,7 @@ import type {
   HexString,
   ShutdownChannelParams,
 } from '@fiber-pay/sdk/browser';
-import { ChannelState } from '@fiber-pay/sdk/browser';
+import { ChannelState, DEFAULT_CKB_ASSET } from '@fiber-pay/sdk/browser';
 import {
   type Dispatch,
   type SetStateAction,
@@ -16,17 +16,17 @@ import {
   useRef,
   useState,
 } from 'react';
+import { buildNewInvoiceParams } from '../invoice-params.js';
 import { type UseChannelOpenFlowResult, useChannelOpenFlow } from '../use-channel-open-flow.js';
 import { useFiberPayment } from '../use-fiber-payment.js';
-import {
-  type ChannelFilter,
-  type FiberNodeButtonConnectorSectionContext,
-  type FiberNodeButtonPanelProps,
-  type GraphChannelInfo,
-  type GraphNodeInfo,
-  ONE_CKB_SHANNONS,
-  type PanelTab,
-  type PeerInfo,
+import type {
+  ChannelFilter,
+  FiberNodeButtonConnectorSectionContext,
+  FiberNodeButtonPanelProps,
+  GraphChannelInfo,
+  GraphNodeInfo,
+  PanelTab,
+  PeerInfo,
 } from './types.js';
 import {
   getChannelFilterState,
@@ -56,8 +56,12 @@ export interface FiberNodeButtonPanelState {
   setPeerPubkey: Dispatch<SetStateAction<string>>;
   peerAddress: string;
   setPeerAddress: Dispatch<SetStateAction<string>>;
+  fundingAmount: string;
+  setFundingAmount: Dispatch<SetStateAction<string>>;
+  /** @deprecated Use `fundingAmount` instead. */
   fundingAmountCkb: string;
-  setFundingAmountCkb: Dispatch<SetStateAction<string>>;
+  invoiceAmount: string;
+  setInvoiceAmount: Dispatch<SetStateAction<string>>;
   peerListId: string;
   connectedPeers: PeerInfo[];
   isRefreshingPeers: boolean;
@@ -108,11 +112,14 @@ export function useFiberNodeButtonPanelState(
   const {
     network,
     fiber,
+    asset = DEFAULT_CKB_ASSET,
     onLog,
     onError,
     initialPeerPubkey,
     initialPeerAddress,
     initialFundingAmountCkb,
+    initialFundingAmount,
+    invoiceAmount: initialInvoiceAmount,
     externalFunding,
   } = props;
 
@@ -120,7 +127,10 @@ export function useFiberNodeButtonPanelState(
 
   const [peerPubkey, setPeerPubkey] = useState(initialPeerPubkey);
   const [peerAddress, setPeerAddress] = useState(initialPeerAddress);
-  const [fundingAmountCkb, setFundingAmountCkb] = useState(initialFundingAmountCkb);
+  const [fundingAmount, setFundingAmount] = useState(
+    initialFundingAmount ?? initialFundingAmountCkb ?? '1000',
+  );
+  const [invoiceAmount, setInvoiceAmount] = useState(initialInvoiceAmount ?? '1');
 
   const [connectedPeers, setConnectedPeers] = useState<PeerInfo[]>([]);
   const [isRefreshingPeers, setIsRefreshingPeers] = useState(false);
@@ -154,7 +164,14 @@ export function useFiberNodeButtonPanelState(
     onLog,
   });
 
-  const { payInvoice, isPaying, paymentResult, error: paymentError } = useFiberPayment(fiber.node);
+  const paymentOptions = useMemo(() => ({ asset }), [asset]);
+
+  const {
+    payInvoice,
+    isPaying,
+    paymentResult,
+    error: paymentError,
+  } = useFiberPayment(fiber.node, paymentOptions);
 
   const isNodeReady = fiber.isRunning && !!fiber.node;
 
@@ -408,8 +425,9 @@ export function useFiberNodeButtonPanelState(
       if (!externalFunding?.enabled) {
         const openResult = await channelOpenFlow.openChannel({
           pubkey,
-          fundingAmountCkb,
+          fundingAmount,
           externalWallet: false,
+          asset,
         });
         if (!openResult) {
           return;
@@ -423,13 +441,14 @@ export function useFiberNodeButtonPanelState(
       const resolved = await externalFunding.resolve({
         node: fiber.node,
         pubkey,
-        fundingAmountCkb,
+        fundingAmountCkb: fundingAmount,
       });
 
       const openResult = await channelOpenFlow.openChannel({
         pubkey,
-        fundingAmountCkb,
+        fundingAmount,
         externalWallet: true,
+        asset,
         shutdownScript: resolved.shutdownScript,
         fundingLockScript: resolved.fundingLockScript,
         fundingLockScriptCellDeps: resolved.fundingLockScriptCellDeps,
@@ -448,11 +467,12 @@ export function useFiberNodeButtonPanelState(
       onLog?.(`Open channel failed: ${message}`);
     }
   }, [
+    asset,
     channelOpenFlow,
     externalFunding,
     fiber.node,
     flashStatus,
-    fundingAmountCkb,
+    fundingAmount,
     onLog,
     peerPubkey,
     refreshChannels,
@@ -468,11 +488,14 @@ export function useFiberNodeButtonPanelState(
     setIsCreatingInvoice(true);
 
     try {
-      const created = await fiber.node.newInvoice({
-        amount: ONE_CKB_SHANNONS,
-        currency: network === 'mainnet' ? 'Fibb' : 'Fibt',
-        description: 'FiberNodeButton invoice',
+      const amountInput = invoiceAmount.trim() || '1';
+      const params = buildNewInvoiceParams({
+        amountInput,
+        asset,
+        network,
+        descriptionPrefix: 'FiberNodeButton invoice',
       });
+      const created = await fiber.node.newInvoice(params);
       setCreatedInvoice(created.invoice_address);
       flashStatus('Invoice created.', 'success');
       onLog?.('fiber_panel_primary_action_clicked: create_invoice');
@@ -483,7 +506,7 @@ export function useFiberNodeButtonPanelState(
     } finally {
       setIsCreatingInvoice(false);
     }
-  }, [fiber.node, flashStatus, network, onLog, reportError]);
+  }, [asset, fiber.node, flashStatus, invoiceAmount, network, onLog, reportError]);
 
   const submitPayment = useCallback(async () => {
     if (!invoiceInput.trim()) {
@@ -590,10 +613,11 @@ export function useFiberNodeButtonPanelState(
   const connectorContext: FiberNodeButtonConnectorSectionContext = useMemo(
     () => ({
       fiber,
+      asset,
       externalFundingEnabled: !!externalFunding?.enabled,
       isOpeningChannel: channelOpenFlow.isOpening,
     }),
-    [channelOpenFlow.isOpening, externalFunding?.enabled, fiber],
+    [asset, channelOpenFlow.isOpening, externalFunding?.enabled, fiber],
   );
 
   const switchTab = useCallback(
@@ -619,8 +643,11 @@ export function useFiberNodeButtonPanelState(
     setPeerPubkey,
     peerAddress,
     setPeerAddress,
-    fundingAmountCkb,
-    setFundingAmountCkb,
+    fundingAmount,
+    setFundingAmount,
+    fundingAmountCkb: fundingAmount,
+    invoiceAmount,
+    setInvoiceAmount,
     peerListId,
     // peers
     connectedPeers,

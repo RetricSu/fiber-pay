@@ -109,6 +109,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
   const {
     dropdownContext,
     fiber,
+    asset,
     onLog,
     externalFunding,
     renderConnectorSection,
@@ -162,11 +163,12 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
     () => ({
       fiber,
       state,
+      asset,
       externalFundingEnabled: !!externalFunding?.enabled,
       t,
       actions: tabActions,
     }),
-    [externalFunding?.enabled, fiber, state, t, tabActions],
+    [asset, externalFunding?.enabled, fiber, state, t, tabActions],
   );
 
   const resolvedTabs = useMemo(() => resolveTabs(tabs, t), [t, tabs]);
@@ -204,6 +206,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
         <WorkbenchTab
           state={state}
           fiber={fiber}
+          asset={asset}
           externalFunding={externalFunding}
           renderConnectorSection={renderConnectorSection}
           renderAction={renderAction}
@@ -212,7 +215,14 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
       );
     } else if (effectiveActiveTab === 'channels') {
       tabContent = (
-        <ChannelsTab state={state} onLog={onLog} renderAction={renderAction} t={t} fiber={fiber} />
+        <ChannelsTab
+          state={state}
+          fiber={fiber}
+          asset={asset}
+          onLog={onLog}
+          renderAction={renderAction}
+          t={t}
+        />
       );
     } else if (effectiveActiveTab === 'diagnostics') {
       tabContent = <DiagnosticsTab state={state} t={t} />;

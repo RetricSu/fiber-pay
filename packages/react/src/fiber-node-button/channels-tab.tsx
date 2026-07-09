@@ -1,3 +1,6 @@
+import type { FormattedChannelBalances, UdtAsset } from '@fiber-pay/sdk/browser';
+import { formatAssetName, formatChannelBalances } from '@fiber-pay/sdk/browser';
+import { useMemo } from 'react';
 import type { UseFiberNodeResult } from '../use-fiber-node.js';
 import { renderPanelAction } from './render-action.js';
 import { styles } from './styles.js';
@@ -8,17 +11,52 @@ import {
   type FiberNodeButtonTabContext,
 } from './types.js';
 import type { FiberNodeButtonPanelState } from './use-panel-state.js';
-import { formatChannelBalance, shorten, withDisabledStyle } from './utils.js';
+import { shorten, withDisabledStyle } from './utils.js';
+
+function formatChannelBalanceValue(
+  balances: FormattedChannelBalances,
+  side: 'local' | 'remote',
+): string {
+  const value = balances.kind === 'udt' ? balances[side] : balances[side].toFixed(4);
+  return value;
+}
+
+function formatChannelBalanceUnit(balances: FormattedChannelBalances, asset?: UdtAsset): string {
+  if (balances.kind === 'udt') {
+    return asset?.kind === 'udt' ? formatAssetName(asset) : 'UDT';
+  }
+  return 'CKB';
+}
+
+function SelectedChannelBalance({
+  balances,
+  side,
+}: {
+  balances: FormattedChannelBalances | null;
+  side: 'local' | 'remote';
+}) {
+  if (!balances) {
+    return <span style={styles.badge}>{side === 'local' ? 'Local' : 'Remote'} — CKB</span>;
+  }
+
+  return (
+    <span style={styles.badge}>
+      {side === 'local' ? 'Local' : 'Remote'} {formatChannelBalanceValue(balances, side)}{' '}
+      {formatChannelBalanceUnit(balances)}
+    </span>
+  );
+}
 
 export interface ChannelsTabProps {
   state: FiberNodeButtonPanelState;
   fiber: UseFiberNodeResult;
+  asset?: UdtAsset;
   onLog?: (message: string) => void;
   renderAction?: FiberNodeButtonRenderAction;
   t: FiberNodeButtonTabContext['t'];
 }
 
-export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTabProps) {
+export function ChannelsTab({ state, fiber, asset, onLog, renderAction, t }: ChannelsTabProps) {
   const {
     isRefreshingChannels,
     refreshChannels,
@@ -35,6 +73,18 @@ export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTa
     selectedPending,
     closeChannel,
   } = state;
+
+  const channelBalances = useMemo(() => {
+    const map = new Map<string, FormattedChannelBalances>();
+    for (const channel of visibleChannels) {
+      map.set(channel.channel_id, formatChannelBalances(channel));
+    }
+    return map;
+  }, [visibleChannels]);
+
+  const selectedChannelBalances = selectedChannel
+    ? (channelBalances.get(selectedChannel.channel_id) ?? formatChannelBalances(selectedChannel))
+    : null;
 
   return (
     <>
@@ -85,6 +135,8 @@ export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTa
           ) : (
             visibleChannels.map((channel) => {
               const selected = channel.channel_id === selectedChannelId;
+              const balances =
+                channelBalances.get(channel.channel_id) ?? formatChannelBalances(channel);
 
               return (
                 <button
@@ -114,8 +166,9 @@ export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTa
                     {t('channels.list.peer', 'Peer')}: {shorten(channel.pubkey, 16, 10)}
                   </span>
                   <span style={styles.compactText}>
-                    L {formatChannelBalance(channel.local_balance)} / R{' '}
-                    {formatChannelBalance(channel.remote_balance)} CKB
+                    L {formatChannelBalanceValue(balances, 'local')} / R{' '}
+                    {formatChannelBalanceValue(balances, 'remote')}{' '}
+                    {formatChannelBalanceUnit(balances, asset)}
                   </span>
                 </button>
               );
@@ -139,14 +192,8 @@ export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTa
           </p>
 
           <div style={styles.row}>
-            <span style={styles.badge}>
-              {t('channels.details.local', 'Local')}{' '}
-              {formatChannelBalance(selectedChannel.local_balance)} CKB
-            </span>
-            <span style={styles.badge}>
-              {t('channels.details.remote', 'Remote')}{' '}
-              {formatChannelBalance(selectedChannel.remote_balance)} CKB
-            </span>
+            <SelectedChannelBalance balances={selectedChannelBalances} side="local" />
+            <SelectedChannelBalance balances={selectedChannelBalances} side="remote" />
             <span
               style={styles.badge}
               title="Pending TLCs are in-flight payment locks associated with this channel."

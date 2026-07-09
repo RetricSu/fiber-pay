@@ -1,3 +1,5 @@
+import type { UdtAsset } from '@fiber-pay/sdk/browser';
+import { formatAssetName } from '@fiber-pay/sdk/browser';
 import { renderPanelAction } from './render-action.js';
 import { styles } from './styles.js';
 import type {
@@ -12,6 +14,7 @@ import { shorten } from './utils.js';
 export interface WorkbenchTabProps {
   state: FiberNodeButtonPanelState;
   fiber: FiberNodeButtonPanelProps['fiber'];
+  asset: UdtAsset;
   externalFunding: FiberNodeButtonPanelProps['externalFunding'];
   renderConnectorSection: FiberNodeButtonPanelProps['renderConnectorSection'];
   renderAction?: FiberNodeButtonRenderAction;
@@ -21,6 +24,7 @@ export interface WorkbenchTabProps {
 export function WorkbenchTab({
   state,
   fiber,
+  asset,
   externalFunding,
   renderConnectorSection,
   renderAction,
@@ -34,14 +38,16 @@ export function WorkbenchTab({
     peerPubkey,
     setPeerPubkey,
     connectedPeers,
-    fundingAmountCkb,
-    setFundingAmountCkb,
+    fundingAmount,
+    setFundingAmount,
     openChannel,
     isCreatingInvoice,
     createInvoice,
     createdInvoice,
     invoiceInput,
     setInvoiceInput,
+    invoiceAmount,
+    setInvoiceAmount,
     isPaying,
     submitPayment,
     paymentResult,
@@ -105,11 +111,11 @@ export function WorkbenchTab({
         </label>
 
         <label style={styles.fieldLabel}>
-          {t('workbench.openChannel.fundingAmount', 'Funding Amount (CKB)')}
+          {t('workbench.openChannel.fundingAmount', `Funding Amount (${formatAssetName(asset)})`)}
           <input
             style={styles.input}
-            value={fundingAmountCkb}
-            onChange={(event) => setFundingAmountCkb(event.target.value)}
+            value={fundingAmount}
+            onChange={(event) => setFundingAmount(event.target.value)}
             placeholder="1000"
           />
         </label>
@@ -151,6 +157,16 @@ export function WorkbenchTab({
       <section style={styles.section}>
         <h4 style={styles.sectionTitle}>{t('workbench.payments.title', 'Payments')}</h4>
 
+        <label style={styles.fieldLabel}>
+          {t('workbench.payments.invoiceAmount', `Invoice Amount (${formatAssetName(asset)})`)}
+          <input
+            style={styles.input}
+            value={invoiceAmount}
+            onChange={(event) => setInvoiceAmount(event.target.value)}
+            placeholder="1"
+          />
+        </label>
+
         <div style={styles.row}>
           {renderPanelAction({
             id: 'create-invoice',
@@ -160,7 +176,10 @@ export function WorkbenchTab({
             t,
             defaultProps: {
               id: 'create-invoice',
-              label: t('actions.createInvoice', 'Create Invoice (1 CKB)'),
+              label: t(
+                'actions.createInvoice',
+                `Create Invoice (${invoiceAmount || '1'} ${formatAssetName(asset)})`,
+              ),
               loadingLabel: t('actions.createInvoice.loading', 'Creating...'),
               disabled: isCreatingInvoice || !isNodeReady,
               loading: isCreatingInvoice,

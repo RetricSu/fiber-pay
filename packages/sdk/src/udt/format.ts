@@ -1,5 +1,8 @@
 import type { Channel, Script } from '../types/rpc.js';
 import { shannonsToCkb, toHex } from '../utils.js';
+import type { UdtAsset } from './types.js';
+
+export const DEFAULT_CKB_ASSET: UdtAsset = { kind: 'ckb' };
 
 export type FormattedChannelBalances =
   | {
@@ -45,4 +48,17 @@ export function formatChannelBalances(channel: Channel): FormattedChannelBalance
     capacity: shannonsToCkb(toHex(capacity)),
     fundingUdtTypeScript: undefined,
   };
+}
+
+/**
+ * Return a human-readable unit name for an asset.
+ *
+ * @param asset - Asset descriptor (CKB or UDT).
+ * @returns 'CKB' for CKB assets, or the trimmed UDT name with 'UDT' fallback.
+ */
+export function formatAssetName(asset: UdtAsset): string {
+  if (asset.kind === 'udt') {
+    return asset.name?.trim() || 'UDT';
+  }
+  return 'CKB';
 }

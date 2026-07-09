@@ -130,6 +130,8 @@ export type {
   UdtTypeScript,
 } from '../udt/index.js';
 export {
+  DEFAULT_CKB_ASSET,
+  formatAssetName,
   formatChannelBalances,
   parseFundingAmount,
   parsePaymentAmount,
@@ -161,7 +163,11 @@ export {
   createCccSignFundingTx,
   resolveFundingLockCellDepsByKnownScript,
 } from './ccc-external-funding.js';
-export { callJsonRpc, formatShannonsAsCkb, getLockBalanceShannons } from './ckb-balance.js';
+export {
+  callJsonRpc,
+  formatShannonsAsCkb,
+  getLockBalanceShannons,
+} from './ckb-balance.js';
 export {
   normalizeCkbTransactionForCcc,
   normalizeCkbTransactionForRpc,
@@ -179,3 +185,7 @@ export {
   type OpenChannelWithExternalFundingFlowResult,
   openChannelWithExternalFundingFlow,
 } from './external-funding-flow.js';
+export {
+  getUdtBalance,
+  parseUdtAmountFromCellData,
+} from './udt-balance.js';

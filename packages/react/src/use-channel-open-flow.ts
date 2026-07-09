@@ -1,6 +1,7 @@
 import {
   type CellDep,
   computeSuggestedFundingAmountCkb,
+  DEFAULT_CKB_ASSET,
   diagnoseExternalFundingFailure,
   extractRequiredCapacityCkbFromFundingError,
   type HexString,
@@ -102,7 +103,7 @@ export function useChannelOpenFlow(options: UseChannelOpenFlowOptions): UseChann
 
       let requestedFundingAmount: bigint | undefined;
       let effectiveFundingLockScript: Script | undefined = params.fundingLockScript;
-      const asset = params.asset ?? { kind: 'ckb' };
+      const asset = params.asset ?? DEFAULT_CKB_ASSET;
       if (asset.kind === 'udt') {
         validateUdtTypeScript(asset.script);
       }

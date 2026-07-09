@@ -1,3 +1,4 @@
+import { DEFAULT_CKB_ASSET } from '@fiber-pay/sdk/browser';
 import { useCallback } from 'react';
 import { ConnectButton, type ConnectButtonConnectedDropdownContext } from '../connect-button.js';
 import { useFiberNode } from '../use-fiber-node.js';
@@ -32,6 +33,7 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
     passkeyUsername = 'User',
     wasmFactory,
     nodeConfig,
+    asset = DEFAULT_CKB_ASSET,
     className,
     style,
     dropdownStyle,
@@ -42,6 +44,8 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
     initialPeerPubkey = '',
     initialPeerAddress = '',
     initialFundingAmountCkb = '1000',
+    initialFundingAmount,
+    invoiceAmount,
     externalFunding,
     renderConnectorSection,
     tabs,
@@ -74,11 +78,14 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
         dropdownContext={dropdownContext}
         network={network}
         fiber={fiber}
+        asset={asset}
         onLog={onLog}
         onError={onError}
         initialPeerPubkey={initialPeerPubkey}
         initialPeerAddress={initialPeerAddress}
         initialFundingAmountCkb={initialFundingAmountCkb}
+        initialFundingAmount={initialFundingAmount}
+        invoiceAmount={invoiceAmount}
         externalFunding={externalFunding}
         renderConnectorSection={renderConnectorSection}
         tabs={tabs}
@@ -88,11 +95,14 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
       />
     ),
     [
+      asset,
       externalFunding,
       fiber,
+      initialFundingAmount,
       initialFundingAmountCkb,
       initialPeerAddress,
       initialPeerPubkey,
+      invoiceAmount,
       network,
       onError,
       onLog,
@@ -107,6 +117,7 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
   return (
     <ConnectButton
       fiber={fiber}
+      asset={asset}
       strategy={strategy}
       password={password}
       passkeyUsername={passkeyUsername}
