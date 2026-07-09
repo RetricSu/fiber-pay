@@ -1,13 +1,21 @@
 import type { Channel, Script } from '../types/rpc.js';
 import { shannonsToCkb, toHex } from '../utils.js';
 
-export interface FormattedChannelBalances {
-  local: string | number;
-  remote: string | number;
-  capacity: string | number;
-  unit: 'CKB' | 'UDT';
-  fundingUdtTypeScript: Script | undefined;
-}
+export type FormattedChannelBalances =
+  | {
+      kind: 'ckb';
+      local: number;
+      remote: number;
+      capacity: number;
+      fundingUdtTypeScript: undefined;
+    }
+  | {
+      kind: 'udt';
+      local: string;
+      remote: string;
+      capacity: string;
+      fundingUdtTypeScript: Script;
+    };
 
 /**
  * Format channel balances for display, choosing raw UDT units or CKB conversion.
@@ -19,14 +27,22 @@ export function formatChannelBalances(channel: Channel): FormattedChannelBalance
   const local = BigInt(channel.local_balance);
   const remote = BigInt(channel.remote_balance);
   const capacity = local + remote;
-  const isUdt = channel.funding_udt_type_script !== null;
-  const unit = isUdt ? 'UDT' : 'CKB';
+
+  if (channel.funding_udt_type_script != null) {
+    return {
+      kind: 'udt',
+      local: local.toString(),
+      remote: remote.toString(),
+      capacity: capacity.toString(),
+      fundingUdtTypeScript: channel.funding_udt_type_script,
+    };
+  }
 
   return {
-    local: isUdt ? local.toString() : shannonsToCkb(channel.local_balance),
-    remote: isUdt ? remote.toString() : shannonsToCkb(channel.remote_balance),
-    capacity: isUdt ? capacity.toString() : shannonsToCkb(toHex(capacity)),
-    unit,
-    fundingUdtTypeScript: channel.funding_udt_type_script ?? undefined,
+    kind: 'ckb',
+    local: shannonsToCkb(channel.local_balance),
+    remote: shannonsToCkb(channel.remote_balance),
+    capacity: shannonsToCkb(toHex(capacity)),
+    fundingUdtTypeScript: undefined,
   };
 }

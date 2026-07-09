@@ -135,6 +135,7 @@ export {
   parsePaymentAmount,
   parseUdtTypeScript,
   resolveUdtAsset,
+  validateUdtTypeScript,
 } from '../udt/index.js';
 export {
   buildMultiaddr,

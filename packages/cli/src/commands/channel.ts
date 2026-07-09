@@ -4,7 +4,7 @@ import {
   ensureHexPrefix,
   type HexString,
   nodeIdToPeerId,
-  resolveUdtAsset,
+  parseFundingAmount,
   toHex,
   type UdtAsset,
   type UdtTypeScript,
@@ -23,9 +23,9 @@ import {
   printJsonSuccess,
   truncateMiddle,
 } from '../lib/format.js';
-import { parseFundingAmount } from '../lib/parse-options.js';
 import { createReadyRpcClient, resolveRpcEndpoint } from '../lib/rpc.js';
 import { tryCreateRuntimeChannelJob } from '../lib/runtime-jobs.js';
+import { resolveAssetFromOptions } from '../lib/udt.js';
 import { registerChannelRebalanceCommand } from './rebalance.js';
 
 function extractPeerIdFromMultiaddr(address: string): string | undefined {
@@ -287,14 +287,15 @@ export function createChannelCommand(config: CliConfig): Command {
       let fundingLabel = 'CKB';
       let fundingAsset: UdtAsset = { kind: 'ckb' };
       try {
-        fundingAsset = await resolveUdtAsset({
+        const resolved = await resolveAssetFromOptions({
           rawScript: options.fundingUdtTypeScript as string | undefined,
           name: options.fundingUdtName as string | undefined,
           scriptOptionName: '--funding-udt-type-script',
           rpc,
         });
-        fundingUdtTypeScript = fundingAsset.kind === 'udt' ? fundingAsset.script : undefined;
-        fundingLabel = fundingAsset.kind === 'udt' ? (fundingAsset.name ?? 'UDT') : 'CKB';
+        fundingUdtTypeScript = resolved.udtTypeScript;
+        fundingLabel = resolved.label;
+        fundingAsset = resolved.asset;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (json) {

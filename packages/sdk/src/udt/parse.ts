@@ -3,6 +3,65 @@ import type { UdtAsset, UdtTypeScript } from './types.js';
 
 const VALID_HASH_TYPES = new Set(['type', 'data', 'data1', 'data2']);
 const SHANNONS_PER_CKB = 10n ** 8n;
+const MAX_SCRIPT_JSON_LENGTH = 4096;
+const CODE_HASH_LENGTH = 66; // 0x + 64 hex chars (32 bytes)
+const MAX_ARGS_LENGTH = 2048; // 0x + up to 2046 hex chars
+
+function validateHexString(
+  value: unknown,
+  optionName: string,
+  field: string,
+  exactLength?: number,
+  maxLength?: number,
+): asserts value is HexString {
+  if (typeof value !== 'string' || !/^0x[0-9a-fA-F]*$/.test(value)) {
+    throw new Error(`Invalid ${optionName}: ${field} must be a hex string starting with 0x`);
+  }
+
+  if (exactLength !== undefined && value.length !== exactLength) {
+    throw new Error(`Invalid ${optionName}: ${field} must be ${exactLength} hex characters`);
+  }
+
+  if (maxLength !== undefined && value.length > maxLength) {
+    throw new Error(`Invalid ${optionName}: ${field} exceeds maximum length of ${maxLength}`);
+  }
+}
+
+function validateHashType(
+  value: unknown,
+  optionName: string,
+): asserts value is UdtTypeScript['hash_type'] {
+  if (typeof value !== 'string' || !VALID_HASH_TYPES.has(value)) {
+    throw new Error(`Invalid ${optionName}: hash_type must be one of type, data, data1, data2`);
+  }
+}
+
+/**
+ * Validate a UDT type script object at runtime.
+ *
+ * @param value - Unknown value to validate.
+ * @param optionName - Name of the option for error messages.
+ * @returns Validated UdtTypeScript.
+ */
+export function validateUdtTypeScript(
+  value: unknown,
+  optionName = '--udt-type-script',
+): UdtTypeScript {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`Invalid ${optionName}: must be an object with code_hash, hash_type, and args`);
+  }
+
+  const script = value as Record<string, unknown>;
+  validateHexString(script.code_hash, optionName, 'code_hash', CODE_HASH_LENGTH);
+  validateHashType(script.hash_type, optionName);
+  validateHexString(script.args, optionName, 'args', undefined, MAX_ARGS_LENGTH);
+
+  return {
+    code_hash: script.code_hash,
+    hash_type: script.hash_type,
+    args: script.args,
+  };
+}
 
 /**
  * Parse a UDT type script from a JSON string.
@@ -19,6 +78,12 @@ export function parseUdtTypeScript(
     return undefined;
   }
 
+  if (value.length > MAX_SCRIPT_JSON_LENGTH) {
+    throw new Error(
+      `Invalid ${optionName}: input exceeds maximum length of ${MAX_SCRIPT_JSON_LENGTH}`,
+    );
+  }
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(value);
@@ -26,31 +91,67 @@ export function parseUdtTypeScript(
     throw new Error(`Invalid ${optionName}: must be a valid JSON object`);
   }
 
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+  return validateUdtTypeScript(parsed, optionName);
+}
+
+function normalizeCkbAmount(value: string): string {
+  const trimmed = value.trim();
+  const dotCount = (trimmed.match(/\./g) ?? []).length;
+  if (dotCount > 1) {
+    return trimmed;
+  }
+  const [integerPart, fractionalPart] = trimmed.split('.');
+  if (fractionalPart === undefined) {
+    return trimmed;
+  }
+
+  const strippedFraction = fractionalPart.replace(/0+$/, '');
+  return strippedFraction.length === 0 ? integerPart : `${integerPart}.${strippedFraction}`;
+}
+
+function parseCkbAmount(value: string, allowZero: boolean, labelPrefix: string): bigint {
+  const normalized = normalizeCkbAmount(value);
+  if (!/^\d+(\.\d{1,8})?$/.test(normalized)) {
     throw new Error(
-      `Invalid ${optionName}: must be a JSON object with code_hash, hash_type, and args`,
+      `Invalid ${labelPrefix} amount: "${value}". Expected a ${allowZero ? 'non-negative' : 'positive'} number with at most 8 decimal places.`,
     );
   }
 
-  const script = parsed as Record<string, unknown>;
+  const [integerPart, fractionalPart = ''] = normalized.split('.');
+  const amount = BigInt(integerPart) * SHANNONS_PER_CKB + BigInt(fractionalPart.padEnd(8, '0'));
+  if (!allowZero && amount <= 0n) {
+    throw new Error('CKB amount must be greater than 0');
+  }
+  if (amount < 0n) {
+    throw new Error(`Invalid ${labelPrefix} amount: "${value}". Expected a non-negative number.`);
+  }
+  return amount;
+}
 
-  if (typeof script.code_hash !== 'string' || !/^0x[0-9a-fA-F]+$/.test(script.code_hash)) {
-    throw new Error(`Invalid ${optionName}: code_hash must be a hex string starting with 0x`);
+function parseUdtAmount(value: string, allowZero: boolean, labelPrefix: string): bigint {
+  const signPattern = allowZero ? /^-?\d+$/ : /^\d+$/;
+  if (!signPattern.test(value)) {
+    throw new Error(
+      `Invalid ${labelPrefix} amount: ${value}. Expected a ${allowZero ? 'non-negative' : 'positive'} integer in the smallest UDT unit.`,
+    );
   }
 
-  if (typeof script.hash_type !== 'string' || !VALID_HASH_TYPES.has(script.hash_type)) {
-    throw new Error(`Invalid ${optionName}: hash_type must be one of type, data, data1, data2`);
+  const amount = BigInt(value);
+  if (!allowZero && amount <= 0n) {
+    throw new Error('UDT amount must be greater than 0');
   }
-
-  if (typeof script.args !== 'string' || !/^0x[0-9a-fA-F]*$/.test(script.args)) {
-    throw new Error(`Invalid ${optionName}: args must be a hex string starting with 0x`);
+  if (amount < 0n) {
+    throw new Error(
+      `Invalid ${labelPrefix} amount: ${value}. Expected a non-negative integer in the smallest UDT unit.`,
+    );
   }
+  return amount;
+}
 
-  return {
-    code_hash: script.code_hash as HexString,
-    hash_type: script.hash_type as UdtTypeScript['hash_type'],
-    args: script.args as HexString,
-  };
+function validateAmountString(value: string, label: string, expected: string): void {
+  if (value.trim() !== value || value.trim().length === 0) {
+    throw new Error(`Invalid ${label}: "${value}". Expected a ${expected}.`);
+  }
 }
 
 /**
@@ -65,35 +166,15 @@ export function parseUdtTypeScript(
  */
 export function parsePaymentAmount(value: string, asset: UdtAsset): bigint {
   const isUdt = asset.kind === 'udt';
+  const labelPrefix = isUdt ? 'UDT' : 'CKB';
 
-  if (value.trim() !== value || value.trim().length === 0) {
-    throw new Error(
-      `Invalid ${isUdt ? 'UDT' : 'CKB'} amount: "${value}". Expected a positive ${isUdt ? 'integer' : 'number'}.`,
-    );
-  }
+  validateAmountString(value, `${labelPrefix} amount`, `positive ${isUdt ? 'integer' : 'number'}`);
 
   if (isUdt) {
-    if (!/^\d+$/.test(value)) {
-      throw new Error(`Invalid UDT amount "${value}": expected a non-negative integer`);
-    }
-    const amount = BigInt(value);
-    if (amount <= 0n) {
-      throw new Error('UDT amount must be greater than 0');
-    }
-    return amount;
+    return parseUdtAmount(value, false, labelPrefix);
   }
 
-  if (!/^\d+(\.\d{1,8})?$/.test(value)) {
-    throw new Error(
-      `Invalid CKB amount: "${value}". Expected a positive number with at most 8 decimal places.`,
-    );
-  }
-  const [integerPart, fractionalPart = ''] = value.split('.');
-  const amount = BigInt(integerPart) * SHANNONS_PER_CKB + BigInt(fractionalPart.padEnd(8, '0'));
-  if (amount <= 0n) {
-    throw new Error('CKB amount must be greater than 0');
-  }
-  return amount;
+  return parseCkbAmount(value, false, labelPrefix);
 }
 
 /**
@@ -107,31 +188,17 @@ export function parsePaymentAmount(value: string, asset: UdtAsset): bigint {
  */
 export function parseFundingAmount(value: string, asset: UdtAsset): bigint {
   const isUdt = asset.kind === 'udt';
+  const labelPrefix = isUdt ? 'UDT' : 'CKB';
 
-  if (value.trim() !== value || value.trim().length === 0) {
-    throw new Error(
-      `Invalid ${isUdt ? 'UDT' : 'CKB'} funding amount: ${value}. Expected a non-negative ${isUdt ? 'integer' : 'number'}.`,
-    );
-  }
+  validateAmountString(
+    value,
+    `${labelPrefix} funding amount`,
+    `non-negative ${isUdt ? 'integer' : 'number'}`,
+  );
 
   if (isUdt) {
-    if (!/^-?\d+$/.test(value)) {
-      throw new Error(
-        `Invalid UDT funding amount: ${value}. Expected a non-negative integer in the smallest UDT unit.`,
-      );
-    }
-    const amount = BigInt(value);
-    if (amount < 0n) {
-      throw new Error(
-        `Invalid UDT funding amount: ${value}. Expected a non-negative integer in the smallest UDT unit.`,
-      );
-    }
-    return amount;
+    return parseUdtAmount(value, true, `${labelPrefix} funding`);
   }
 
-  if (!/^\d+(\.\d{1,8})?$/.test(value)) {
-    throw new Error(`Invalid CKB funding amount: ${value}. Expected a non-negative number.`);
-  }
-  const [integerPart, fractionalPart = ''] = value.split('.');
-  return BigInt(integerPart) * SHANNONS_PER_CKB + BigInt(fractionalPart.padEnd(8, '0'));
+  return parseCkbAmount(value, true, `${labelPrefix} funding`);
 }

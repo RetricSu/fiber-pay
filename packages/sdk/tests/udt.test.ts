@@ -5,12 +5,14 @@ import {
   parsePaymentAmount,
   parseUdtTypeScript,
   resolveUdtAsset,
+  validateUdtTypeScript,
   type UdtAsset,
 } from '../src/udt/index.js';
 import type { Channel, UdtCfgInfos } from '../src/types/rpc.js';
 
+const validCodeHash = '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a';
 const validUdtScript =
-  '{"code_hash":"0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a","hash_type":"type","args":"0x878fcc6f1f08d48e87bb1c3b3d5083f23f8a39c5d5c764f253b55b998526439b"}';
+  `{"code_hash":"${validCodeHash}","hash_type":"type","args":"0x878fcc6f1f08d48e87bb1c3b3d5083f23f8a39c5d5c764f253b55b998526439b"}`;
 
 describe('parseUdtTypeScript', () => {
   it('returns undefined when value is undefined', () => {
@@ -40,14 +42,47 @@ describe('parseUdtTypeScript', () => {
   it('rejects invalid hash_type', () => {
     expect(() =>
       parseUdtTypeScript(
-        '{"code_hash":"0x00","hash_type":"invalid","args":"0x"}',
+        `{"code_hash":"${validCodeHash}","hash_type":"invalid","args":"0x"}`,
       ),
     ).toThrow('hash_type must be one of type, data, data1, data2');
   });
 
   it('rejects args without 0x prefix', () => {
-    expect(() => parseUdtTypeScript('{"code_hash":"0x00","hash_type":"type","args":"00"}')).toThrow(
-      'args must be a hex string starting with 0x',
+    expect(() =>
+      parseUdtTypeScript(`{"code_hash":"${validCodeHash}","hash_type":"type","args":"00"}`),
+    ).toThrow('args must be a hex string starting with 0x');
+  });
+
+  it('rejects code_hash with wrong length', () => {
+    expect(() => parseUdtTypeScript('{"code_hash":"0x00","hash_type":"type","args":"0x"}')).toThrow(
+      'code_hash must be 66 hex characters',
+    );
+  });
+
+  it('rejects oversized input', () => {
+    const oversized = '{"code_hash":"' + '0'.repeat(5000) + '","hash_type":"type","args":"0x"}';
+    expect(() => parseUdtTypeScript(oversized)).toThrow('input exceeds maximum length');
+  });
+});
+
+describe('validateUdtTypeScript', () => {
+  it('validates a valid script object', () => {
+    expect(
+      validateUdtTypeScript({
+        code_hash: '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a',
+        hash_type: 'type',
+        args: '0x00',
+      }),
+    ).toEqual({
+      code_hash: '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a',
+      hash_type: 'type',
+      args: '0x00',
+    });
+  });
+
+  it('rejects invalid script object', () => {
+    expect(() => validateUdtTypeScript({ code_hash: '0x00', hash_type: 'type', args: '0x' })).toThrow(
+      'code_hash must be 66 hex characters',
     );
   });
 });
@@ -55,6 +90,17 @@ describe('parseUdtTypeScript', () => {
 describe('parsePaymentAmount', () => {
   it('converts CKB decimal to shannons', () => {
     expect(parsePaymentAmount('1.5', { kind: 'ckb' })).toBe(150_000_000n);
+  });
+
+  it('accepts CKB amounts with trailing zeros beyond 8 decimals', () => {
+    expect(parsePaymentAmount('1.000000000', { kind: 'ckb' })).toBe(100_000_000n);
+    expect(parsePaymentAmount('1.123000000', { kind: 'ckb' })).toBe(112_300_000n);
+  });
+
+  it('rejects CKB amounts with non-zero digits beyond 8 decimals', () => {
+    expect(() => parsePaymentAmount('1.123456789', { kind: 'ckb' })).toThrow(
+      'with at most 8 decimal places',
+    );
   });
 
   it('converts UDT integer to raw units', () => {
@@ -73,7 +119,7 @@ describe('parsePaymentAmount', () => {
 
   it('rejects UDT decimal amount', () => {
     expect(() => parsePaymentAmount('1.5', { kind: 'udt', script: {} as never })).toThrow(
-      'expected a non-negative integer',
+      'positive integer in the smallest UDT unit',
     );
   });
 });
@@ -146,6 +192,43 @@ describe('resolveUdtAsset', () => {
       'UDT name not found in node config: UNKNOWN',
     );
   });
+
+  it('does not require rpc when resolving by raw script', async () => {
+    await expect(
+      resolveUdtAsset({ rawScript: validUdtScript, scriptOptionName: '--test' }),
+    ).resolves.toEqual({
+      kind: 'udt',
+      script: {
+        code_hash: '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a',
+        hash_type: 'type',
+        args: '0x878fcc6f1f08d48e87bb1c3b3d5083f23f8a39c5d5c764f253b55b998526439b',
+      },
+    });
+  });
+
+  it('throws when resolving by name without rpc', async () => {
+    await expect(resolveUdtAsset({ name: 'RUSD' })).rejects.toThrow(
+      'RPC client is required to resolve UDT by name',
+    );
+  });
+
+  it('validates RPC-returned UDT scripts', async () => {
+    const badRpc = {
+      nodeInfo: async () => ({
+        udt_cfg_infos: [
+          {
+            name: 'BAD',
+            script: { code_hash: '0x00', hash_type: 'type', args: '0x' },
+            auto_accept_amount: '0x0',
+            cell_deps: [],
+          },
+        ],
+      }),
+    };
+    await expect(resolveUdtAsset({ name: 'BAD', rpc: badRpc })).rejects.toThrow(
+      'code_hash must be 66 hex characters',
+    );
+  });
 });
 
 describe('formatChannelBalances', () => {
@@ -163,7 +246,7 @@ describe('formatChannelBalances', () => {
       funding_udt_type_script: null,
     };
     const result = formatChannelBalances(channel);
-    expect(result.unit).toBe('CKB');
+    expect(result.kind).toBe('ckb');
     expect(result.local).toBe(0.1);
     expect(result.remote).toBe(0.2);
     expect(result.capacity).toBe(0.3);
@@ -182,7 +265,7 @@ describe('formatChannelBalances', () => {
       },
     };
     const result = formatChannelBalances(channel);
-    expect(result.unit).toBe('UDT');
+    expect(result.kind).toBe('udt');
     expect(result.local).toBe('1000');
     expect(result.remote).toBe('2000');
     expect(result.capacity).toBe('3000');

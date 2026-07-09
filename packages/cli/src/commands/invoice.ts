@@ -1,7 +1,7 @@
 import {
   type HexString,
+  parsePaymentAmount,
   randomBytes32,
-  resolveUdtAsset,
   shannonsToCkb,
   toHex,
   type UdtAsset,
@@ -16,9 +16,9 @@ import {
   printJsonError,
   printJsonSuccess,
 } from '../lib/format.js';
-import { parsePaymentAmount } from '../lib/parse-options.js';
 import { createReadyRpcClient, resolveRpcEndpoint } from '../lib/rpc.js';
 import { tryCreateRuntimeInvoiceJob, waitForRuntimeJobTerminal } from '../lib/runtime-jobs.js';
+import { resolveAssetFromOptions } from '../lib/udt.js';
 
 export function createInvoiceCommand(config: CliConfig): Command {
   const invoice = new Command('invoice').description('Invoice lifecycle and status commands');
@@ -40,13 +40,14 @@ export function createInvoiceCommand(config: CliConfig): Command {
       let udtName: string | undefined;
       let invoiceAsset: UdtAsset = { kind: 'ckb' };
       try {
-        invoiceAsset = await resolveUdtAsset({
+        const resolved = await resolveAssetFromOptions({
           rawScript: options.udtTypeScript as string | undefined,
           name: options.udtName as string | undefined,
           rpc,
         });
-        udtTypeScript = invoiceAsset.kind === 'udt' ? invoiceAsset.script : undefined;
-        udtName = invoiceAsset.kind === 'udt' ? invoiceAsset.name : undefined;
+        udtTypeScript = resolved.udtTypeScript;
+        udtName = resolved.label === 'CKB' ? undefined : resolved.label;
+        invoiceAsset = resolved.asset;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid UDT option';
         if (json) {

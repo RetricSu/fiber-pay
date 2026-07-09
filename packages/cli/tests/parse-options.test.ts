@@ -1,14 +1,19 @@
-import { describe, expect, it } from 'vitest';
 import {
   parseFundingAmount,
   parsePaymentAmount,
   parseUdtTypeScript,
-} from '../src/lib/parse-options.js';
+} from '@fiber-pay/sdk';
+import { describe, expect, it } from 'vitest';
 
+const validCodeHash = '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a';
 const ckbAsset = { kind: 'ckb' } as const;
 const udtAsset = {
   kind: 'udt',
-  script: { code_hash: '0x0', hash_type: 'type' as const, args: '0x' },
+  script: {
+    code_hash: validCodeHash,
+    hash_type: 'type' as const,
+    args: '0x',
+  },
 } as const;
 
 describe('parseUdtTypeScript', () => {
@@ -18,12 +23,12 @@ describe('parseUdtTypeScript', () => {
 
   it('parses a valid type script', () => {
     const raw = JSON.stringify({
-      code_hash: '0x1234abcd',
+      code_hash: validCodeHash,
       hash_type: 'type',
       args: '0x',
     });
     expect(parseUdtTypeScript(raw, '--funding-udt-type-script')).toEqual({
-      code_hash: '0x1234abcd',
+      code_hash: validCodeHash,
       hash_type: 'type',
       args: '0x',
     });
@@ -32,12 +37,12 @@ describe('parseUdtTypeScript', () => {
   it('accepts all valid hash types', () => {
     for (const hashType of ['type', 'data', 'data1', 'data2']) {
       const raw = JSON.stringify({
-        code_hash: '0x1234',
+        code_hash: validCodeHash,
         hash_type: hashType,
         args: '0x5678',
       });
       expect(parseUdtTypeScript(raw, '--funding-udt-type-script')).toEqual({
-        code_hash: '0x1234',
+        code_hash: validCodeHash,
         hash_type: hashType,
         args: '0x5678',
       });
@@ -52,7 +57,7 @@ describe('parseUdtTypeScript', () => {
 
   it('throws when input is not an object', () => {
     expect(() => parseUdtTypeScript('[]', '--funding-udt-type-script')).toThrow(
-      'must be a JSON object',
+      'must be an object with code_hash, hash_type, and args',
     );
   });
 
@@ -67,17 +72,17 @@ describe('parseUdtTypeScript', () => {
   });
 
   it('throws when hash_type is invalid', () => {
-    const raw = JSON.stringify({ code_hash: '0x1234', hash_type: 'invalid', args: '0x' });
+    const raw = JSON.stringify({ code_hash: validCodeHash, hash_type: 'invalid', args: '0x' });
     expect(() => parseUdtTypeScript(raw, '--funding-udt-type-script')).toThrow('hash_type');
   });
 
   it('throws when args is missing', () => {
-    const raw = JSON.stringify({ code_hash: '0x1234', hash_type: 'type' });
+    const raw = JSON.stringify({ code_hash: validCodeHash, hash_type: 'type' });
     expect(() => parseUdtTypeScript(raw, '--funding-udt-type-script')).toThrow('args');
   });
 
   it('throws when args is not a hex string', () => {
-    const raw = JSON.stringify({ code_hash: '0x1234', hash_type: 'type', args: 'abcd' });
+    const raw = JSON.stringify({ code_hash: validCodeHash, hash_type: 'type', args: 'abcd' });
     expect(() => parseUdtTypeScript(raw, '--funding-udt-type-script')).toThrow('args');
   });
 });

@@ -1,10 +1,11 @@
-import type {
-  FiberBrowserNode,
-  GetPaymentResult,
-  ParseInvoiceResult,
-  PaymentHash,
-  SendPaymentResult,
-  UdtAsset,
+import {
+  type FiberBrowserNode,
+  type GetPaymentResult,
+  type ParseInvoiceResult,
+  type PaymentHash,
+  type SendPaymentResult,
+  type UdtAsset,
+  validateUdtTypeScript,
 } from '@fiber-pay/sdk/browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -37,6 +38,11 @@ export function useFiberPayment(
   const [paymentResult, setPaymentResult] = useState<GetPaymentResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
+  const optionsRef = useRef(options);
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   useEffect(
     () => () => {
@@ -64,13 +70,14 @@ export function useFiberPayment(
   const sendPaymentInternal = useCallback(
     async (invoice: string, paymentOptions?: { asset?: UdtAsset }) => {
       const activeNode = ensureNode();
-      const asset = paymentOptions?.asset ?? options.asset;
+      const asset = paymentOptions?.asset ?? optionsRef.current.asset;
       if (asset?.kind === 'udt') {
-        return activeNode.sendPayment({ invoice, udt_type_script: asset.script });
+        const script = validateUdtTypeScript(asset.script);
+        return activeNode.sendPayment({ invoice, udt_type_script: script });
       }
       return activeNode.sendPayment({ invoice });
     },
-    [ensureNode, options.asset],
+    [ensureNode],
   );
 
   const waitForPaymentInternal = useCallback(

@@ -6,6 +6,9 @@ import {
 } from '../src/commands/rebalance.js';
 import type { CliConfig } from '../src/lib/config.js';
 
+const MOCK_CODE_HASH =
+  '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a';
+
 const buildRouter = vi.fn().mockResolvedValue({
   router_hops: [
     {
@@ -69,7 +72,7 @@ const nodeInfo = vi.fn().mockResolvedValue({
   udt_cfg_infos: [
     {
       name: 'RUSD',
-      script: { code_hash: '0x1234', hash_type: 'type', args: '0x5678' },
+      script: { code_hash: MOCK_CODE_HASH, hash_type: 'type', args: '0x5678' },
       cell_deps: [],
     },
   ],
@@ -137,7 +140,7 @@ describe('payment rebalance UDT', () => {
     expect(sendPayment).toHaveBeenCalledWith(
       expect.objectContaining({
         amount: '0x3e8',
-        udt_type_script: { code_hash: '0x1234', hash_type: 'type', args: '0x5678' },
+        udt_type_script: { code_hash: MOCK_CODE_HASH, hash_type: 'type', args: '0x5678' },
       }),
     );
   });
@@ -162,12 +165,12 @@ describe('payment rebalance UDT', () => {
     expect(buildRouter).toHaveBeenCalledWith(
       expect.objectContaining({
         amount: '0x3e8',
-        udt_type_script: { code_hash: '0x1234', hash_type: 'type', args: '0x5678' },
+        udt_type_script: { code_hash: MOCK_CODE_HASH, hash_type: 'type', args: '0x5678' },
       }),
     );
     expect(sendPaymentWithRouter).toHaveBeenCalledWith(
       expect.objectContaining({
-        udt_type_script: { code_hash: '0x1234', hash_type: 'type', args: '0x5678' },
+        udt_type_script: { code_hash: MOCK_CODE_HASH, hash_type: 'type', args: '0x5678' },
       }),
     );
   });
@@ -231,7 +234,7 @@ describe('payment rebalance UDT', () => {
     expect(json.data.unit).toBe('RUSD');
     expect(json.data.amount).toBe('1000');
     expect(json.data.udtTypeScript).toEqual({
-      code_hash: '0x1234',
+      code_hash: MOCK_CODE_HASH,
       hash_type: 'type',
       args: '0x5678',
     });
@@ -269,12 +272,12 @@ describe('channel rebalance UDT', () => {
     expect(buildRouter).toHaveBeenCalledWith(
       expect.objectContaining({
         amount: '0x3e8',
-        udt_type_script: { code_hash: '0x1234', hash_type: 'type', args: '0x5678' },
+        udt_type_script: { code_hash: MOCK_CODE_HASH, hash_type: 'type', args: '0x5678' },
       }),
     );
     expect(sendPaymentWithRouter).toHaveBeenCalledWith(
       expect.objectContaining({
-        udt_type_script: { code_hash: '0x1234', hash_type: 'type', args: '0x5678' },
+        udt_type_script: { code_hash: MOCK_CODE_HASH, hash_type: 'type', args: '0x5678' },
       }),
     );
   });

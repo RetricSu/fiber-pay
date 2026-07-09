@@ -1,12 +1,12 @@
 import type { UdtCfgInfos } from '../types/rpc.js';
-import { parseUdtTypeScript } from './parse.js';
-import type { UdtAsset, UdtTypeScript } from './types.js';
+import { parseUdtTypeScript, validateUdtTypeScript } from './parse.js';
+import type { UdtAsset } from './types.js';
 
 export interface ResolveUdtAssetOptions {
   rawScript?: string;
   name?: string;
   scriptOptionName?: string;
-  rpc: { nodeInfo(): Promise<{ udt_cfg_infos: UdtCfgInfos }> };
+  rpc?: { nodeInfo(): Promise<{ udt_cfg_infos: UdtCfgInfos }> };
 }
 
 /**
@@ -22,12 +22,16 @@ export async function resolveUdtAsset(options: ResolveUdtAssetOptions): Promise<
   }
 
   if (options.name !== undefined) {
+    if (!options.rpc) {
+      throw new Error('RPC client is required to resolve UDT by name');
+    }
     const info = await options.rpc.nodeInfo();
     const match = info.udt_cfg_infos.find((entry) => entry.name === options.name);
     if (!match) {
       throw new Error(`UDT name not found in node config: ${options.name}`);
     }
-    return { kind: 'udt', script: match.script as UdtTypeScript, name: match.name };
+    const script = validateUdtTypeScript(match.script, options.scriptOptionName ?? '--udt-name');
+    return { kind: 'udt', script, name: match.name };
   }
 
   return { kind: 'ckb' };

@@ -1,7 +1,7 @@
 import {
   ckbToShannons,
   type HexString,
-  resolveUdtAsset,
+  parsePaymentAmount,
   shannonsToCkb,
   toHex,
   type UdtAsset,
@@ -10,8 +10,8 @@ import {
 import type { Command } from 'commander';
 import type { CliConfig } from '../lib/config.js';
 import { printJsonError, printJsonSuccess } from '../lib/format.js';
-import { parsePaymentAmount } from '../lib/parse-options.js';
 import { createReadyRpcClient } from '../lib/rpc.js';
+import { resolveAssetFromOptions } from '../lib/udt.js';
 
 interface RebalanceExecutionParams {
   amountInput: string;
@@ -206,13 +206,14 @@ export function registerPaymentRebalanceCommand(parent: Command, config: CliConf
       let udtName: string | undefined;
       let rebalanceAsset: UdtAsset = { kind: 'ckb' };
       try {
-        rebalanceAsset = await resolveUdtAsset({
+        const resolved = await resolveAssetFromOptions({
           rawScript: options.udtTypeScript as string | undefined,
           name: options.udtName as string | undefined,
           rpc,
         });
-        udtTypeScript = rebalanceAsset.kind === 'udt' ? rebalanceAsset.script : undefined;
-        udtName = rebalanceAsset.kind === 'udt' ? rebalanceAsset.name : undefined;
+        udtTypeScript = resolved.udtTypeScript;
+        udtName = resolved.label === 'CKB' ? undefined : resolved.label;
+        rebalanceAsset = resolved.asset;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid UDT option';
         if (options.json) {
@@ -354,14 +355,14 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
       let udtName: string | undefined;
       let channelRebalanceAsset: UdtAsset = { kind: 'ckb' };
       try {
-        channelRebalanceAsset = await resolveUdtAsset({
+        const resolved = await resolveAssetFromOptions({
           rawScript: options.udtTypeScript as string | undefined,
           name: options.udtName as string | undefined,
           rpc,
         });
-        udtTypeScript =
-          channelRebalanceAsset.kind === 'udt' ? channelRebalanceAsset.script : undefined;
-        udtName = channelRebalanceAsset.kind === 'udt' ? channelRebalanceAsset.name : undefined;
+        udtTypeScript = resolved.udtTypeScript;
+        udtName = resolved.label === 'CKB' ? undefined : resolved.label;
+        channelRebalanceAsset = resolved.asset;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid UDT option';
         if (json) {

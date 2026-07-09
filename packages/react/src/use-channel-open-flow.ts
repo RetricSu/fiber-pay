@@ -12,6 +12,7 @@ import {
   type Script,
   shouldDiagnoseFundingAbortError,
   type UdtAsset,
+  validateUdtTypeScript,
 } from '@fiber-pay/sdk/browser';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -102,7 +103,10 @@ export function useChannelOpenFlow(options: UseChannelOpenFlowOptions): UseChann
       let requestedFundingAmount: bigint | undefined;
       let effectiveFundingLockScript: Script | undefined = params.fundingLockScript;
       const asset = params.asset ?? { kind: 'ckb' };
-      const fundingAmountInput = params.fundingAmount ?? params.fundingAmountCkb;
+      if (asset.kind === 'udt') {
+        validateUdtTypeScript(asset.script);
+      }
+      const fundingAmountInput = params.fundingAmount?.trim() || params.fundingAmountCkb?.trim();
 
       try {
         if (!fundingAmountInput) {
