@@ -1,4 +1,4 @@
-import type { UdtAsset } from '@fiber-pay/sdk/browser';
+import { DEFAULT_CKB_ASSET } from '@fiber-pay/sdk/browser';
 import { useCallback } from 'react';
 import { ConnectButton, type ConnectButtonConnectedDropdownContext } from '../connect-button.js';
 import { useFiberNode } from '../use-fiber-node.js';
@@ -33,7 +33,7 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
     passkeyUsername = 'User',
     wasmFactory,
     nodeConfig,
-    asset = { kind: 'ckb' } satisfies UdtAsset,
+    asset = DEFAULT_CKB_ASSET,
     className,
     style,
     dropdownStyle,

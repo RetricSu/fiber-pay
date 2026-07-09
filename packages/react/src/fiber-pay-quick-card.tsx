@@ -1,6 +1,7 @@
 import type { GetPaymentResult, UdtAsset } from '@fiber-pay/sdk/browser';
-import { parsePaymentAmount } from '@fiber-pay/sdk/browser';
-import { type CSSProperties, useEffect, useId, useState } from 'react';
+import { DEFAULT_CKB_ASSET, formatAssetName } from '@fiber-pay/sdk/browser';
+import { type CSSProperties, useEffect, useId, useMemo, useState } from 'react';
+import { buildNewInvoiceParams } from './invoice-params.js';
 import { type UseFiberNodeResult, useFiberNode } from './use-fiber-node.js';
 import { useFiberPayment } from './use-fiber-payment.js';
 
@@ -43,8 +44,8 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
   const network = props.network ?? 'testnet';
   const passkeyUsername = props.passkeyUsername ?? 'User';
   const title = props.title ?? 'FiberPay Quick Card';
-  const asset = props.asset ?? ({ kind: 'ckb' } satisfies UdtAsset);
-  const assetUnit = asset.kind === 'udt' ? asset.name?.trim() || 'UDT' : 'CKB';
+  const asset = props.asset ?? DEFAULT_CKB_ASSET;
+  const assetUnit = formatAssetName(asset);
   const usesExternalFiber = !!props.fiber;
   const onError = props.onError;
   const onInvoiceCreated = props.onInvoiceCreated;
@@ -74,7 +75,13 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
     stop,
   } = fiber;
 
-  const { payInvoice, isPaying, error: payError, paymentResult } = useFiberPayment(node, { asset });
+  const paymentOptions = useMemo(() => ({ asset }), [asset]);
+  const {
+    payInvoice,
+    isPaying,
+    error: payError,
+    paymentResult,
+  } = useFiberPayment(node, paymentOptions);
 
   const [password, setPassword] = useState('');
   const [invoiceInput, setInvoiceInput] = useState('');
@@ -110,15 +117,12 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
     setInvoiceError(null);
     try {
       const amountInput = invoiceAmountInput.trim() || '1';
-      const parsedAmount = parsePaymentAmount(amountInput, asset);
-      const params: Parameters<typeof node.newInvoice>[0] = {
-        amount: `0x${parsedAmount.toString(16)}`,
-        currency: network === 'mainnet' ? 'Fibb' : 'Fibt',
-        description: `FiberPay QuickCard invoice (${amountInput} ${assetUnit})`,
-      };
-      if (asset.kind === 'udt') {
-        params.udt_type_script = asset.script;
-      }
+      const params = buildNewInvoiceParams({
+        amountInput,
+        asset,
+        network,
+        descriptionPrefix: 'FiberPay QuickCard invoice',
+      });
       const created = await node.newInvoice(params);
       setCreatedInvoice(created.invoice_address);
       onInvoiceCreated?.(created.invoice_address);

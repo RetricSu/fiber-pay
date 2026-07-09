@@ -1,4 +1,5 @@
 import type { UdtAsset } from '@fiber-pay/sdk/browser';
+import { formatAssetName } from '@fiber-pay/sdk/browser';
 import { renderPanelAction } from './render-action.js';
 import { styles } from './styles.js';
 import type {
@@ -9,10 +10,6 @@ import type {
 } from './types.js';
 import type { FiberNodeButtonPanelState } from './use-panel-state.js';
 import { shorten } from './utils.js';
-
-function formatAssetUnit(asset: UdtAsset): string {
-  return asset.kind === 'udt' ? asset.name?.trim() || 'UDT' : 'CKB';
-}
 
 export interface WorkbenchTabProps {
   state: FiberNodeButtonPanelState;
@@ -114,7 +111,7 @@ export function WorkbenchTab({
         </label>
 
         <label style={styles.fieldLabel}>
-          {t('workbench.openChannel.fundingAmount', `Funding Amount (${formatAssetUnit(asset)})`)}
+          {t('workbench.openChannel.fundingAmount', `Funding Amount (${formatAssetName(asset)})`)}
           <input
             style={styles.input}
             value={fundingAmount}
@@ -161,7 +158,7 @@ export function WorkbenchTab({
         <h4 style={styles.sectionTitle}>{t('workbench.payments.title', 'Payments')}</h4>
 
         <label style={styles.fieldLabel}>
-          {t('workbench.payments.invoiceAmount', `Invoice Amount (${formatAssetUnit(asset)})`)}
+          {t('workbench.payments.invoiceAmount', `Invoice Amount (${formatAssetName(asset)})`)}
           <input
             style={styles.input}
             value={invoiceAmount}
@@ -181,7 +178,7 @@ export function WorkbenchTab({
               id: 'create-invoice',
               label: t(
                 'actions.createInvoice',
-                `Create Invoice (${invoiceAmount || '1'} ${formatAssetUnit(asset)})`,
+                `Create Invoice (${invoiceAmount || '1'} ${formatAssetName(asset)})`,
               ),
               loadingLabel: t('actions.createInvoice.loading', 'Creating...'),
               disabled: isCreatingInvoice || !isNodeReady,

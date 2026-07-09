@@ -215,7 +215,14 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
       );
     } else if (effectiveActiveTab === 'channels') {
       tabContent = (
-        <ChannelsTab state={state} onLog={onLog} renderAction={renderAction} t={t} fiber={fiber} />
+        <ChannelsTab
+          state={state}
+          fiber={fiber}
+          asset={asset}
+          onLog={onLog}
+          renderAction={renderAction}
+          t={t}
+        />
       );
     } else if (effectiveActiveTab === 'diagnostics') {
       tabContent = <DiagnosticsTab state={state} t={t} />;

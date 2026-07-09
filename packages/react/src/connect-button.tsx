@@ -25,6 +25,7 @@ import type {
   NodeInfoResult,
   UdtAsset,
 } from '@fiber-pay/sdk/browser';
+import { DEFAULT_CKB_ASSET, formatAssetName } from '@fiber-pay/sdk/browser';
 import {
   type CSSProperties,
   type ReactNode,
@@ -126,13 +127,6 @@ export interface ConnectButtonConnectedDropdownContext {
 function truncateNodeId(id: string): string {
   if (id.length <= 16) return id;
   return `${id.slice(0, 8)}…${id.slice(-4)}`;
-}
-
-function formatAssetLabel(asset: UdtAsset): string {
-  if (asset.kind === 'udt') {
-    return asset.name?.trim() || 'UDT';
-  }
-  return 'CKB';
 }
 
 // =============================================================================
@@ -322,7 +316,7 @@ export function ConnectButton(props: ConnectButtonProps) {
     passkeyUsername = 'User',
     wasmFactory,
     nodeConfig,
-    asset = { kind: 'ckb' },
+    asset = DEFAULT_CKB_ASSET,
     className,
     style,
     dropdownStyle,
@@ -566,7 +560,7 @@ export function ConnectButton(props: ConnectButtonProps) {
                       </div>
                       <div style={styles.infoRow}>
                         <span style={styles.infoLabel}>Asset</span>
-                        <span style={styles.infoValue}>{formatAssetLabel(asset)}</span>
+                        <span style={styles.infoValue}>{formatAssetName(asset)}</span>
                       </div>
                     </>
                   )}

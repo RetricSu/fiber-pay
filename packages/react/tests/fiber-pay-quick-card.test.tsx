@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FiberPayQuickCard } from '../src/fiber-pay-quick-card.js';
 import type { UseFiberNodeResult } from '../src/use-fiber-node.js';
+import { validUdtScript } from './fixtures/udt.js';
 
 afterEach(() => {
   cleanup();
@@ -58,12 +59,6 @@ describe('FiberPayQuickCard', () => {
   });
 
   it('creates a UDT invoice when asset is UDT', async () => {
-    const validUdtScript = {
-      code_hash: '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a',
-      hash_type: 'type' as const,
-      args: '0x00',
-    };
-
     const newInvoice = vi.fn(async () => ({ invoice_address: 'ln-udt' }));
     const sendPayment = vi.fn(async () => ({}));
     const fiber = createFiberMock({

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatAssetName,
   formatChannelBalances,
   parseFundingAmount,
   parsePaymentAmount,
@@ -270,5 +271,20 @@ describe('formatChannelBalances', () => {
     expect(result.remote).toBe('2000');
     expect(result.capacity).toBe('3000');
     expect(result.fundingUdtTypeScript).toEqual(channel.funding_udt_type_script);
+  });
+});
+
+describe('formatAssetName', () => {
+  it('returns CKB for CKB asset', () => {
+    expect(formatAssetName({ kind: 'ckb' })).toBe('CKB');
+  });
+
+  it('returns trimmed UDT name when available', () => {
+    expect(formatAssetName({ kind: 'udt', script: {} as never, name: '  RUSD  ' })).toBe('RUSD');
+  });
+
+  it('falls back to UDT when name is missing or empty', () => {
+    expect(formatAssetName({ kind: 'udt', script: {} as never })).toBe('UDT');
+    expect(formatAssetName({ kind: 'udt', script: {} as never, name: '   ' })).toBe('UDT');
   });
 });

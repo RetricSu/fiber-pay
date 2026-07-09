@@ -4,9 +4,8 @@ import type {
   GetPaymentResult,
   HexString,
   ShutdownChannelParams,
-  UdtAsset,
 } from '@fiber-pay/sdk/browser';
-import { ChannelState, parsePaymentAmount } from '@fiber-pay/sdk/browser';
+import { ChannelState, DEFAULT_CKB_ASSET } from '@fiber-pay/sdk/browser';
 import {
   type Dispatch,
   type SetStateAction,
@@ -17,6 +16,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { buildNewInvoiceParams } from '../invoice-params.js';
 import { type UseChannelOpenFlowResult, useChannelOpenFlow } from '../use-channel-open-flow.js';
 import { useFiberPayment } from '../use-fiber-payment.js';
 import type {
@@ -112,7 +112,7 @@ export function useFiberNodeButtonPanelState(
   const {
     network,
     fiber,
-    asset = { kind: 'ckb' } satisfies UdtAsset,
+    asset = DEFAULT_CKB_ASSET,
     onLog,
     onError,
     initialPeerPubkey,
@@ -164,14 +164,14 @@ export function useFiberNodeButtonPanelState(
     onLog,
   });
 
+  const paymentOptions = useMemo(() => ({ asset }), [asset]);
+
   const {
     payInvoice,
     isPaying,
     paymentResult,
     error: paymentError,
-  } = useFiberPayment(fiber.node, {
-    asset,
-  });
+  } = useFiberPayment(fiber.node, paymentOptions);
 
   const isNodeReady = fiber.isRunning && !!fiber.node;
 
@@ -489,15 +489,12 @@ export function useFiberNodeButtonPanelState(
 
     try {
       const amountInput = invoiceAmount.trim() || '1';
-      const parsedAmount = parsePaymentAmount(amountInput, asset);
-      const params: Parameters<typeof fiber.node.newInvoice>[0] = {
-        amount: `0x${parsedAmount.toString(16)}`,
-        currency: network === 'mainnet' ? 'Fibb' : 'Fibt',
-        description: `FiberNodeButton invoice (${amountInput} ${asset.kind === 'udt' ? asset.name || 'UDT' : 'CKB'})`,
-      };
-      if (asset.kind === 'udt') {
-        params.udt_type_script = asset.script;
-      }
+      const params = buildNewInvoiceParams({
+        amountInput,
+        asset,
+        network,
+        descriptionPrefix: 'FiberNodeButton invoice',
+      });
       const created = await fiber.node.newInvoice(params);
       setCreatedInvoice(created.invoice_address);
       flashStatus('Invoice created.', 'success');

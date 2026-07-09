@@ -16,10 +16,13 @@
 import type { FiberBrowserNode, UdtAsset } from '@fiber-pay/sdk/browser';
 import {
   ConfigBuilder,
+  DEFAULT_CKB_ASSET,
+  formatAssetName,
   formatShannonsAsCkb,
   getLockBalanceShannons,
   getUdtBalance,
   scriptToAddress,
+  validateUdtTypeScript,
 } from '@fiber-pay/sdk/browser';
 import {
   type ComponentType,
@@ -109,7 +112,7 @@ async function fetchNodeStats(
       channels: channels.channels.length,
       ckbAddress: null,
       balance: null,
-      balanceUnit: asset.kind === 'udt' ? asset.name?.trim() || 'UDT' : 'CKB',
+      balanceUnit: formatAssetName(asset),
       externalFunding: true,
     };
   }
@@ -117,14 +120,15 @@ async function fetchNodeStats(
   const ckbAddress = scriptToAddress(lockScript, network);
 
   if (asset.kind === 'udt') {
-    const balanceRaw = await getUdtBalance(ckbRpcUrl, lockScript, asset.script);
+    const script = validateUdtTypeScript(asset.script);
+    const balanceRaw = await getUdtBalance(ckbRpcUrl, lockScript, script);
     return {
       pubkey: nodeInfo.pubkey,
       peers: peers.peers.length,
       channels: channels.channels.length,
       ckbAddress,
       balance: balanceRaw.toString(),
-      balanceUnit: asset.name?.trim() || 'UDT',
+      balanceUnit: formatAssetName(asset),
       externalFunding: false,
     };
   }
@@ -346,7 +350,7 @@ export function NodeInfoPanel(props: NodeInfoPanelProps) {
   const {
     node,
     network,
-    asset = { kind: 'ckb' } satisfies UdtAsset,
+    asset = DEFAULT_CKB_ASSET,
     pollInterval = 15000,
     showQrCode = false,
     renderQrCode,
