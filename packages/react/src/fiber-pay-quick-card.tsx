@@ -1,4 +1,5 @@
-import type { GetPaymentResult } from '@fiber-pay/sdk/browser';
+import type { GetPaymentResult, UdtAsset } from '@fiber-pay/sdk/browser';
+import { parsePaymentAmount } from '@fiber-pay/sdk/browser';
 import { type CSSProperties, useEffect, useId, useState } from 'react';
 import { type UseFiberNodeResult, useFiberNode } from './use-fiber-node.js';
 import { useFiberPayment } from './use-fiber-payment.js';
@@ -9,6 +10,10 @@ export interface FiberPayQuickCardProps {
   network?: 'testnet' | 'mainnet';
   walletId?: string;
   passkeyUsername?: string;
+  /** Asset for invoices and payments. Defaults to CKB. */
+  asset?: UdtAsset;
+  /** Invoice amount in CKB or UDT units. Defaults to 1. */
+  invoiceAmount?: string;
   title?: string;
   className?: string;
   style?: CSSProperties;
@@ -16,8 +21,6 @@ export interface FiberPayQuickCardProps {
   onPaymentResult?: (result: GetPaymentResult) => void;
   onError?: (error: { scope: 'node' | 'payment' | 'invoice'; message: string }) => void;
 }
-
-const ONE_CKB_SHANNONS = '0x5f5e100';
 
 const cardStyle: CSSProperties = {
   border: '1px solid #ddd',
@@ -40,12 +43,15 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
   const network = props.network ?? 'testnet';
   const passkeyUsername = props.passkeyUsername ?? 'User';
   const title = props.title ?? 'FiberPay Quick Card';
+  const asset = props.asset ?? ({ kind: 'ckb' } satisfies UdtAsset);
+  const assetUnit = asset.kind === 'udt' ? asset.name?.trim() || 'UDT' : 'CKB';
   const usesExternalFiber = !!props.fiber;
   const onError = props.onError;
   const onInvoiceCreated = props.onInvoiceCreated;
   const onPaymentResult = props.onPaymentResult;
   const passwordInputId = useId();
   const invoiceInputId = useId();
+  const invoiceAmountInputId = useId();
 
   const managedFiber = useFiberNode({
     network,
@@ -68,10 +74,11 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
     stop,
   } = fiber;
 
-  const { payInvoice, isPaying, error: payError, paymentResult } = useFiberPayment(node);
+  const { payInvoice, isPaying, error: payError, paymentResult } = useFiberPayment(node, { asset });
 
   const [password, setPassword] = useState('');
   const [invoiceInput, setInvoiceInput] = useState('');
+  const [invoiceAmountInput, setInvoiceAmountInput] = useState(props.invoiceAmount ?? '1');
   const [createdInvoice, setCreatedInvoice] = useState('');
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
@@ -102,11 +109,17 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
     setIsCreatingInvoice(true);
     setInvoiceError(null);
     try {
-      const created = await node.newInvoice({
-        amount: ONE_CKB_SHANNONS,
+      const amountInput = invoiceAmountInput.trim() || '1';
+      const parsedAmount = parsePaymentAmount(amountInput, asset);
+      const params: Parameters<typeof node.newInvoice>[0] = {
+        amount: `0x${parsedAmount.toString(16)}`,
         currency: network === 'mainnet' ? 'Fibb' : 'Fibt',
-        description: 'FiberPay QuickCard invoice',
-      });
+        description: `FiberPay QuickCard invoice (${amountInput} ${assetUnit})`,
+      };
+      if (asset.kind === 'udt') {
+        params.udt_type_script = asset.script;
+      }
+      const created = await node.newInvoice(params);
       setCreatedInvoice(created.invoice_address);
       onInvoiceCreated?.(created.invoice_address);
     } catch (createInvoiceError) {
@@ -177,11 +190,24 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
 
           <div style={rowWithMarginStyle}>
             <button type="button" onClick={() => void createInvoice()} disabled={isCreatingInvoice}>
-              {isCreatingInvoice ? 'Creating...' : 'Create Invoice (1 CKB)'}
+              {isCreatingInvoice
+                ? 'Creating...'
+                : `Create Invoice (${invoiceAmountInput || '1'} ${assetUnit})`}
             </button>
             <button type="button" onClick={() => void stop()}>
               Stop Node
             </button>
+          </div>
+
+          <label htmlFor={invoiceAmountInputId}>Invoice Amount ({assetUnit})</label>
+          <div style={rowWithMarginStyle}>
+            <input
+              id={invoiceAmountInputId}
+              aria-label="Invoice amount"
+              value={invoiceAmountInput}
+              onChange={(event) => setInvoiceAmountInput(event.target.value)}
+              placeholder="1"
+            />
           </div>
 
           {createdInvoice ? (

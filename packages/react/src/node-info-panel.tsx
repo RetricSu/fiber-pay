@@ -13,11 +13,12 @@
  * ```
  */
 
-import type { FiberBrowserNode } from '@fiber-pay/sdk/browser';
+import type { FiberBrowserNode, UdtAsset } from '@fiber-pay/sdk/browser';
 import {
   ConfigBuilder,
   formatShannonsAsCkb,
   getLockBalanceShannons,
+  getUdtBalance,
   scriptToAddress,
 } from '@fiber-pay/sdk/browser';
 import {
@@ -40,6 +41,9 @@ export interface NodeInfoPanelProps {
 
   /** Network (needed for address derivation and RPC URL defaults). */
   network: 'testnet' | 'mainnet';
+
+  /** Asset for balance display. Defaults to CKB. */
+  asset?: UdtAsset;
 
   /** How often to refresh stats (ms). Default: 15000. */
   pollInterval?: number;
@@ -66,7 +70,8 @@ interface NodeStats {
   peers: number;
   channels: number;
   ckbAddress: string | null;
-  balanceCkb: string | null;
+  balance: string | null;
+  balanceUnit: string;
   externalFunding: boolean;
 }
 
@@ -86,6 +91,7 @@ function copyToClipboard(text: string) {
 async function fetchNodeStats(
   node: FiberBrowserNode,
   network: 'testnet' | 'mainnet',
+  asset: UdtAsset,
 ): Promise<NodeStats> {
   const [nodeInfo, peers, channels] = await Promise.all([
     node.nodeInfo(),
@@ -102,12 +108,27 @@ async function fetchNodeStats(
       peers: peers.peers.length,
       channels: channels.channels.length,
       ckbAddress: null,
-      balanceCkb: null,
+      balance: null,
+      balanceUnit: asset.kind === 'udt' ? asset.name?.trim() || 'UDT' : 'CKB',
       externalFunding: true,
     };
   }
 
   const ckbAddress = scriptToAddress(lockScript, network);
+
+  if (asset.kind === 'udt') {
+    const balanceRaw = await getUdtBalance(ckbRpcUrl, lockScript, asset.script);
+    return {
+      pubkey: nodeInfo.pubkey,
+      peers: peers.peers.length,
+      channels: channels.channels.length,
+      ckbAddress,
+      balance: balanceRaw.toString(),
+      balanceUnit: asset.name?.trim() || 'UDT',
+      externalFunding: false,
+    };
+  }
+
   const balanceShannons = await getLockBalanceShannons(ckbRpcUrl, lockScript);
   const balanceCkb = formatShannonsAsCkb(balanceShannons, 4);
 
@@ -116,7 +137,8 @@ async function fetchNodeStats(
     peers: peers.peers.length,
     channels: channels.channels.length,
     ckbAddress,
-    balanceCkb,
+    balance: balanceCkb,
+    balanceUnit: 'CKB',
     externalFunding: false,
   };
 }
@@ -324,6 +346,7 @@ export function NodeInfoPanel(props: NodeInfoPanelProps) {
   const {
     node,
     network,
+    asset = { kind: 'ckb' } satisfies UdtAsset,
     pollInterval = 15000,
     showQrCode = false,
     renderQrCode,
@@ -377,7 +400,7 @@ export function NodeInfoPanel(props: NodeInfoPanelProps) {
     setStatsLoading(true);
     setStatsError(null);
     try {
-      const data = await fetchNodeStats(node, network);
+      const data = await fetchNodeStats(node, network, asset);
       if (!cancelledRef.current) setStats(data);
     } catch (e) {
       if (!cancelledRef.current) {
@@ -387,7 +410,7 @@ export function NodeInfoPanel(props: NodeInfoPanelProps) {
       loadingRef.current = false;
       if (!cancelledRef.current) setStatsLoading(false);
     }
-  }, [node, network]);
+  }, [node, network, asset]);
 
   useEffect(() => {
     cancelledRef.current = false;
@@ -483,7 +506,11 @@ export function NodeInfoPanel(props: NodeInfoPanelProps) {
               External funding mode
             </div>
           ) : stats.ckbAddress ? (
-            <InfoRow label="CKB Address" value={stats.ckbAddress} copyable />
+            <InfoRow
+              label={asset.kind === 'udt' ? 'Address' : 'CKB Address'}
+              value={stats.ckbAddress}
+              copyable
+            />
           ) : null}
 
           <div style={styles.statsGrid}>
@@ -514,7 +541,7 @@ export function NodeInfoPanel(props: NodeInfoPanelProps) {
                   Install qrcode.react for QR code
                 </div>
               )}
-              <span style={styles.qrCaption}>Scan to deposit CKB</span>
+              <span style={styles.qrCaption}>Scan to deposit {stats.balanceUnit}</span>
               <div style={styles.balanceRow}>
                 <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Balance</span>
                 <span
@@ -524,7 +551,7 @@ export function NodeInfoPanel(props: NodeInfoPanelProps) {
                     fontWeight: 500,
                   }}
                 >
-                  {stats.balanceCkb ?? '—'} CKB
+                  {stats.balance ?? '—'} {stats.balanceUnit}
                 </span>
               </div>
             </div>

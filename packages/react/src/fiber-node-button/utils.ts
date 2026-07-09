@@ -1,5 +1,5 @@
 import type { Channel, HexString } from '@fiber-pay/sdk/browser';
-import { ChannelState, shannonsToCkb } from '@fiber-pay/sdk/browser';
+import { ChannelState } from '@fiber-pay/sdk/browser';
 import type { CSSProperties } from 'react';
 import type { ChannelFilter } from './types.js';
 
@@ -34,11 +34,6 @@ export function isPendingChannelState(state: ChannelState): boolean {
     state === ChannelState.AwaitingTxSignatures ||
     state === ChannelState.AwaitingChannelReady
   );
-}
-
-export function formatChannelBalance(shannonsHex: HexString): string {
-  const ckb = shannonsToCkb(shannonsHex);
-  return Number.isFinite(ckb) ? ckb.toFixed(4) : '0.0000';
 }
 
 export function isClosedChannelState(state: ChannelState): boolean {

@@ -1,3 +1,5 @@
+import type { FormattedChannelBalances } from '@fiber-pay/sdk/browser';
+import { formatChannelBalances } from '@fiber-pay/sdk/browser';
 import type { UseFiberNodeResult } from '../use-fiber-node.js';
 import { renderPanelAction } from './render-action.js';
 import { styles } from './styles.js';
@@ -8,7 +10,19 @@ import {
   type FiberNodeButtonTabContext,
 } from './types.js';
 import type { FiberNodeButtonPanelState } from './use-panel-state.js';
-import { formatChannelBalance, shorten, withDisabledStyle } from './utils.js';
+import { shorten, withDisabledStyle } from './utils.js';
+
+function formatChannelBalanceValue(
+  balances: FormattedChannelBalances,
+  side: 'local' | 'remote',
+): string {
+  const value = balances.kind === 'udt' ? balances[side] : balances[side].toFixed(4);
+  return value;
+}
+
+function formatChannelBalanceUnit(balances: FormattedChannelBalances): string {
+  return balances.kind === 'udt' ? 'UDT' : 'CKB';
+}
 
 export interface ChannelsTabProps {
   state: FiberNodeButtonPanelState;
@@ -35,6 +49,8 @@ export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTa
     selectedPending,
     closeChannel,
   } = state;
+
+  const selectedChannelBalances = selectedChannel ? formatChannelBalances(selectedChannel) : null;
 
   return (
     <>
@@ -85,6 +101,7 @@ export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTa
           ) : (
             visibleChannels.map((channel) => {
               const selected = channel.channel_id === selectedChannelId;
+              const balances = formatChannelBalances(channel);
 
               return (
                 <button
@@ -114,8 +131,9 @@ export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTa
                     {t('channels.list.peer', 'Peer')}: {shorten(channel.pubkey, 16, 10)}
                   </span>
                   <span style={styles.compactText}>
-                    L {formatChannelBalance(channel.local_balance)} / R{' '}
-                    {formatChannelBalance(channel.remote_balance)} CKB
+                    L {formatChannelBalanceValue(balances, 'local')} / R{' '}
+                    {formatChannelBalanceValue(balances, 'remote')}{' '}
+                    {formatChannelBalanceUnit(balances)}
                   </span>
                 </button>
               );
@@ -141,11 +159,17 @@ export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTa
           <div style={styles.row}>
             <span style={styles.badge}>
               {t('channels.details.local', 'Local')}{' '}
-              {formatChannelBalance(selectedChannel.local_balance)} CKB
+              {selectedChannelBalances
+                ? formatChannelBalanceValue(selectedChannelBalances, 'local')
+                : '-'}{' '}
+              {selectedChannelBalances ? formatChannelBalanceUnit(selectedChannelBalances) : 'CKB'}
             </span>
             <span style={styles.badge}>
               {t('channels.details.remote', 'Remote')}{' '}
-              {formatChannelBalance(selectedChannel.remote_balance)} CKB
+              {selectedChannelBalances
+                ? formatChannelBalanceValue(selectedChannelBalances, 'remote')
+                : '-'}{' '}
+              {selectedChannelBalances ? formatChannelBalanceUnit(selectedChannelBalances) : 'CKB'}
             </span>
             <span
               style={styles.badge}

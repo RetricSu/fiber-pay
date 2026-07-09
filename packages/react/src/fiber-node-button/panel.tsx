@@ -109,6 +109,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
   const {
     dropdownContext,
     fiber,
+    asset,
     onLog,
     externalFunding,
     renderConnectorSection,
@@ -162,11 +163,12 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
     () => ({
       fiber,
       state,
+      asset,
       externalFundingEnabled: !!externalFunding?.enabled,
       t,
       actions: tabActions,
     }),
-    [externalFunding?.enabled, fiber, state, t, tabActions],
+    [asset, externalFunding?.enabled, fiber, state, t, tabActions],
   );
 
   const resolvedTabs = useMemo(() => resolveTabs(tabs, t), [t, tabs]);
@@ -204,6 +206,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
         <WorkbenchTab
           state={state}
           fiber={fiber}
+          asset={asset}
           externalFunding={externalFunding}
           renderConnectorSection={renderConnectorSection}
           renderAction={renderAction}

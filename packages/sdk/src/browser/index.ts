@@ -161,7 +161,12 @@ export {
   createCccSignFundingTx,
   resolveFundingLockCellDepsByKnownScript,
 } from './ccc-external-funding.js';
-export { callJsonRpc, formatShannonsAsCkb, getLockBalanceShannons } from './ckb-balance.js';
+export {
+  callJsonRpc,
+  formatShannonsAsCkb,
+  getLockBalanceShannons,
+  getUdtBalance,
+} from './ckb-balance.js';
 export {
   normalizeCkbTransactionForCcc,
   normalizeCkbTransactionForRpc,

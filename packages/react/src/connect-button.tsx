@@ -19,7 +19,12 @@
  * ```
  */
 
-import type { FiberBrowserNode, FiberWasmFactory, NodeInfoResult } from '@fiber-pay/sdk/browser';
+import type {
+  FiberBrowserNode,
+  FiberWasmFactory,
+  NodeInfoResult,
+  UdtAsset,
+} from '@fiber-pay/sdk/browser';
 import {
   type CSSProperties,
   type ReactNode,
@@ -91,6 +96,9 @@ export interface ConnectButtonProps {
    */
   renderConnectedDropdown?: (context: ConnectButtonConnectedDropdownContext) => ReactNode;
 
+  /** Optional asset context (CKB or UDT). Exposed to custom dropdown renderers. */
+  asset?: UdtAsset;
+
   /**
    * Called when the node reaches the "running" state.
    * Receives the `FiberBrowserNode` instance and its `NodeInfoResult`.
@@ -106,6 +114,7 @@ export interface ConnectButtonProps {
 
 export interface ConnectButtonConnectedDropdownContext {
   fiber: UseFiberNodeResult;
+  asset: UdtAsset;
   closeDropdown: () => void;
   disconnect: () => Promise<void>;
 }
@@ -117,6 +126,13 @@ export interface ConnectButtonConnectedDropdownContext {
 function truncateNodeId(id: string): string {
   if (id.length <= 16) return id;
   return `${id.slice(0, 8)}…${id.slice(-4)}`;
+}
+
+function formatAssetLabel(asset: UdtAsset): string {
+  if (asset.kind === 'udt') {
+    return asset.name?.trim() || 'UDT';
+  }
+  return 'CKB';
 }
 
 // =============================================================================
@@ -306,6 +322,7 @@ export function ConnectButton(props: ConnectButtonProps) {
     passkeyUsername = 'User',
     wasmFactory,
     nodeConfig,
+    asset = { kind: 'ckb' },
     className,
     style,
     dropdownStyle,
@@ -530,6 +547,7 @@ export function ConnectButton(props: ConnectButtonProps) {
               {renderConnectedDropdown ? (
                 renderConnectedDropdown({
                   fiber,
+                  asset,
                   closeDropdown,
                   disconnect: handleDisconnect,
                 })
@@ -545,6 +563,10 @@ export function ConnectButton(props: ConnectButtonProps) {
                       <div style={styles.infoRow}>
                         <span style={styles.infoLabel}>State</span>
                         <span style={styles.infoValue}>{state}</span>
+                      </div>
+                      <div style={styles.infoRow}>
+                        <span style={styles.infoLabel}>Asset</span>
+                        <span style={styles.infoValue}>{formatAssetLabel(asset)}</span>
                       </div>
                     </>
                   )}

@@ -1,7 +1,20 @@
+import type { HexString } from '@fiber-pay/sdk/browser';
+import { shannonsToCkb } from '@fiber-pay/sdk/browser';
 import { styles } from './styles.js';
 import type { FiberNodeButtonTabContext } from './types.js';
 import type { FiberNodeButtonPanelState } from './use-panel-state.js';
-import { formatChannelBalance, shorten, withDisabledStyle } from './utils.js';
+import { shorten, withDisabledStyle } from './utils.js';
+
+function formatGraphChannelCapacity(
+  capacity: string,
+  udtTypeScript: { code_hash: string } | null | undefined,
+): string {
+  if (udtTypeScript) {
+    return `${BigInt(capacity).toString()} UDT`;
+  }
+  const ckb = shannonsToCkb(capacity as HexString);
+  return Number.isFinite(ckb) ? `${ckb.toFixed(4)} CKB` : `${capacity} shannons`;
+}
 
 export interface DiagnosticsTabProps {
   state: FiberNodeButtonPanelState;
@@ -156,7 +169,7 @@ export function DiagnosticsTab({ state, t }: DiagnosticsTabProps) {
             style={styles.inlineCode}
           >
             {shorten(channel.node1, 10, 6)} to {shorten(channel.node2, 10, 6)};{' '}
-            {formatChannelBalance(channel.capacity)} CKB
+            {formatGraphChannelCapacity(channel.capacity, channel.udt_type_script)}
           </p>
         ))}
 
