@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInvoiceCommand } from '../src/commands/invoice.js';
 import type { CliConfig } from '../src/lib/config.js';
 
+const MOCK_CODE_HASH =
+  '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a';
+
 const newInvoice = vi.fn().mockResolvedValue({
   invoice_address: 'fibt1...',
   invoice: { data: { payment_hash: '0xabc' } },
@@ -11,7 +14,7 @@ const nodeInfo = vi.fn().mockResolvedValue({
   udt_cfg_infos: [
     {
       name: 'RUSD',
-      script: { code_hash: '0x1234', hash_type: 'type', args: '0x5678' },
+      script: { code_hash: MOCK_CODE_HASH, hash_type: 'type', args: '0x5678' },
       cell_deps: [],
     },
   ],
@@ -74,7 +77,7 @@ describe('invoice create UDT', () => {
     expect(newInvoice).toHaveBeenCalledWith(
       expect.objectContaining({
         amount: '0x3e8',
-        udt_type_script: { code_hash: '0x1234', hash_type: 'type', args: '0x5678' },
+        udt_type_script: { code_hash: MOCK_CODE_HASH, hash_type: 'type', args: '0x5678' },
       }),
     );
   });
@@ -89,7 +92,7 @@ describe('invoice create UDT', () => {
       '--amount',
       '500',
       '--udt-type-script',
-      '{"code_hash":"0xabcd","hash_type":"data","args":"0x"}',
+      `{"code_hash":"${MOCK_CODE_HASH}","hash_type":"data","args":"0x"}`,
       '--json',
     ]);
 
@@ -97,7 +100,7 @@ describe('invoice create UDT', () => {
     expect(newInvoice).toHaveBeenCalledWith(
       expect.objectContaining({
         amount: '0x1f4',
-        udt_type_script: { code_hash: '0xabcd', hash_type: 'data', args: '0x' },
+        udt_type_script: { code_hash: MOCK_CODE_HASH, hash_type: 'data', args: '0x' },
       }),
     );
   });
@@ -170,7 +173,7 @@ describe('invoice create UDT', () => {
     expect(json.data.unit).toBe('RUSD');
     expect(json.data.amount).toBe('1000');
     expect(json.data.udtTypeScript).toEqual({
-      code_hash: '0x1234',
+      code_hash: MOCK_CODE_HASH,
       hash_type: 'type',
       args: '0x5678',
     });
@@ -205,7 +208,7 @@ describe('invoice create UDT', () => {
     const joined = output.join('\n');
     expect(joined).toContain('Amount:       1000 RUSD');
     expect(joined).toContain('UDT Type Script:');
-    expect(joined).toContain('"code_hash":"0x1234"');
+    expect(joined).toContain(`"code_hash":"${MOCK_CODE_HASH}"`);
     expect(joined).toContain('"hash_type":"type"');
     expect(joined).toContain('"args":"0x5678"');
   });

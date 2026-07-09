@@ -4,7 +4,10 @@ import {
   ensureHexPrefix,
   type HexString,
   nodeIdToPeerId,
+  parseFundingAmount,
   toHex,
+  type UdtAsset,
+  type UdtTypeScript,
 } from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import { sleep } from '../lib/async.js';
@@ -20,10 +23,9 @@ import {
   printJsonSuccess,
   truncateMiddle,
 } from '../lib/format.js';
-import { parseFundingAmount, type UdtTypeScript } from '../lib/parse-options.js';
 import { createReadyRpcClient, resolveRpcEndpoint } from '../lib/rpc.js';
 import { tryCreateRuntimeChannelJob } from '../lib/runtime-jobs.js';
-import { resolveUdtTypeScript } from '../lib/udt.js';
+import { resolveAssetFromOptions } from '../lib/udt.js';
 import { registerChannelRebalanceCommand } from './rebalance.js';
 
 function extractPeerIdFromMultiaddr(address: string): string | undefined {
@@ -283,15 +285,17 @@ export function createChannelCommand(config: CliConfig): Command {
 
       let fundingUdtTypeScript: UdtTypeScript | undefined;
       let fundingLabel = 'CKB';
+      let fundingAsset: UdtAsset = { kind: 'ckb' };
       try {
-        const resolved = await resolveUdtTypeScript({
+        const resolved = await resolveAssetFromOptions({
           rawScript: options.fundingUdtTypeScript as string | undefined,
           name: options.fundingUdtName as string | undefined,
           scriptOptionName: '--funding-udt-type-script',
           rpc,
         });
-        fundingUdtTypeScript = resolved.script;
-        fundingLabel = resolved.name ?? resolved.unit;
+        fundingUdtTypeScript = resolved.udtTypeScript;
+        fundingLabel = resolved.label;
+        fundingAsset = resolved.asset;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (json) {
@@ -312,7 +316,7 @@ export function createChannelCommand(config: CliConfig): Command {
 
       let fundingAmount: bigint;
       try {
-        fundingAmount = parseFundingAmount(options.funding as string, isUdt);
+        fundingAmount = parseFundingAmount(options.funding as string, fundingAsset);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (json) {
@@ -427,7 +431,7 @@ export function createChannelCommand(config: CliConfig): Command {
 
       let fundingAmount: bigint;
       try {
-        fundingAmount = parseFundingAmount(options.funding as string, false);
+        fundingAmount = parseFundingAmount(options.funding as string, { kind: 'ckb' });
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (json) {

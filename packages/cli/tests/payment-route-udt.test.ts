@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPaymentCommand } from '../src/commands/payment.js';
 import type { CliConfig } from '../src/lib/config.js';
 
+const MOCK_CODE_HASH =
+  '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a';
+
 const buildRouter = vi.fn().mockResolvedValue({
   router_hops: [
     {
@@ -24,7 +27,7 @@ const nodeInfo = vi.fn().mockResolvedValue({
   udt_cfg_infos: [
     {
       name: 'RUSD',
-      script: { code_hash: '0x1234', hash_type: 'type', args: '0x5678' },
+      script: { code_hash: MOCK_CODE_HASH, hash_type: 'type', args: '0x5678' },
       cell_deps: [],
     },
   ],
@@ -91,7 +94,7 @@ describe('payment route UDT', () => {
       expect.objectContaining({
         hops_info: [{ pubkey: '0xaaa' }],
         amount: '0x3e8',
-        udt_type_script: { code_hash: '0x1234', hash_type: 'type', args: '0x5678' },
+        udt_type_script: { code_hash: MOCK_CODE_HASH, hash_type: 'type', args: '0x5678' },
       }),
     );
   });
@@ -107,14 +110,14 @@ describe('payment route UDT', () => {
       '--amount',
       '500',
       '--udt-type-script',
-      '{"code_hash":"0xabcd","hash_type":"data","args":"0x"}',
+      `{"code_hash":"${MOCK_CODE_HASH}","hash_type":"data","args":"0x"}`,
       '--json',
     ]);
 
     expect(nodeInfo).not.toHaveBeenCalled();
     expect(buildRouter).toHaveBeenCalledWith(
       expect.objectContaining({
-        udt_type_script: { code_hash: '0xabcd', hash_type: 'data', args: '0x' },
+        udt_type_script: { code_hash: MOCK_CODE_HASH, hash_type: 'data', args: '0x' },
       }),
     );
   });
@@ -178,7 +181,7 @@ describe('payment route UDT', () => {
     expect(json.success).toBe(true);
     expect(json.data.unit).toBe('UDT');
     expect(json.data.udtTypeScript).toEqual({
-      code_hash: '0x1234',
+      code_hash: MOCK_CODE_HASH,
       hash_type: 'type',
       args: '0x5678',
     });
@@ -228,7 +231,7 @@ describe('payment route UDT', () => {
     expect(nodeInfo).toHaveBeenCalledTimes(1);
     expect(sendPaymentWithRouter).toHaveBeenCalledWith(
       expect.objectContaining({
-        udt_type_script: { code_hash: '0x1234', hash_type: 'type', args: '0x5678' },
+        udt_type_script: { code_hash: MOCK_CODE_HASH, hash_type: 'type', args: '0x5678' },
       }),
     );
   });
@@ -242,14 +245,14 @@ describe('payment route UDT', () => {
       '--router',
       JSON.stringify([{ target: '0xaaa', channel_outpoint: { tx_hash: '0xtx1', index: '0x0' } }]),
       '--udt-type-script',
-      '{"code_hash":"0xabcd","hash_type":"data","args":"0x"}',
+      `{"code_hash":"${MOCK_CODE_HASH}","hash_type":"data","args":"0x"}`,
       '--json',
     ]);
 
     expect(nodeInfo).not.toHaveBeenCalled();
     expect(sendPaymentWithRouter).toHaveBeenCalledWith(
       expect.objectContaining({
-        udt_type_script: { code_hash: '0xabcd', hash_type: 'data', args: '0x' },
+        udt_type_script: { code_hash: MOCK_CODE_HASH, hash_type: 'data', args: '0x' },
       }),
     );
   });
@@ -273,7 +276,7 @@ describe('payment route UDT', () => {
     expect(json.success).toBe(true);
     expect(json.data.unit).toBe('UDT');
     expect(json.data.udtTypeScript).toEqual({
-      code_hash: '0x1234',
+      code_hash: MOCK_CODE_HASH,
       hash_type: 'type',
       args: '0x5678',
     });

@@ -1,10 +1,17 @@
-import { ckbToShannons, type HexString, shannonsToCkb, toHex } from '@fiber-pay/sdk';
+import {
+  ckbToShannons,
+  type HexString,
+  parsePaymentAmount,
+  shannonsToCkb,
+  toHex,
+  type UdtAsset,
+  type UdtTypeScript,
+} from '@fiber-pay/sdk';
 import type { Command } from 'commander';
 import type { CliConfig } from '../lib/config.js';
 import { printJsonError, printJsonSuccess } from '../lib/format.js';
-import { parsePaymentAmount, type UdtTypeScript } from '../lib/parse-options.js';
 import { createReadyRpcClient } from '../lib/rpc.js';
-import { resolveUdtTypeScript } from '../lib/udt.js';
+import { resolveAssetFromOptions } from '../lib/udt.js';
 
 interface RebalanceExecutionParams {
   amountInput: string;
@@ -15,6 +22,7 @@ interface RebalanceExecutionParams {
   errorCode: 'PAYMENT_REBALANCE_INPUT_INVALID' | 'CHANNEL_REBALANCE_INPUT_INVALID';
   udtTypeScript?: UdtTypeScript;
   udtName?: string;
+  asset: UdtAsset;
 }
 
 async function executeRebalance(
@@ -26,7 +34,7 @@ async function executeRebalance(
 
   let amount: bigint;
   try {
-    amount = parsePaymentAmount(params.amountInput, isUdt);
+    amount = parsePaymentAmount(params.amountInput, params.asset);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Invalid amount';
     if (params.json) {
@@ -196,14 +204,16 @@ export function registerPaymentRebalanceCommand(parent: Command, config: CliConf
       const rpc = await createReadyRpcClient(config);
       let udtTypeScript: UdtTypeScript | undefined;
       let udtName: string | undefined;
+      let rebalanceAsset: UdtAsset = { kind: 'ckb' };
       try {
-        const resolved = await resolveUdtTypeScript({
+        const resolved = await resolveAssetFromOptions({
           rawScript: options.udtTypeScript as string | undefined,
           name: options.udtName as string | undefined,
           rpc,
         });
-        udtTypeScript = resolved.script;
-        udtName = resolved.name;
+        udtTypeScript = resolved.udtTypeScript;
+        udtName = resolved.label === 'CKB' ? undefined : resolved.label;
+        rebalanceAsset = resolved.asset;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid UDT option';
         if (options.json) {
@@ -229,6 +239,7 @@ export function registerPaymentRebalanceCommand(parent: Command, config: CliConf
         errorCode: 'PAYMENT_REBALANCE_INPUT_INVALID',
         udtTypeScript,
         udtName,
+        asset: rebalanceAsset,
       });
     });
 }
@@ -342,14 +353,16 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
       const rpc = await createReadyRpcClient(config);
       let udtTypeScript: UdtTypeScript | undefined;
       let udtName: string | undefined;
+      let channelRebalanceAsset: UdtAsset = { kind: 'ckb' };
       try {
-        const resolved = await resolveUdtTypeScript({
+        const resolved = await resolveAssetFromOptions({
           rawScript: options.udtTypeScript as string | undefined,
           name: options.udtName as string | undefined,
           rpc,
         });
-        udtTypeScript = resolved.script;
-        udtName = resolved.name;
+        udtTypeScript = resolved.udtTypeScript;
+        udtName = resolved.label === 'CKB' ? undefined : resolved.label;
+        channelRebalanceAsset = resolved.asset;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid UDT option';
         if (json) {
@@ -375,6 +388,7 @@ export function registerChannelRebalanceCommand(parent: Command, config: CliConf
         errorCode: 'CHANNEL_REBALANCE_INPUT_INVALID',
         udtTypeScript,
         udtName,
+        asset: channelRebalanceAsset,
       });
     });
 }

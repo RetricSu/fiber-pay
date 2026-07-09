@@ -26,6 +26,12 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
+const validUdtScript = {
+  code_hash: '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a',
+  hash_type: 'type' as const,
+  args: '0x00',
+};
+
 describe('useFiberPayment', () => {
   it('supports staged parse/send/wait APIs', async () => {
     const node = createNodeMock();
@@ -153,5 +159,52 @@ describe('useFiberPayment', () => {
     expect(result.current.paymentResult).toBeNull();
     expect(result.current.error).toBe('route not found');
     expect(result.current.isPaying).toBe(false);
+  });
+
+  it('sends UDT payment with default asset', async () => {
+    const node = createNodeMock();
+    const asset = { kind: 'udt' as const, script: validUdtScript };
+    const { result } = renderHook(() => useFiberPayment(node, { asset }));
+
+    await act(async () => {
+      await result.current.sendPayment('ln-udt');
+    });
+
+    expect(node.sendPayment).toHaveBeenCalledWith({
+      invoice: 'ln-udt',
+      udt_type_script: validUdtScript,
+    });
+  });
+
+  it('sends UDT payment with per-call asset', async () => {
+    const node = createNodeMock();
+    const { result } = renderHook(() => useFiberPayment(node));
+
+    const asset = { kind: 'udt' as const, script: validUdtScript };
+    await act(async () => {
+      await result.current.sendPayment('ln-udt', { asset });
+    });
+
+    expect(node.sendPayment).toHaveBeenCalledWith({
+      invoice: 'ln-udt',
+      udt_type_script: validUdtScript,
+    });
+  });
+
+  it('throws when UDT asset script is invalid', async () => {
+    const node = createNodeMock();
+    const asset = { kind: 'udt' as const, script: { ...validUdtScript, code_hash: '0x00' } };
+    const { result } = renderHook(() => useFiberPayment(node, { asset }));
+
+    let thrown: unknown;
+    await act(async () => {
+      try {
+        await result.current.sendPayment('ln-udt');
+      } catch (error) {
+        thrown = error;
+      }
+    });
+
+    expect((thrown as Error).message).toContain('code_hash must be 66 hex characters');
   });
 });

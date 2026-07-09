@@ -52,6 +52,8 @@ export type * from './types/index.js';
 // Types - Re-export all types from types module
 // Note: IFiberClient is included via the wildcard type export above
 export { ChannelState } from './types/index.js';
+// UDT helpers
+export * from './udt/index.js';
 // Utility functions
 export {
   buildMultiaddr,

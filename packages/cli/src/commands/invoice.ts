@@ -1,4 +1,12 @@
-import { type HexString, randomBytes32, shannonsToCkb, toHex } from '@fiber-pay/sdk';
+import {
+  type HexString,
+  parsePaymentAmount,
+  randomBytes32,
+  shannonsToCkb,
+  toHex,
+  type UdtAsset,
+  type UdtTypeScript,
+} from '@fiber-pay/sdk';
 import { Command } from 'commander';
 import type { CliConfig } from '../lib/config.js';
 import {
@@ -8,10 +16,9 @@ import {
   printJsonError,
   printJsonSuccess,
 } from '../lib/format.js';
-import { parsePaymentAmount, type UdtTypeScript } from '../lib/parse-options.js';
 import { createReadyRpcClient, resolveRpcEndpoint } from '../lib/rpc.js';
 import { tryCreateRuntimeInvoiceJob, waitForRuntimeJobTerminal } from '../lib/runtime-jobs.js';
-import { resolveUdtTypeScript } from '../lib/udt.js';
+import { resolveAssetFromOptions } from '../lib/udt.js';
 
 export function createInvoiceCommand(config: CliConfig): Command {
   const invoice = new Command('invoice').description('Invoice lifecycle and status commands');
@@ -31,14 +38,16 @@ export function createInvoiceCommand(config: CliConfig): Command {
 
       let udtTypeScript: UdtTypeScript | undefined;
       let udtName: string | undefined;
+      let invoiceAsset: UdtAsset = { kind: 'ckb' };
       try {
-        const resolved = await resolveUdtTypeScript({
+        const resolved = await resolveAssetFromOptions({
           rawScript: options.udtTypeScript as string | undefined,
           name: options.udtName as string | undefined,
           rpc,
         });
-        udtTypeScript = resolved.script;
-        udtName = resolved.name;
+        udtTypeScript = resolved.udtTypeScript;
+        udtName = resolved.label === 'CKB' ? undefined : resolved.label;
+        invoiceAsset = resolved.asset;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid UDT option';
         if (json) {
@@ -73,7 +82,7 @@ export function createInvoiceCommand(config: CliConfig): Command {
 
       let amount: bigint;
       try {
-        amount = parsePaymentAmount(amountInput, isUdt);
+        amount = parsePaymentAmount(amountInput, invoiceAsset);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid amount';
         if (json) {

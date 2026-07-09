@@ -1,39 +1,42 @@
-import type { UdtCfgInfos } from '@fiber-pay/sdk';
-import { parseUdtTypeScript, type UdtTypeScript } from './parse-options.js';
+import { resolveUdtAsset, type UdtAsset, type UdtTypeScript } from '@fiber-pay/sdk';
+import type { createReadyRpcClient } from './rpc.js';
 
-export interface UdtResolution {
-  script?: UdtTypeScript;
-  unit: 'CKB' | 'UDT';
-  name?: string;
+export interface ResolvedCliAsset {
+  asset: UdtAsset;
+  udtTypeScript?: UdtTypeScript;
+  label: string;
 }
 
-export interface UdtResolutionOptions {
+/**
+ * Resolve a UDT asset from CLI options and normalize the result for commands.
+ *
+ * @param options - CLI option values.
+ * @param options.rawScript - Raw JSON script string, if provided.
+ * @param options.name - Configured UDT name, if provided.
+ * @param options.scriptOptionName - Option name for error messages.
+ * @param rpc - Ready RPC client (required when resolving by name).
+ * @returns Resolved asset, optional UDT type script, and display label.
+ */
+export async function resolveAssetFromOptions(options: {
   rawScript?: string;
   name?: string;
   scriptOptionName?: string;
-  rpc: { nodeInfo(): Promise<{ udt_cfg_infos: UdtCfgInfos }> };
-}
+  rpc: Awaited<ReturnType<typeof createReadyRpcClient>>;
+}): Promise<ResolvedCliAsset> {
+  const asset = await resolveUdtAsset({
+    rawScript: options.rawScript,
+    name: options.name,
+    scriptOptionName: options.scriptOptionName,
+    rpc: options.rpc,
+  });
 
-export async function resolveUdtTypeScript(options: UdtResolutionOptions): Promise<UdtResolution> {
-  if (options.rawScript !== undefined) {
-    const script = parseUdtTypeScript(
-      options.rawScript,
-      options.scriptOptionName ?? '--udt-type-script',
-    );
-    if (script === undefined) {
-      return { unit: 'CKB' };
-    }
-    return { script, unit: 'UDT' };
+  if (asset.kind === 'udt') {
+    return {
+      asset,
+      udtTypeScript: asset.script,
+      label: asset.name ?? 'UDT',
+    };
   }
 
-  if (options.name !== undefined) {
-    const info = await options.rpc.nodeInfo();
-    const match = info.udt_cfg_infos.find((entry) => entry.name === options.name);
-    if (!match) {
-      throw new Error(`UDT name not found in node config: ${options.name}`);
-    }
-    return { script: match.script, unit: 'UDT', name: match.name };
-  }
-
-  return { unit: 'CKB' };
+  return { asset, label: 'CKB' };
 }

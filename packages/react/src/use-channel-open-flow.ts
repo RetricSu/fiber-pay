@@ -5,14 +5,16 @@ import {
   extractRequiredCapacityCkbFromFundingError,
   type HexString,
   type IFiberClient,
+  type OpenChannelParams,
   type OpenChannelWithExternalFundingFlowResult,
   openChannelWithExternalFundingFlow,
+  parseFundingAmount,
   type Script,
   shouldDiagnoseFundingAbortError,
+  type UdtAsset,
+  validateUdtTypeScript,
 } from '@fiber-pay/sdk/browser';
 import { useCallback, useMemo, useState } from 'react';
-
-const SHANNONS_PER_CKB = 100_000_000n;
 
 function toHexPrefixed(value: string): HexString {
   const trimmed = value.trim();
@@ -22,34 +24,18 @@ function toHexPrefixed(value: string): HexString {
   return (trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`) as HexString;
 }
 
-function ckbToShannons(amountCkb: string): bigint {
-  const normalized = amountCkb.trim();
-  if (!/^\d+(\.\d+)?$/.test(normalized)) {
-    throw new Error('Funding amount must be a valid CKB number.');
-  }
-
-  const [wholePart, fracPart = ''] = normalized.split('.');
-  if (fracPart.length > 8 && /[1-9]/.test(fracPart.slice(8))) {
-    throw new Error('Funding amount supports up to 8 decimal places.');
-  }
-
-  const fracPadded = `${fracPart}00000000`.slice(0, 8);
-  const shannons = BigInt(wholePart) * SHANNONS_PER_CKB + BigInt(fracPadded || '0');
-  if (shannons <= 0n) {
-    throw new Error('Funding amount must be greater than 0.');
-  }
-  return shannons;
-}
-
 export interface ChannelOpenFlowParams {
   pubkey: string;
-  fundingAmountCkb: string;
+  fundingAmount?: string;
+  /** @deprecated Use `fundingAmount` instead. */
+  fundingAmountCkb?: string;
   externalWallet: boolean;
   shutdownScript?: Script;
   fundingLockScript?: Script;
   fundingLockScriptCellDeps?: CellDep[];
   signFundingTx?: (txForSigner: unknown) => Promise<unknown>;
   ckbRpcUrl?: string;
+  asset?: UdtAsset;
 }
 
 export interface ChannelOpenFlowResult {
@@ -114,18 +100,31 @@ export function useChannelOpenFlow(options: UseChannelOpenFlowOptions): UseChann
       setDiagnostic(null);
       setSuggestedFundingAmountCkb(null);
 
-      let requestedFundingShannons: bigint | undefined;
+      let requestedFundingAmount: bigint | undefined;
       let effectiveFundingLockScript: Script | undefined = params.fundingLockScript;
+      const asset = params.asset ?? { kind: 'ckb' };
+      if (asset.kind === 'udt') {
+        validateUdtTypeScript(asset.script);
+      }
+      const fundingAmountInput = params.fundingAmount?.trim() || params.fundingAmountCkb?.trim();
 
       try {
-        requestedFundingShannons = ckbToShannons(params.fundingAmountCkb);
+        if (!fundingAmountInput) {
+          throw new Error('Funding amount is required.');
+        }
+        requestedFundingAmount = parseFundingAmount(fundingAmountInput, asset);
+        const fundingAmountHex = `0x${requestedFundingAmount.toString(16)}` as HexString;
         const pubkey = toHexPrefixed(params.pubkey);
 
         if (!params.externalWallet) {
-          const openResult = await node.openChannel({
+          const openChannelParams: OpenChannelParams = {
             pubkey,
-            funding_amount: `0x${requestedFundingShannons.toString(16)}` as HexString,
-          });
+            funding_amount: fundingAmountHex,
+          };
+          if (asset.kind === 'udt') {
+            openChannelParams.funding_udt_type_script = asset.script;
+          }
+          const openResult = await node.openChannel(openChannelParams);
           const result: ChannelOpenFlowResult = {
             mode: 'internal',
             channelId: openResult.temporary_channel_id,
@@ -148,10 +147,11 @@ export function useChannelOpenFlow(options: UseChannelOpenFlowOptions): UseChann
           node,
           params: {
             pubkey,
-            funding_amount: `0x${requestedFundingShannons.toString(16)}` as HexString,
+            funding_amount: fundingAmountHex,
             shutdown_script: shutdownScript,
             funding_lock_script: effectiveFundingLockScript,
             funding_lock_script_cell_deps: params.fundingLockScriptCellDeps,
+            ...(asset.kind === 'udt' ? { funding_udt_type_script: asset.script } : {}),
           },
           signFundingTx: params.signFundingTx,
         });
@@ -167,15 +167,15 @@ export function useChannelOpenFlow(options: UseChannelOpenFlowOptions): UseChann
         let displayMessage = message;
 
         const requiredCapacity = extractRequiredCapacityCkbFromFundingError(message);
-        if (requiredCapacity) {
+        if (requiredCapacity && asset.kind === 'ckb') {
           try {
             const suggested = computeSuggestedFundingAmountCkb(
-              params.fundingAmountCkb,
+              fundingAmountInput ?? '',
               requiredCapacity,
             );
             if (suggested) {
               setSuggestedFundingAmountCkb(suggested);
-              displayMessage = `Insufficient capacity: current amount ${params.fundingAmountCkb} CKB may not cover fee. Suggested amount: ${suggested} CKB. Original error: ${message}`;
+              displayMessage = `Insufficient capacity: current amount ${fundingAmountInput} CKB may not cover fee. Suggested amount: ${suggested} CKB. Original error: ${message}`;
             }
           } catch {
             // Preserve original flow error when suggestion calculation fails.
@@ -206,7 +206,10 @@ export function useChannelOpenFlow(options: UseChannelOpenFlowOptions): UseChann
               rawError: message,
               targetPubkey,
               fundingLockScript: effectiveFundingLockScript,
-              requestedFundingShannons,
+              requestedFundingShannons:
+                asset.kind === 'ckb' && requestedFundingAmount !== undefined
+                  ? requestedFundingAmount
+                  : undefined,
               ckbRpcUrl: params.ckbRpcUrl,
             });
 

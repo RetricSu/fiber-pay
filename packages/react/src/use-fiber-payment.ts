@@ -1,17 +1,19 @@
-import type {
-  FiberBrowserNode,
-  GetPaymentResult,
-  ParseInvoiceResult,
-  PaymentHash,
-  SendPaymentResult,
+import {
+  type FiberBrowserNode,
+  type GetPaymentResult,
+  type ParseInvoiceResult,
+  type PaymentHash,
+  type SendPaymentResult,
+  type UdtAsset,
+  validateUdtTypeScript,
 } from '@fiber-pay/sdk/browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface UseFiberPaymentResult {
   parseInvoice: (invoice: string) => Promise<ParseInvoiceResult>;
-  sendPayment: (invoice: string) => Promise<SendPaymentResult>;
+  sendPayment: (invoice: string, options?: { asset?: UdtAsset }) => Promise<SendPaymentResult>;
   waitForPayment: (paymentHash: PaymentHash) => Promise<GetPaymentResult>;
-  payInvoice: (invoice: string) => Promise<void>;
+  payInvoice: (invoice: string, options?: { asset?: UdtAsset }) => Promise<void>;
   isPaying: boolean;
   paymentResult: GetPaymentResult | null;
   error: string | null;
@@ -24,11 +26,23 @@ function asErrorMessage(error: unknown): string {
   return String(error);
 }
 
-export function useFiberPayment(node: FiberBrowserNode | null): UseFiberPaymentResult {
+export interface UseFiberPaymentOptions {
+  asset?: UdtAsset;
+}
+
+export function useFiberPayment(
+  node: FiberBrowserNode | null,
+  options: UseFiberPaymentOptions = {},
+): UseFiberPaymentResult {
   const [isPaying, setIsPaying] = useState(false);
   const [paymentResult, setPaymentResult] = useState<GetPaymentResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
+  const optionsRef = useRef(options);
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   useEffect(
     () => () => {
@@ -54,8 +68,13 @@ export function useFiberPayment(node: FiberBrowserNode | null): UseFiberPaymentR
   );
 
   const sendPaymentInternal = useCallback(
-    async (invoice: string) => {
+    async (invoice: string, paymentOptions?: { asset?: UdtAsset }) => {
       const activeNode = ensureNode();
+      const asset = paymentOptions?.asset ?? optionsRef.current.asset;
+      if (asset?.kind === 'udt') {
+        const script = validateUdtTypeScript(asset.script);
+        return activeNode.sendPayment({ invoice, udt_type_script: script });
+      }
       return activeNode.sendPayment({ invoice });
     },
     [ensureNode],
@@ -88,7 +107,7 @@ export function useFiberPayment(node: FiberBrowserNode | null): UseFiberPaymentR
   );
 
   const sendPayment = useCallback(
-    async (invoice: string) => {
+    async (invoice: string, paymentOptions?: { asset?: UdtAsset }) => {
       if (isMountedRef.current) {
         setIsPaying(true);
         setError(null);
@@ -96,7 +115,7 @@ export function useFiberPayment(node: FiberBrowserNode | null): UseFiberPaymentR
       }
 
       try {
-        return await sendPaymentInternal(invoice);
+        return await sendPaymentInternal(invoice, paymentOptions);
       } catch (sendError) {
         if (isMountedRef.current) {
           setError(asErrorMessage(sendError));
@@ -140,7 +159,7 @@ export function useFiberPayment(node: FiberBrowserNode | null): UseFiberPaymentR
   );
 
   const payInvoice = useCallback(
-    async (invoice: string) => {
+    async (invoice: string, paymentOptions?: { asset?: UdtAsset }) => {
       if (isMountedRef.current) {
         setIsPaying(true);
         setError(null);
@@ -149,7 +168,7 @@ export function useFiberPayment(node: FiberBrowserNode | null): UseFiberPaymentR
 
       try {
         const parsed = await parseInvoiceInternal(invoice);
-        await sendPaymentInternal(invoice);
+        await sendPaymentInternal(invoice, paymentOptions);
 
         const paymentHash = parsed.invoice.data.payment_hash;
         const result = await waitForPaymentInternal(paymentHash);
