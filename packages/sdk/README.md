@@ -177,6 +177,9 @@ import {
 ### Common UDT Workflows
 
 **Parsing user input** — safely convert CLI/browser input into validated types:
+
+> **Note:** `validateUdtTypeScript` checks structural validity (required fields and types) only. The `code_hash` and `args` values must still be verified against the token's official deployment for authenticity.
+
 ```ts
 const script = parseUdtTypeScript(rawJson, '--udt-type-script');
 // or validate an already-parsed object:
@@ -187,6 +190,9 @@ const paymentAmount = parsePaymentAmount('500', { kind: 'udt', script });
 ```
 
 **Resolving by name** — look up configured UDTs from node info:
+
+> **Note:** `resolveUdtAsset` returns whatever the RPC node's `udt_cfg_infos` maps the name to. A compromised or misconfigured node could alias a familiar name to a counterfeit type script. Verify the returned `UdtTypeScript` against the token issuer's official deployment before signing transactions. For repeated use, cache the resolved `UdtTypeScript` to avoid redundant RPC calls.
+
 ```ts
 const asset = await resolveUdtAsset({
   name: 'RUSD',

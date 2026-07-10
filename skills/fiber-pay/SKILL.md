@@ -1,6 +1,6 @@
 ---
 name: fiber-pay
-description: Operate CKB Lightning payments through fiber-pay CLI. Use when tasks involve node lifecycle, channel management, invoice/payment flows, config tuning, or multi-node orchestration on Fiber Network v0.9.0-rc4.
+description: Operate CKB Lightning payments through fiber-pay CLI, including UDT support. Use when tasks involve node lifecycle, channel management, invoice/payment flows, UDT operations, config tuning, or multi-node orchestration on Fiber Network v0.9.0-rc7.
 ---
 
 # fiber-pay

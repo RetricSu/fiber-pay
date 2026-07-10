@@ -24,10 +24,14 @@ The CLI supports UDT channels, invoices, payments, and rebalances on Fiber `v0.9
 
 ```bash
 # Open a UDT channel
-fiber-pay channel open --peer <addr> --funding <UDT-amount> \
+fiber-pay channel open --peer <peer> --funding <UDT-amount> \
   --funding-udt-type-script '{"code_hash":"0x...","hash_type":"type","args":"0x..."}' --json
+fiber-pay channel open --peer <peer> --funding <UDT-amount> --funding-udt-name <name> --json
 
 # Create a UDT invoice
+# Note: UDT amounts are raw integer units. If both --udt-name and --udt-type-script
+# are provided, the type script takes precedence. Verify the type script against the
+# token's official deployment before funding or accepting payment.
 fiber-pay invoice create --amount <UDT-amount> \
   --udt-type-script '{"code_hash":"0x...","hash_type":"type","args":"0x..."}' --json
 fiber-pay invoice create --amount <UDT-amount> --udt-name <name> --json
