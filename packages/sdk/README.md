@@ -148,7 +148,70 @@ L402 primitives include:
 
 See [packages/cli/docs/l402-agent-guide.md](../cli/docs/l402-agent-guide.md) for usage.
 
+## UDT (User-Defined Token) Support
+
+The SDK provides typed UDT helpers for parsing, formatting, and resolving UDT assets:
+
+```ts
+import {
+  parseUdtTypeScript,
+  validateUdtTypeScript,
+  resolveUdtAsset,
+  parseFundingAmount,
+  parsePaymentAmount,
+  formatChannelBalances,
+  formatAssetName,
+  DEFAULT_CKB_ASSET,
+} from '@fiber-pay/sdk';
+// Also available from '@fiber-pay/sdk/browser'
+```
+
+### UDT Types
+
+| Type | Description |
+|------|-------------|
+| `UdtAsset` | Union type: `{ kind: 'ckb' }` or `{ kind: 'udt'; script: UdtTypeScript; name?: string }` |
+| `UdtTypeScript` | CKB type script `{ code_hash, hash_type, args }` |
+| `FormattedChannelBalances` | Display-ready balance fields with `kind: 'ckb'` or `kind: 'udt'` |
+
+### Common UDT Workflows
+
+**Parsing user input** — safely convert CLI/browser input into validated types:
+
+> **Note:** `validateUdtTypeScript` checks structural validity (required fields and types) only. The `code_hash` and `args` values must still be verified against the token's official deployment for authenticity.
+
+```ts
+const script = parseUdtTypeScript(rawJson, '--udt-type-script');
+// or validate an already-parsed object:
+validateUdtTypeScript(obj, '--udt-type-script');
+
+const fundingAmount = parseFundingAmount('1000', { kind: 'udt', script, name: 'TEST' });
+const paymentAmount = parsePaymentAmount('500', { kind: 'udt', script });
+```
+
+**Resolving by name** — look up configured UDTs from node info:
+
+> **Note:** `resolveUdtAsset` returns whatever the RPC node's `udt_cfg_infos` maps the name to. A compromised or misconfigured node could alias a familiar name to a counterfeit type script. Verify the returned `UdtTypeScript` against the token issuer's official deployment before signing transactions. For repeated use, cache the resolved `UdtTypeScript` to avoid redundant RPC calls.
+
+```ts
+const asset = await resolveUdtAsset({
+  name: 'RUSD',
+  rpc: client,
+});
+// asset = { kind: 'udt', script: {...}, name: 'RUSD' }
+```
+
+**Formatting channels** — handle both CKB and UDT channels in display code:
+```ts
+const balances = formatChannelBalances(channel);
+if (balances.kind === 'udt') {
+  console.log(`UDT: local ${balances.local}, remote ${balances.remote}`);
+} else {
+  console.log(`CKB: local ${balances.local}, remote ${balances.remote}`);
+}
+```
+
 ## Compatibility
 
 - Node.js `>=20`
-- Fiber target: `v0.9.0-rc4`
+- Fiber target: `v0.9.0-rc7`
