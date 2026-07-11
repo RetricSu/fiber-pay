@@ -86,8 +86,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/sdk
       '@nervosnetwork/fiber-js':
-        specifier: ~0.8.1
-        version: 0.8.1
+        specifier: 'catalog:'
+        version: 0.9.0-rc4
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -147,8 +147,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/sdk
       '@nervosnetwork/fiber-js':
-        specifier: ~0.8.1
-        version: 0.8.1
+        specifier: 'catalog:'
+        version: 0.9.0-rc4
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -196,8 +196,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/react
       '@nervosnetwork/fiber-js':
-        specifier: ~0.8.1
-        version: 0.8.1
+        specifier: 'catalog:'
+        version: 0.9.0-rc4
       react:
         specifier: ^19.2.4
         version: 19.2.4

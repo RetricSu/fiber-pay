@@ -357,6 +357,7 @@ export function ConnectButton(props: ConnectButtonProps) {
   // --- Local UI state -------------------------------------------------------
   const [isConnecting, setIsConnecting] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [hasOpenedDropdown, setHasOpenedDropdown] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dropdownId = useId();
@@ -379,16 +380,24 @@ export function ConnectButton(props: ConnectButtonProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showDropdown]);
 
+  useEffect(() => {
+    if (!isRunning) {
+      setShowDropdown(false);
+      setHasOpenedDropdown(false);
+    }
+  }, [isRunning]);
+
   // Notify parent on connect/disconnect
   const prevRunningRef = useRef(false);
   useEffect(() => {
-    if (isRunning && !prevRunningRef.current && node && nodeInfo) {
+    if (isRunning && node && nodeInfo && !prevRunningRef.current) {
       onConnect?.(node, nodeInfo);
+      prevRunningRef.current = true;
     }
     if (!isRunning && prevRunningRef.current) {
       onDisconnect?.();
+      prevRunningRef.current = false;
     }
-    prevRunningRef.current = isRunning;
   }, [isRunning, node, nodeInfo, onConnect, onDisconnect]);
 
   // Notify parent on error once per distinct message.
@@ -450,6 +459,7 @@ export function ConnectButton(props: ConnectButtonProps) {
       setLocalError(msg);
     } finally {
       setShowDropdown(false);
+      setHasOpenedDropdown(false);
     }
   }, [stop]);
 
@@ -477,7 +487,10 @@ export function ConnectButton(props: ConnectButtonProps) {
         <Chevron open={showDropdown} />
       </>
     );
-    buttonOnClick = () => setShowDropdown((s) => !s);
+    buttonOnClick = () => {
+      setHasOpenedDropdown(true);
+      setShowDropdown((s) => !s);
+    };
     buttonStyle = { ...styles.button, ...styles.connectedButton };
   } else if (effectiveIsStarting) {
     buttonLabel = (
@@ -531,12 +544,17 @@ export function ConnectButton(props: ConnectButtonProps) {
             {buttonLabel}
           </button>
 
-          {showDropdown && (
+          {hasOpenedDropdown && (
             <div
               id={dropdownId}
               role="dialog"
               aria-label="Connection panel"
-              style={{ ...styles.dropdown, ...dropdownStyle }}
+              hidden={!showDropdown}
+              style={{
+                ...styles.dropdown,
+                ...dropdownStyle,
+                display: showDropdown ? dropdownStyle?.display : 'none',
+              }}
             >
               {renderConnectedDropdown ? (
                 renderConnectedDropdown({

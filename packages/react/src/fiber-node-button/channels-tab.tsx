@@ -1,5 +1,9 @@
 import type { FormattedChannelBalances, UdtAsset } from '@fiber-pay/sdk/browser';
-import { formatAssetName, formatChannelBalances } from '@fiber-pay/sdk/browser';
+import {
+  areUdtTypeScriptsEqual,
+  formatAssetName,
+  formatChannelBalances,
+} from '@fiber-pay/sdk/browser';
 import { useMemo } from 'react';
 import type { UseFiberNodeResult } from '../use-fiber-node.js';
 import { renderPanelAction } from './render-action.js';
@@ -23,7 +27,14 @@ function formatChannelBalanceValue(
 
 function formatChannelBalanceUnit(balances: FormattedChannelBalances, asset?: UdtAsset): string {
   if (balances.kind === 'udt') {
-    return asset?.kind === 'udt' ? formatAssetName(asset) : 'UDT';
+    if (
+      asset?.kind === 'udt' &&
+      areUdtTypeScriptsEqual(balances.fundingUdtTypeScript, asset.script)
+    ) {
+      return formatAssetName(asset);
+    }
+    const codeHash = balances.fundingUdtTypeScript.code_hash;
+    return `UDT · ${codeHash.slice(0, 10)}…${codeHash.slice(-6)}`;
   }
   return 'CKB';
 }
@@ -31,9 +42,11 @@ function formatChannelBalanceUnit(balances: FormattedChannelBalances, asset?: Ud
 function SelectedChannelBalance({
   balances,
   side,
+  asset,
 }: {
   balances: FormattedChannelBalances | null;
   side: 'local' | 'remote';
+  asset?: UdtAsset;
 }) {
   if (!balances) {
     return <span style={styles.badge}>{side === 'local' ? 'Local' : 'Remote'} — CKB</span>;
@@ -42,7 +55,7 @@ function SelectedChannelBalance({
   return (
     <span style={styles.badge}>
       {side === 'local' ? 'Local' : 'Remote'} {formatChannelBalanceValue(balances, side)}{' '}
-      {formatChannelBalanceUnit(balances)}
+      {formatChannelBalanceUnit(balances, asset)}
     </span>
   );
 }
@@ -192,8 +205,12 @@ export function ChannelsTab({ state, fiber, asset, onLog, renderAction, t }: Cha
           </p>
 
           <div style={styles.row}>
-            <SelectedChannelBalance balances={selectedChannelBalances} side="local" />
-            <SelectedChannelBalance balances={selectedChannelBalances} side="remote" />
+            <SelectedChannelBalance balances={selectedChannelBalances} side="local" asset={asset} />
+            <SelectedChannelBalance
+              balances={selectedChannelBalances}
+              side="remote"
+              asset={asset}
+            />
             <span
               style={styles.badge}
               title="Pending TLCs are in-flight payment locks associated with this channel."

@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { serializeUdtTypeScript } from '@fiber-pay/sdk/browser';
 import { FiberPayQuickCard } from '../src/fiber-pay-quick-card.js';
 import type { UseFiberNodeResult } from '../src/use-fiber-node.js';
 import { validUdtScript } from './fixtures/udt.js';
@@ -45,7 +46,12 @@ describe('FiberPayQuickCard', () => {
       isRunning: true,
       node: {
         newInvoice: vi.fn(async () => ({ invoice_address: 'ln-fake' })),
-        parseInvoice: vi.fn(async () => ({ invoice: { data: { payment_hash: '0x1' } } })),
+        parseInvoice: vi.fn(async () => ({
+          invoice: {
+            currency: 'Fibt',
+            data: { payment_hash: '0x1', attrs: [] },
+          },
+        })),
         sendPayment: vi.fn(async () => ({})),
         waitForPayment: vi.fn(async () => ({ status: 'Succeeded' })),
       } as unknown as UseFiberNodeResult['node'],
@@ -66,7 +72,15 @@ describe('FiberPayQuickCard', () => {
       isRunning: true,
       node: {
         newInvoice,
-        parseInvoice: vi.fn(async () => ({ invoice: { data: { payment_hash: '0x1' } } })),
+        parseInvoice: vi.fn(async () => ({
+          invoice: {
+            currency: 'Fibt',
+            data: {
+              payment_hash: '0x1',
+              attrs: [{ udt_script: serializeUdtTypeScript(validUdtScript) }],
+            },
+          },
+        })),
         sendPayment,
         waitForPayment: vi.fn(async () => ({ status: 'Succeeded' })),
       } as unknown as UseFiberNodeResult['node'],

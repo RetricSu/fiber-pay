@@ -48,8 +48,7 @@ describe('NodeInfoPanel', () => {
           objects: [
             {
               output: { capacity: '0x0' },
-              output_data:
-                '0x10270000000000000000000000000000',
+              output_data: '0x10270000000000000000000000000000',
             },
           ],
           last_cursor: '0x',
@@ -73,7 +72,7 @@ describe('NodeInfoPanel', () => {
     });
 
     expect(fetchSpy).toHaveBeenCalled();
-    expect(screen.getByText(/Scan to deposit/).textContent).toContain('RUSD');
+    expect(screen.getByText(/Address only/).textContent).toContain('select RUSD');
   });
 
   it('falls back to generic UDT label when name is not provided', async () => {
@@ -106,6 +105,6 @@ describe('NodeInfoPanel', () => {
       expect(screen.getByText(/0 UDT/)).toBeTruthy();
     });
 
-    expect(screen.getByText(/Scan to deposit/).textContent).toContain('UDT');
+    expect(screen.getByText(/Address only/).textContent).toContain('select UDT');
   });
 });

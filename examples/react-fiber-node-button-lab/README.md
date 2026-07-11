@@ -13,6 +13,7 @@ You will learn:
 3. renderAction override for selected actions.
 4. t callback for lightweight i18n overrides.
 5. externalFunding.resolve integration path with CCC signer handoff.
+6. CKB/RUSD asset switching with an explicit UDT whitelist and raw base-unit amounts.
 
 Out of scope:
 

@@ -86,7 +86,7 @@ Nginx, Cloudflare, or Vercel), not only in local dev tooling.
 ### Bundle Size Expectations
 
 The Fiber browser runtime is intentionally heavy. Expect a large WASM-related chunk in production builds
-(roughly ~14 MB raw and ~6.5 MB gzip in current examples). Prefer route-level code splitting and lazy
+(roughly ~45.5 MB raw and ~13.4 MB gzip with fiber-js 0.9.0-rc4 in the current React lab). Prefer route-level code splitting and lazy
 mounting so the chunk loads only when payment/node features are needed.
 
 `@fiber-pay/sdk/browser` also exports `FiberRpcClient` for migration compatibility.
@@ -161,6 +161,8 @@ import {
   parsePaymentAmount,
   formatChannelBalances,
   formatAssetName,
+  serializeUdtTypeScript,
+  areUdtTypeScriptsEqual,
   DEFAULT_CKB_ASSET,
 } from '@fiber-pay/sdk';
 // Also available from '@fiber-pay/sdk/browser'
@@ -182,12 +184,18 @@ import {
 
 ```ts
 const script = parseUdtTypeScript(rawJson, '--udt-type-script');
+if (!script) throw new Error('UDT type script is required');
 // or validate an already-parsed object:
 validateUdtTypeScript(obj, '--udt-type-script');
 
 const fundingAmount = parseFundingAmount('1000', { kind: 'udt', script, name: 'TEST' });
 const paymentAmount = parsePaymentAmount('500', { kind: 'udt', script });
+
+// Compare the invoice's serialized udt_script attribute with this asset.
+const invoiceScript = serializeUdtTypeScript(script);
 ```
+
+UDT funding and payment amounts are raw integer base units. Apply the token's decimals only in display/input code; do not pass decimal strings to these helpers.
 
 **Resolving by name** — look up configured UDTs from node info:
 

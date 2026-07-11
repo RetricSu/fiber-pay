@@ -92,6 +92,12 @@ describe('ConnectButton', () => {
       node: {} as UseFiberNodeResult['node'],
       nodeInfo: { pubkey: '0x0123456789abcdef0123456789abcdef' } as UseFiberNodeResult['nodeInfo'],
     });
+    const runningWithoutInfo = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: {} as UseFiberNodeResult['node'],
+      nodeInfo: null,
+    });
 
     const { rerender } = render(
       <ConnectButton
@@ -101,6 +107,17 @@ describe('ConnectButton', () => {
         onDisconnect={onDisconnect}
       />,
     );
+
+    rerender(
+      <ConnectButton
+        fiber={runningWithoutInfo}
+        strategy="passkey"
+        onConnect={onConnect}
+        onDisconnect={onDisconnect}
+      />,
+    );
+
+    expect(onConnect).not.toHaveBeenCalled();
 
     rerender(
       <ConnectButton
@@ -171,5 +188,43 @@ describe('ConnectButton', () => {
     render(<ConnectButton fiber={fiber} strategy="passkey" asset={asset} />);
     fireEvent.click(screen.getByRole('button'));
     expect(screen.getByText('UDT')).toBeTruthy();
+  });
+
+  it('preserves custom panel state when the dropdown is closed and reopened', () => {
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: {} as UseFiberNodeResult['node'],
+      nodeInfo: { pubkey: '0x0123456789abcdef0123456789abcdef' } as UseFiberNodeResult['nodeInfo'],
+    });
+
+    render(
+      <ConnectButton
+        fiber={fiber}
+        strategy="passkey"
+        renderConnectedDropdown={({ closeDropdown }) => (
+          <>
+            <input aria-label="Persistent value" />
+            <button type="button" onClick={closeDropdown}>
+              Close custom panel
+            </button>
+          </>
+        )}
+      />,
+    );
+
+    const toggle = screen.getByRole('button', { name: /0x012345/i });
+    fireEvent.click(toggle);
+    const input = screen.getByRole('textbox', { name: 'Persistent value' });
+    fireEvent.change(input, { target: { value: 'in-flight invoice' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close custom panel' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Connection panel' })).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(screen.getByRole('textbox', { name: 'Persistent value' })).toHaveProperty(
+      'value',
+      'in-flight invoice',
+    );
   });
 });

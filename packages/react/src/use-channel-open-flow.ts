@@ -104,12 +104,11 @@ export function useChannelOpenFlow(options: UseChannelOpenFlowOptions): UseChann
       let requestedFundingAmount: bigint | undefined;
       let effectiveFundingLockScript: Script | undefined = params.fundingLockScript;
       const asset = params.asset ?? DEFAULT_CKB_ASSET;
-      if (asset.kind === 'udt') {
-        validateUdtTypeScript(asset.script);
-      }
       const fundingAmountInput = params.fundingAmount?.trim() || params.fundingAmountCkb?.trim();
 
       try {
+        const validatedUdtScript =
+          asset.kind === 'udt' ? validateUdtTypeScript(asset.script) : undefined;
         if (!fundingAmountInput) {
           throw new Error('Funding amount is required.');
         }
@@ -122,8 +121,8 @@ export function useChannelOpenFlow(options: UseChannelOpenFlowOptions): UseChann
             pubkey,
             funding_amount: fundingAmountHex,
           };
-          if (asset.kind === 'udt') {
-            openChannelParams.funding_udt_type_script = asset.script;
+          if (validatedUdtScript) {
+            openChannelParams.funding_udt_type_script = validatedUdtScript;
           }
           const openResult = await node.openChannel(openChannelParams);
           const result: ChannelOpenFlowResult = {
@@ -152,7 +151,7 @@ export function useChannelOpenFlow(options: UseChannelOpenFlowOptions): UseChann
             shutdown_script: shutdownScript,
             funding_lock_script: effectiveFundingLockScript,
             funding_lock_script_cell_deps: params.fundingLockScriptCellDeps,
-            ...(asset.kind === 'udt' ? { funding_udt_type_script: asset.script } : {}),
+            ...(validatedUdtScript ? { funding_udt_type_script: validatedUdtScript } : {}),
           },
           signFundingTx: params.signFundingTx,
         });

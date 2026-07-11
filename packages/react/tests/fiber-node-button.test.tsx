@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ChannelState } from '@fiber-pay/sdk/browser';
+import { ChannelState, serializeUdtTypeScript } from '@fiber-pay/sdk/browser';
+import { StrictMode } from 'react';
 import { FiberNodeButton } from '../src/fiber-node-button.js';
 import type { UseFiberNodeResult } from '../src/use-fiber-node.js';
 import { validUdtScript } from './fixtures/udt.js';
@@ -18,8 +19,11 @@ function createNodeMock() {
     connectPeer: vi.fn(async () => ({})),
     shutdownChannel: vi.fn(async () => ({})),
     abandonChannel: vi.fn(async () => ({})),
+    openChannel: vi.fn(async () => ({ temporary_channel_id: '0xtemporary' })),
     newInvoice: vi.fn(async () => ({ invoice_address: 'ln-fake-invoice' })),
-    parseInvoice: vi.fn(async () => ({ invoice: { data: { payment_hash: '0x1' } } })),
+    parseInvoice: vi.fn(async () => ({
+      invoice: { currency: 'Fibt', data: { payment_hash: '0x1', attrs: [] } },
+    })),
     sendPayment: vi.fn(async () => ({})),
     waitForPayment: vi.fn(async () => ({ status: 'Succeeded' })),
   };
@@ -46,6 +50,30 @@ function createFiberMock(overrides: Partial<UseFiberNodeResult> = {}): UseFiberN
   };
 }
 
+function createUdtChannel(script = validUdtScript) {
+  return {
+    channel_id: '0xchannel',
+    is_public: false,
+    is_acceptor: false,
+    is_one_way: false,
+    channel_outpoint: null,
+    pubkey: '0xpeer',
+    funding_udt_type_script: script,
+    state: { state_name: ChannelState.ChannelReady },
+    local_balance: '0x64',
+    offered_tlc_balance: '0x0',
+    remote_balance: '0x32',
+    received_tlc_balance: '0x0',
+    pending_tlcs: [],
+    latest_commitment_transaction_hash: null,
+    created_at: '0x1',
+    enabled: true,
+    tlc_expiry_delta: '0x0',
+    tlc_fee_proportional_millionths: '0x0',
+    shutdown_transaction_hash: null,
+  };
+}
+
 describe('FiberNodeButton', () => {
   it('renders as a connect button when disconnected', () => {
     const fiber = createFiberMock();
@@ -61,7 +89,10 @@ describe('FiberNodeButton', () => {
       state: 'running',
       isRunning: true,
       node: node as unknown as UseFiberNodeResult['node'],
-      nodeInfo: { pubkey: '0x0123456789abcdef0123456789abcdef' } as UseFiberNodeResult['nodeInfo'],
+      nodeInfo: {
+        pubkey: '0x0123456789abcdef0123456789abcdef',
+        udt_cfg_infos: [{ script: validUdtScript }],
+      } as UseFiberNodeResult['nodeInfo'],
     });
 
     render(
@@ -93,6 +124,45 @@ describe('FiberNodeButton', () => {
 
     await waitFor(() => {
       expect(node.graphNodes).toHaveBeenCalled();
+    });
+  });
+
+  it('loads and renders panel data in React StrictMode', async () => {
+    const node = createNodeMock();
+    node.listChannels = vi.fn(async () => ({
+      channels: [
+        {
+          channel_id: '0xstrict',
+          pubkey: '0xpeer',
+          funding_udt_type_script: null,
+          state: { state_name: ChannelState.ChannelReady },
+          local_balance: '0x5f5e100',
+          remote_balance: '0x5f5e100',
+          pending_tlcs: [],
+        },
+      ],
+    }));
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: {
+        pubkey: '0x0123456789abcdef0123456789abcdef',
+        udt_cfg_infos: [{ script: validUdtScript }],
+      } as UseFiberNodeResult['nodeInfo'],
+    });
+
+    render(
+      <StrictMode>
+        <FiberNodeButton fiber={fiber} strategy="passkey" />
+      </StrictMode>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Channels' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'active (1)' })).toBeTruthy();
     });
   });
 
@@ -161,7 +231,10 @@ describe('FiberNodeButton', () => {
       state: 'running',
       isRunning: true,
       node: node as unknown as UseFiberNodeResult['node'],
-      nodeInfo: { pubkey: '0x0123456789abcdef0123456789abcdef' } as UseFiberNodeResult['nodeInfo'],
+      nodeInfo: {
+        pubkey: '0x0123456789abcdef0123456789abcdef',
+        udt_cfg_infos: [{ script: validUdtScript }],
+      } as UseFiberNodeResult['nodeInfo'],
     });
 
     render(
@@ -191,34 +264,190 @@ describe('FiberNodeButton', () => {
     });
   });
 
+  it('opens a UDT channel and pays a matching UDT invoice from the high-level panel', async () => {
+    const node = createNodeMock();
+    node.parseInvoice = vi.fn(async () => ({
+      invoice: {
+        currency: 'Fibt',
+        data: {
+          payment_hash: '0x1',
+          attrs: [{ udt_script: serializeUdtTypeScript(validUdtScript) }],
+        },
+      },
+    }));
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: {
+        pubkey: '0x0123456789abcdef0123456789abcdef',
+        udt_cfg_infos: [{ script: validUdtScript }],
+      } as UseFiberNodeResult['nodeInfo'],
+    });
+
+    render(
+      <FiberNodeButton
+        fiber={fiber}
+        strategy="passkey"
+        asset={{ kind: 'udt', script: validUdtScript, name: 'RUSD' }}
+        initialPeerPubkey="0xpeer"
+        initialFundingAmount="100"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Channel' }));
+
+    await waitFor(() => {
+      expect(node.openChannel).toHaveBeenCalledWith({
+        pubkey: '0xpeer',
+        funding_amount: '0x64',
+        funding_udt_type_script: validUdtScript,
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText('Invoice'), { target: { value: '  ln-udt  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Pay Invoice' }));
+
+    await waitFor(() => {
+      expect(node.sendPayment).toHaveBeenCalledWith({
+        invoice: 'ln-udt',
+        udt_type_script: validUdtScript,
+      });
+      expect(screen.getByText('Status: Succeeded')).toBeTruthy();
+    });
+  });
+
+  it('recovers the Open Channel action after an invalid UDT script error', async () => {
+    const node = createNodeMock();
+    const onError = vi.fn();
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: { pubkey: '0x0123456789abcdef0123456789abcdef' } as UseFiberNodeResult['nodeInfo'],
+    });
+
+    render(
+      <FiberNodeButton
+        fiber={fiber}
+        strategy="passkey"
+        asset={{ kind: 'udt', script: { ...validUdtScript, code_hash: '0x00' } }}
+        initialPeerPubkey="0xpeer"
+        onError={onError}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Channel' }));
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledWith(expect.stringContaining('code_hash must be 66'));
+      expect(screen.getByRole('button', { name: 'Open Channel' }).hasAttribute('disabled')).toBe(
+        false,
+      );
+    });
+    expect(node.openChannel).not.toHaveBeenCalled();
+  });
+
+  it('reports an actionable error when the UDT is absent from the node whitelist', async () => {
+    const node = createNodeMock();
+    const onError = vi.fn();
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: {
+        pubkey: '0x0123456789abcdef0123456789abcdef',
+        udt_cfg_infos: [],
+      } as unknown as UseFiberNodeResult['nodeInfo'],
+    });
+
+    render(
+      <FiberNodeButton
+        fiber={fiber}
+        strategy="passkey"
+        asset={{ kind: 'udt', script: validUdtScript, name: 'RUSD' }}
+        initialPeerPubkey="0xpeer"
+        onError={onError}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Channel' }));
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledWith(
+        expect.stringContaining('not present in the node whitelist'),
+      );
+    });
+    expect(node.openChannel).not.toHaveBeenCalled();
+  });
+
+  it('passes asset-aware amounts to external funding resolvers', async () => {
+    const node = createNodeMock();
+    const asset = { kind: 'udt' as const, script: validUdtScript, name: 'RUSD' };
+    const resolve = vi.fn(async () => {
+      throw new Error('stop after context capture');
+    });
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: {
+        pubkey: '0x0123456789abcdef0123456789abcdef',
+        udt_cfg_infos: [{ script: validUdtScript }],
+      } as UseFiberNodeResult['nodeInfo'],
+    });
+
+    render(
+      <FiberNodeButton
+        fiber={fiber}
+        strategy="passkey"
+        asset={asset}
+        initialPeerPubkey="0xpeer"
+        initialFundingAmount="500"
+        externalFunding={{ enabled: true, resolve }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Channel' }));
+
+    await waitFor(() => {
+      expect(resolve).toHaveBeenCalledWith(
+        expect.objectContaining({
+          node,
+          pubkey: '0xpeer',
+          asset,
+          fundingAmount: '500',
+          fundingAmountCkb: '500',
+        }),
+      );
+    });
+  });
+
+  it('uses the shared fiber network when creating invoices', async () => {
+    const node = createNodeMock();
+    const fiber = createFiberMock({
+      network: 'mainnet',
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: { pubkey: '0x0123456789abcdef0123456789abcdef' } as UseFiberNodeResult['nodeInfo'],
+    });
+
+    render(<FiberNodeButton fiber={fiber} strategy="passkey" invoiceAmount="2" />);
+    fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Create Invoice/i }));
+
+    await waitFor(() => {
+      expect(node.newInvoice).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'Fibb', amount: '0xbebc200' }),
+      );
+    });
+  });
+
   it('shows UDT unit for channels with funding_udt_type_script', async () => {
-    const udtChannel = {
-      channel_id: '0xchannel',
-      is_public: false,
-      is_acceptor: false,
-      is_one_way: false,
-      channel_outpoint: null,
-      pubkey: '0xpeer',
-      funding_udt_type_script: {
-        code_hash: '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a',
-        hash_type: 'type',
-        args: '0x00',
-      },
-      state: {
-        state_name: ChannelState.ChannelReady,
-      },
-      local_balance: '0x64',
-      offered_tlc_balance: '0x0',
-      remote_balance: '0x32',
-      received_tlc_balance: '0x0',
-      pending_tlcs: [],
-      latest_commitment_transaction_hash: null,
-      created_at: '0x1',
-      enabled: true,
-      tlc_expiry_delta: '0x0',
-      tlc_fee_proportional_millionths: '0x0',
-      shutdown_transaction_hash: null,
-    };
+    const udtChannel = createUdtChannel();
 
     const node = createNodeMock();
     node.listChannels = vi.fn(async () => ({ channels: [udtChannel] }));
@@ -230,19 +459,51 @@ describe('FiberNodeButton', () => {
       nodeInfo: { pubkey: '0x0123456789abcdef0123456789abcdef' } as UseFiberNodeResult['nodeInfo'],
     });
 
-    render(<FiberNodeButton fiber={fiber} strategy="passkey" asset={{ kind: 'udt', script: udtChannel.funding_udt_type_script }} />);
+    render(
+      <FiberNodeButton
+        fiber={fiber}
+        strategy="passkey"
+        asset={{ kind: 'udt', script: udtChannel.funding_udt_type_script, name: 'RUSD' }}
+      />,
+    );
 
     fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
     fireEvent.click(screen.getByRole('tab', { name: 'Channels' }));
 
     await waitFor(() => {
-      expect(screen.getAllByText(/\b100 UDT\b/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/\b100 RUSD\b/).length).toBeGreaterThan(0);
     });
-
-    fireEvent.click(screen.getAllByText(/\b100 UDT\b/)[0]);
 
     await waitFor(() => {
-      expect(screen.getAllByText(/\b50 UDT\b/).length).toBeGreaterThan(0);
+      expect(screen.getByText(/Local 100 RUSD/)).toBeTruthy();
+      expect(screen.getByText(/Remote 50 RUSD/)).toBeTruthy();
     });
+  });
+
+  it('does not label a different UDT channel with the configured asset name', async () => {
+    const udtChannel = createUdtChannel({ ...validUdtScript, args: '0x01' });
+    const node = createNodeMock();
+    node.listChannels = vi.fn(async () => ({ channels: [udtChannel] }));
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: { pubkey: '0x0123456789abcdef0123456789abcdef' } as UseFiberNodeResult['nodeInfo'],
+    });
+
+    render(
+      <FiberNodeButton
+        fiber={fiber}
+        strategy="passkey"
+        asset={{ kind: 'udt', script: validUdtScript, name: 'RUSD' }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Channels' }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/UDT · 0x114275/).length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText(/100 RUSD/)).toBeNull();
   });
 });

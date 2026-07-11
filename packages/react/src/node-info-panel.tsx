@@ -545,7 +545,11 @@ export function NodeInfoPanel(props: NodeInfoPanelProps) {
                   Install qrcode.react for QR code
                 </div>
               )}
-              <span style={styles.qrCaption}>Scan to deposit {stats.balanceUnit}</span>
+              <span style={styles.qrCaption}>
+                {asset.kind === 'udt'
+                  ? `Address only — select ${stats.balanceUnit} in your wallet`
+                  : 'Scan to deposit CKB'}
+              </span>
               <div style={styles.balanceRow}>
                 <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Balance</span>
                 <span

@@ -30,6 +30,8 @@ export function WorkbenchTab({
   renderAction,
   t,
 }: WorkbenchTabProps) {
+  const assetName = formatAssetName(asset);
+  const amountUnit = asset.kind === 'udt' ? `${assetName} base units` : assetName;
   const {
     isNodeReady,
     connectorContext,
@@ -111,7 +113,7 @@ export function WorkbenchTab({
         </label>
 
         <label style={styles.fieldLabel}>
-          {t('workbench.openChannel.fundingAmount', `Funding Amount (${formatAssetName(asset)})`)}
+          {t('workbench.openChannel.fundingAmount', `Funding Amount (${amountUnit})`)}
           <input
             style={styles.input}
             value={fundingAmount}
@@ -158,7 +160,7 @@ export function WorkbenchTab({
         <h4 style={styles.sectionTitle}>{t('workbench.payments.title', 'Payments')}</h4>
 
         <label style={styles.fieldLabel}>
-          {t('workbench.payments.invoiceAmount', `Invoice Amount (${formatAssetName(asset)})`)}
+          {t('workbench.payments.invoiceAmount', `Invoice Amount (${amountUnit})`)}
           <input
             style={styles.input}
             value={invoiceAmount}
@@ -178,10 +180,10 @@ export function WorkbenchTab({
               id: 'create-invoice',
               label: t(
                 'actions.createInvoice',
-                `Create Invoice (${invoiceAmount || '1'} ${formatAssetName(asset)})`,
+                `Create Invoice (${invoiceAmount || '—'} ${assetName})`,
               ),
               loadingLabel: t('actions.createInvoice.loading', 'Creating...'),
-              disabled: isCreatingInvoice || !isNodeReady,
+              disabled: isCreatingInvoice || !isNodeReady || !invoiceAmount.trim(),
               loading: isCreatingInvoice,
               onTrigger: createInvoice,
             } satisfies FiberNodeButtonActionDefaultProps,
