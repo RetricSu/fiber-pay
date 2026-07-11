@@ -47,10 +47,13 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
   const asset = props.asset ?? DEFAULT_CKB_ASSET;
   const assetUnit = formatAssetName(asset);
   const assetAmountUnit = asset.kind === 'udt' ? `${assetUnit} base units` : assetUnit;
-  const assetIdentity =
-    asset.kind === 'ckb'
-      ? 'ckb'
-      : `${asset.script.code_hash}:${asset.script.hash_type}:${asset.script.args}`.toLowerCase();
+  let assetIdentity = 'ckb';
+  if (asset.kind === 'udt') {
+    const script = asset.script;
+    assetIdentity = script
+      ? `${script.code_hash}:${script.hash_type}:${script.args}`.toLowerCase()
+      : 'udt:invalid';
+  }
   const usesExternalFiber = !!props.fiber;
   const onError = props.onError;
   const onInvoiceCreated = props.onInvoiceCreated;

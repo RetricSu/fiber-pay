@@ -33,7 +33,10 @@ function formatChannelBalanceUnit(balances: FormattedChannelBalances, asset?: Ud
     ) {
       return formatAssetName(asset);
     }
-    const codeHash = balances.fundingUdtTypeScript.code_hash;
+    const codeHash = balances.fundingUdtTypeScript?.code_hash;
+    if (!codeHash) {
+      return 'UDT';
+    }
     return `UDT · ${codeHash.slice(0, 10)}…${codeHash.slice(-6)}`;
   }
   return 'CKB';

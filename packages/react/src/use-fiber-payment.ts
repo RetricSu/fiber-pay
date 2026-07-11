@@ -36,16 +36,22 @@ export type FiberPaymentOptions = UseFiberPaymentOptions;
 
 function getPaymentContextKey(options: UseFiberPaymentOptions): string {
   const asset = options.asset;
-  const assetKey =
-    !asset || asset.kind === 'ckb'
-      ? 'ckb'
-      : `${asset.script.code_hash}:${asset.script.hash_type}:${asset.script.args}`.toLowerCase();
+  let assetKey = 'ckb';
+  if (asset?.kind === 'udt') {
+    const script = asset.script;
+    assetKey = script
+      ? `${script.code_hash}:${script.hash_type}:${script.args}`.toLowerCase()
+      : 'udt:invalid';
+  }
   return `${options.network ?? 'unknown'}:${assetKey}`;
 }
 
 function getInvoiceUdtScript(parsed: ParseInvoiceResult): string | null {
   for (const attribute of parsed.invoice.data.attrs ?? []) {
-    const record = attribute as unknown as Record<string, unknown>;
+    if (!attribute || typeof attribute !== 'object') {
+      continue;
+    }
+    const record = attribute as Record<string, unknown>;
     const value = record.udt_script ?? record.UdtScript;
     if (typeof value === 'string') {
       return value.toLowerCase();

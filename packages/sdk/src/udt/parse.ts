@@ -101,7 +101,13 @@ export function serializeUdtTypeScript(value: unknown): HexString {
 /** Compare UDT scripts by their canonical fields, ignoring hex letter casing. */
 export function areUdtTypeScriptsEqual(left: unknown, right: unknown): boolean {
   try {
-    return serializeUdtTypeScript(left) === serializeUdtTypeScript(right);
+    const normalizedLeft = validateUdtTypeScript(left);
+    const normalizedRight = validateUdtTypeScript(right);
+    return (
+      normalizedLeft.code_hash.toLowerCase() === normalizedRight.code_hash.toLowerCase() &&
+      normalizedLeft.hash_type === normalizedRight.hash_type &&
+      normalizedLeft.args.toLowerCase() === normalizedRight.args.toLowerCase()
+    );
   } catch {
     return false;
   }

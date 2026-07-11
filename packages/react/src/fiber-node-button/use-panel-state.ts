@@ -116,6 +116,9 @@ function getAssetIdentity(asset: FiberNodeButtonPanelProps['asset']): string {
   if (!asset || asset.kind === 'ckb') {
     return 'ckb';
   }
+  if (!asset.script) {
+    return 'udt:invalid';
+  }
   return `${asset.script.code_hash}:${asset.script.hash_type}:${asset.script.args}`.toLowerCase();
 }
 

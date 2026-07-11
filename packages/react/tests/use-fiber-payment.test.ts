@@ -104,6 +104,24 @@ describe('useFiberPayment', () => {
     expect(result.current.error).toBeNull();
   });
 
+  it('ignores malformed invoice attributes without crashing', async () => {
+    const node = createNodeMock({
+      parseInvoice: vi.fn(async () => ({
+        invoice: {
+          data: { payment_hash: '0xabc', attrs: [null, 'invalid'] as never[] },
+        },
+      })),
+    });
+    const { result } = renderHook(() => useFiberPayment(node, { asset: { kind: 'ckb' } }));
+
+    await act(async () => {
+      await result.current.payInvoice('ln-malformed-attrs');
+    });
+
+    expect(node.sendPayment).toHaveBeenCalledWith({ invoice: 'ln-malformed-attrs' });
+    expect(result.current.paymentResult?.status).toBe('Succeeded');
+  });
+
   it('keeps payment state updates working in React StrictMode', async () => {
     const node = createNodeMock();
     const { result } = renderHook(() => useFiberPayment(node), { wrapper: strictModeWrapper });
