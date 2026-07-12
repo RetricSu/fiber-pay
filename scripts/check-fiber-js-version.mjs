@@ -42,12 +42,18 @@ if (!catalogMatch) {
 }
 const catalogVersion = catalogMatch[1].trim();
 if (catalogVersion !== sdkPeer) {
-  fail(`pnpm-workspace.yaml catalog (${catalogVersion}) does not match SDK peerDependency (${sdkPeer})`);
+  fail(
+    `pnpm-workspace.yaml catalog (${catalogVersion}) does not match SDK peerDependency (${sdkPeer})`,
+  );
 }
 ok(`Workspace catalog: ${catalogVersion}`);
 
 const consumers = [
   ['e2e/wasm-smoke/package.json', 'dependencies'],
+  ['e2e/wasm-dual-node/package.json', 'dependencies'],
+  ['examples/browser-sdk-playground/package.json', 'dependencies'],
+  ['examples/react-fiber-node-button-lab/package.json', 'dependencies'],
+  ['examples/react-min-connect/package.json', 'dependencies'],
   ['packages/react/package.json', 'devDependencies'],
 ];
 
@@ -55,7 +61,9 @@ for (const [pkgPath, depField] of consumers) {
   const pkg = readJson(pkgPath);
   const declared = pkg[depField]?.['@nervosnetwork/fiber-js'];
   if (declared !== 'catalog:') {
-    fail(`${pkgPath} must declare @nervosnetwork/fiber-js as "catalog:" in ${depField}, got ${declared}`);
+    fail(
+      `${pkgPath} must declare @nervosnetwork/fiber-js as "catalog:" in ${depField}, got ${declared}`,
+    );
   }
   ok(`${pkgPath} uses catalog:`);
 }

@@ -52,8 +52,9 @@ set these headers on your web server or CDN (for example Nginx, Cloudflare, Verc
 
 ## Bundle Size Notes
 
-Browser Fiber WASM artifacts are large by nature. In the current examples, a production build includes
-an additional ~14 MB JS chunk (~6.5 MB gzip) for WASM/runtime assets.
+Browser Fiber WASM artifacts are large by nature. With `fiber-js` 0.9.0-rc4, the current
+`react-fiber-node-button-lab` production build includes an additional ~45.5 MB JS chunk
+(~13.4 MB gzip) for WASM/runtime assets.
 
 Recommended integration strategy:
 
@@ -85,6 +86,7 @@ For a complete browser passkey + payment walkthrough, see [docs/wasm-passkey-pay
 `FiberPayQuickCard` supports lightweight integration hooks:
 
 - `fiber` (reuse existing `useFiberNode()` session)
+- `asset`, `invoiceAmount` (CKB or whitelisted UDT payment context)
 - `className`, `style`, `title`
 - `onInvoiceCreated(invoice)`
 - `onPaymentResult(result)`
@@ -145,10 +147,10 @@ export function NodeDashboard() {
 |------|--------|
 | **Node state badge** | Visual status indicator (idle, starting, running, error, etc.) |
 | **Pubkey** | Full display with **copy-to-clipboard button** |
-| **CKB Address** | Derived from the node's lock script, displayed with **copy button** |
+| **Funding Address** | Derived from the node's lock script, displayed with **copy button** |
 | **Peers / Channels count** | Compact stat cards |
-| **CKB Balance** | Queried from chain via RPC (updated every 15s) |
-| **QR Code** | Optional — shows CKB address for "Scan to deposit CKB" (`showQrCode` prop) |
+| **CKB / UDT Balance** | Queried from chain via RPC for the selected `asset` (updated every 15s) |
+| **QR Code** | Optional — encodes the funding address only (`showQrCode` prop). For UDT deposits, the wallet must still select the matching token script. |
 
 ### Props
 
@@ -156,6 +158,7 @@ export function NodeDashboard() {
 |------|------|---------|-------------|
 | `node` | `FiberBrowserNode \| null` | — | The running node instance. Pass `null` for idle state. |
 | `network` | `"testnet" \| "mainnet"` | — | Network for address derivation and RPC URL. |
+| `asset` | `UdtAsset` | `{ kind: "ckb" }` | Balance asset. UDT values are displayed in raw base units. |
 | `pollInterval` | `number` | `15000` | Stats refresh interval in milliseconds. |
 | `showQrCode` | `boolean` | `false` | Show a QR code of the CKB address (requires `qrcode.react`). |
 | `renderQrCode` | `(value: string) => ReactNode` | — | Override QR rendering with your own library. |
@@ -217,8 +220,8 @@ export function WalletWithDeposit() {
         {
           id: 'deposit',
           label: 'Deposit',
-          render: ({ fiber: { node } }) => (
-            <NodeInfoPanel node={node} network="testnet" showQrCode />
+          render: ({ fiber: { node }, asset }) => (
+            <NodeInfoPanel node={node} network="testnet" asset={asset} showQrCode />
           ),
         },
         { id: 'diagnostics' },
@@ -284,7 +287,7 @@ export function WalletEntry() {
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `network` | `"testnet" \| "mainnet"` | `"testnet"` | Network to connect to. |
+| `network` | `"testnet" \| "mainnet"` | `fiber.network`, then `"testnet"` | Network used for node startup and invoice currency. |
 | `fiber` | `UseFiberNodeResult` | — | Pre-existing hook result. When provided, the button shares this session instead of creating its own. |
 | `strategy` | `"passkey" \| "password"` | `"passkey"` | Credential strategy for authentication. |
 | `externalWallet` | `boolean` | `false` | Enable external wallet mode (no internal CKB key derivation). |
@@ -293,6 +296,7 @@ export function WalletEntry() {
 | `passkeyUsername` | `string` | `"User"` | Display name for passkey registration. |
 | `wasmFactory` | `FiberWasmFactory` | — | Optional WASM factory override. |
 | `nodeConfig` | `UseFiberNodeOptions["nodeConfig"]` | — | Additional node configuration. |
+| `asset` | `UdtAsset` | `{ kind: "ckb" }` | Asset used for channel funding, invoices, and payments. |
 | `className` | `string` | — | Additional CSS class for the root container. |
 | `style` | `CSSProperties` | — | Inline styles for the root container. |
 | `dropdownStyle` | `CSSProperties` | — | Inline styles for the dropdown panel. |
@@ -303,12 +307,69 @@ export function WalletEntry() {
 | `initialPeerPubkey` | `string` | `""` | Pre-filled peer pubkey for the open-channel form. |
 | `initialPeerAddress` | `string` | `""` | Pre-filled peer address for the open-channel form. |
 | `initialFundingAmountCkb` | `string` | `"1000"` | Pre-filled funding amount (in CKB) for the open-channel form. |
+| `initialFundingAmount` | `string` | — | CKB display amount or raw integer UDT base units. Takes precedence over `initialFundingAmountCkb`. |
+| `invoiceAmount` | `string` | `"1"` | CKB display amount or raw integer UDT base units. |
 | `externalFunding` | `FiberNodeButtonExternalFundingConfig` | — | External funding resolver configuration. |
 | `renderConnectorSection` | `(context) => ReactNode` | — | Custom renderer for the connector section inside the panel. |
 | `tabs` | `FiberNodeButtonTabConfig[]` | — | Reorder, hide, or extend built-in tabs. |
 | `renderTabContent` | `(tabId, context) => ReactNode \| undefined` | — | Override tab body rendering per tab. Return `undefined` to fall through. |
 | `renderAction` | `(context) => ReactNode \| undefined` | — | Replace default action buttons (e.g. Pay Invoice, Open Channel). |
 | `t` | `FiberNodeButtonI18n` | — | Localization function for labels and copy. |
+
+### UDT setup
+
+Passing `asset` selects the token for UI and RPC calls, but it does **not** configure the Fiber node. The same type script must be present in `nodeConfig.udtWhitelist`, including the token's official cell deps. Both channel peers must support the token.
+
+UDT amounts are raw integer base units. For a token with 8 decimals, `100000000` represents one display token.
+
+```tsx
+import { FiberNodeButton, useFiberNode, type UdtAsset } from '@fiber-pay/react';
+
+const RUSD_SCRIPT = {
+  code_hash: '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a',
+  hash_type: 'type' as const,
+  args: '0x878fcc6f1f08d48e87bb1c3b3d5083f23f8a39c5d5c764f253b55b998526439b',
+};
+
+const RUSD: UdtAsset = { kind: 'udt', name: 'RUSD', script: RUSD_SCRIPT };
+
+export function RusdWallet() {
+  const fiber = useFiberNode({
+    network: 'testnet',
+    walletId: 'rusd-wallet',
+    nodeConfig: {
+      udtWhitelist: [
+        {
+          name: 'RUSD',
+          script: RUSD_SCRIPT,
+          cellDeps: [
+            {
+              typeId: {
+                code_hash: '0x00000000000000000000000000000000000000000000000000545950455f4944',
+                hash_type: 'type',
+                args: '0x97d30b723c0b2c66e9cb8d4d0df4ab5d7222cbb00d4a9a2055ce2e5d7f0d8b0f',
+              },
+            },
+          ],
+          autoAcceptAmount: '1000000000',
+        },
+      ],
+    },
+  });
+
+  return (
+    <FiberNodeButton
+      fiber={fiber}
+      asset={RUSD}
+      initialFundingAmount="1000000000"
+      invoiceAmount="100000000"
+      onError={console.error}
+    />
+  );
+}
+```
+
+`FiberNodeButton` verifies that the configured UDT appears in `nodeInfo.udt_cfg_infos`, checks pasted invoice network and serialized UDT script before payment, and rejects mismatches before `send_payment`.
 
 ### State mapping
 
@@ -415,6 +476,8 @@ export function CustomPanelDemo() {
 For external funding, pass `externalFunding` with an async `resolve` callback that returns
 `signFundingTx` and optional script / dep overrides.
 
+The resolver context includes `asset` and `fundingAmount`; for UDTs the amount is raw base units. The legacy `fundingAmountCkb` field remains for compatibility and should not be used for new integrations.
+
 If you use CCC wallets, `@fiber-pay/sdk/browser` provides
 `createCccExternalFundingResolver(...)` so you do not need to handwrite resolve logic:
 
@@ -484,7 +547,7 @@ The following common keys can be localized via the `t` prop (additional keys exi
 ## Hooks
 
 - `useFiberNode(options)`
-- `useFiberPayment(node)`
+- `useFiberPayment(node, { asset?, network? })`
 
 `useFiberNode` exposes passkey/password startup, node lifecycle methods, and passkey diagnostics (`passkeySupportReason`, `passkeyUnavailableReason`).
 
@@ -494,6 +557,8 @@ The following common keys can be localized via the `t` prop (additional keys exi
 - `parseInvoice(invoice)`
 - `sendPayment(invoice)`
 - `waitForPayment(paymentHash)`
+
+`payInvoice` parses and validates invoice network/asset before sending. The lower-level staged `sendPayment` API cannot validate an invoice by itself; staged callers should inspect the `parseInvoice` result before calling it.
 
 Staged flow example:
 

@@ -14,7 +14,7 @@ export function buildNewInvoiceParams(options: BuildNewInvoiceParamsOptions): Ne
   const safeAmount = amountInput.replace(/[^\d.]/g, '').slice(0, 32);
   const safeName = (asset.kind === 'udt' ? asset.name?.trim() : 'CKB')?.slice(0, 32) ?? 'UDT';
 
-  const parsedAmount = parsePaymentAmount(amountInput.trim() || '1', asset);
+  const parsedAmount = parsePaymentAmount(amountInput.trim(), asset);
   const params: NewInvoiceParams = {
     amount: `0x${parsedAmount.toString(16)}`,
     currency: network === 'mainnet' ? 'Fibb' : 'Fibt',

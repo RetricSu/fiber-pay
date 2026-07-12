@@ -18,6 +18,10 @@ function validateHexString(
     throw new Error(`Invalid ${optionName}: ${field} must be a hex string starting with 0x`);
   }
 
+  if ((value.length - 2) % 2 !== 0) {
+    throw new Error(`Invalid ${optionName}: ${field} must contain complete bytes`);
+  }
+
   if (exactLength !== undefined && value.length !== exactLength) {
     throw new Error(`Invalid ${optionName}: ${field} must be ${exactLength} hex characters`);
   }
@@ -61,6 +65,52 @@ export function validateUdtTypeScript(
     hash_type: script.hash_type,
     args: script.args,
   };
+}
+
+const HASH_TYPE_BYTES: Record<UdtTypeScript['hash_type'], number> = {
+  data: 0,
+  type: 1,
+  data1: 2,
+  data2: 4,
+};
+
+function uint32LeHex(value: number): string {
+  const bytes = new Uint8Array(4);
+  new DataView(bytes.buffer).setUint32(0, value, true);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Serialize a UDT type script to the Molecule bytes used by Fiber invoice attributes.
+ */
+export function serializeUdtTypeScript(value: unknown): HexString {
+  const script = validateUdtTypeScript(value, 'UDT type script');
+  const codeHash = script.code_hash.slice(2).toLowerCase();
+  const args = script.args.slice(2).toLowerCase();
+  const argsByteLength = args.length / 2;
+  const tableHeaderSize = 16;
+  const codeHashOffset = tableHeaderSize;
+  const hashTypeOffset = codeHashOffset + 32;
+  const argsOffset = hashTypeOffset + 1;
+  const totalSize = argsOffset + 4 + argsByteLength;
+  const hashType = HASH_TYPE_BYTES[script.hash_type].toString(16).padStart(2, '0');
+
+  return `0x${uint32LeHex(totalSize)}${uint32LeHex(codeHashOffset)}${uint32LeHex(hashTypeOffset)}${uint32LeHex(argsOffset)}${codeHash}${hashType}${uint32LeHex(argsByteLength)}${args}`;
+}
+
+/** Compare UDT scripts by their canonical fields, ignoring hex letter casing. */
+export function areUdtTypeScriptsEqual(left: unknown, right: unknown): boolean {
+  try {
+    const normalizedLeft = validateUdtTypeScript(left);
+    const normalizedRight = validateUdtTypeScript(right);
+    return (
+      normalizedLeft.code_hash.toLowerCase() === normalizedRight.code_hash.toLowerCase() &&
+      normalizedLeft.hash_type === normalizedRight.hash_type &&
+      normalizedLeft.args.toLowerCase() === normalizedRight.args.toLowerCase()
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**

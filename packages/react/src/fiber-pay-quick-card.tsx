@@ -1,6 +1,6 @@
 import type { GetPaymentResult, UdtAsset } from '@fiber-pay/sdk/browser';
 import { DEFAULT_CKB_ASSET, formatAssetName } from '@fiber-pay/sdk/browser';
-import { type CSSProperties, useEffect, useId, useMemo, useState } from 'react';
+import { type CSSProperties, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { buildNewInvoiceParams } from './invoice-params.js';
 import { type UseFiberNodeResult, useFiberNode } from './use-fiber-node.js';
 import { useFiberPayment } from './use-fiber-payment.js';
@@ -13,7 +13,7 @@ export interface FiberPayQuickCardProps {
   passkeyUsername?: string;
   /** Asset for invoices and payments. Defaults to CKB. */
   asset?: UdtAsset;
-  /** Invoice amount in CKB or UDT units. Defaults to 1. */
+  /** CKB display amount or raw integer UDT base units. Defaults to 1. */
   invoiceAmount?: string;
   title?: string;
   className?: string;
@@ -41,11 +41,19 @@ const rowWithMarginStyle: CSSProperties = {
 };
 
 export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
-  const network = props.network ?? 'testnet';
+  const network = props.network ?? props.fiber?.network ?? 'testnet';
   const passkeyUsername = props.passkeyUsername ?? 'User';
   const title = props.title ?? 'FiberPay Quick Card';
   const asset = props.asset ?? DEFAULT_CKB_ASSET;
   const assetUnit = formatAssetName(asset);
+  const assetAmountUnit = asset.kind === 'udt' ? `${assetUnit} base units` : assetUnit;
+  let assetIdentity = 'ckb';
+  if (asset.kind === 'udt') {
+    const script = asset.script;
+    assetIdentity = script
+      ? `${script.code_hash}:${script.hash_type}:${script.args}`.toLowerCase()
+      : 'udt:invalid';
+  }
   const usesExternalFiber = !!props.fiber;
   const onError = props.onError;
   const onInvoiceCreated = props.onInvoiceCreated;
@@ -75,7 +83,7 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
     stop,
   } = fiber;
 
-  const paymentOptions = useMemo(() => ({ asset }), [asset]);
+  const paymentOptions = useMemo(() => ({ asset, network }), [asset, network]);
   const {
     payInvoice,
     isPaying,
@@ -89,6 +97,18 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
   const [createdInvoice, setCreatedInvoice] = useState('');
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const previousAssetIdentityRef = useRef(assetIdentity);
+
+  useEffect(() => {
+    if (previousAssetIdentityRef.current === assetIdentity) {
+      return;
+    }
+    previousAssetIdentityRef.current = assetIdentity;
+    setInvoiceAmountInput(props.invoiceAmount ?? '1');
+    setInvoiceInput('');
+    setCreatedInvoice('');
+    setInvoiceError(null);
+  }, [assetIdentity, props.invoiceAmount]);
 
   useEffect(() => {
     if (nodeError) {
@@ -116,7 +136,7 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
     setIsCreatingInvoice(true);
     setInvoiceError(null);
     try {
-      const amountInput = invoiceAmountInput.trim() || '1';
+      const amountInput = invoiceAmountInput.trim();
       const params = buildNewInvoiceParams({
         amountInput,
         asset,
@@ -193,17 +213,21 @@ export function FiberPayQuickCard(props: FiberPayQuickCardProps) {
           </p>
 
           <div style={rowWithMarginStyle}>
-            <button type="button" onClick={() => void createInvoice()} disabled={isCreatingInvoice}>
+            <button
+              type="button"
+              onClick={() => void createInvoice()}
+              disabled={isCreatingInvoice || !invoiceAmountInput.trim()}
+            >
               {isCreatingInvoice
                 ? 'Creating...'
-                : `Create Invoice (${invoiceAmountInput || '1'} ${assetUnit})`}
+                : `Create Invoice (${invoiceAmountInput || '—'} ${assetUnit})`}
             </button>
             <button type="button" onClick={() => void stop()}>
               Stop Node
             </button>
           </div>
 
-          <label htmlFor={invoiceAmountInputId}>Invoice Amount ({assetUnit})</label>
+          <label htmlFor={invoiceAmountInputId}>Invoice Amount ({assetAmountUnit})</label>
           <div style={rowWithMarginStyle}>
             <input
               id={invoiceAmountInputId}

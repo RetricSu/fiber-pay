@@ -1,19 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  areUdtTypeScriptsEqual,
   formatAssetName,
   formatChannelBalances,
   parseFundingAmount,
   parsePaymentAmount,
   parseUdtTypeScript,
   resolveUdtAsset,
+  serializeUdtTypeScript,
   validateUdtTypeScript,
   type UdtAsset,
 } from '../src/udt/index.js';
 import type { Channel, UdtCfgInfos } from '../src/types/rpc.js';
 
 const validCodeHash = '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a';
-const validUdtScript =
-  `{"code_hash":"${validCodeHash}","hash_type":"type","args":"0x878fcc6f1f08d48e87bb1c3b3d5083f23f8a39c5d5c764f253b55b998526439b"}`;
+const validUdtScript = `{"code_hash":"${validCodeHash}","hash_type":"type","args":"0x878fcc6f1f08d48e87bb1c3b3d5083f23f8a39c5d5c764f253b55b998526439b"}`;
 
 describe('parseUdtTypeScript', () => {
   it('returns undefined when value is undefined', () => {
@@ -42,9 +43,7 @@ describe('parseUdtTypeScript', () => {
 
   it('rejects invalid hash_type', () => {
     expect(() =>
-      parseUdtTypeScript(
-        `{"code_hash":"${validCodeHash}","hash_type":"invalid","args":"0x"}`,
-      ),
+      parseUdtTypeScript(`{"code_hash":"${validCodeHash}","hash_type":"invalid","args":"0x"}`),
     ).toThrow('hash_type must be one of type, data, data1, data2');
   });
 
@@ -82,9 +81,35 @@ describe('validateUdtTypeScript', () => {
   });
 
   it('rejects invalid script object', () => {
-    expect(() => validateUdtTypeScript({ code_hash: '0x00', hash_type: 'type', args: '0x' })).toThrow(
-      'code_hash must be 66 hex characters',
+    expect(() =>
+      validateUdtTypeScript({ code_hash: '0x00', hash_type: 'type', args: '0x' }),
+    ).toThrow('code_hash must be 66 hex characters');
+  });
+
+  it('rejects hex fields that do not contain complete bytes', () => {
+    expect(() =>
+      validateUdtTypeScript({ code_hash: validCodeHash, hash_type: 'type', args: '0x0' }),
+    ).toThrow('args must contain complete bytes');
+  });
+
+  it('serializes scripts to Fiber invoice Molecule bytes', () => {
+    expect(
+      serializeUdtTypeScript({ code_hash: validCodeHash, hash_type: 'type', args: '0x00' }),
+    ).toBe(
+      '0x360000001000000030000000310000001142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a010100000000',
     );
+  });
+
+  it('compares scripts by canonical fields and rejects mismatches', () => {
+    const script = { code_hash: validCodeHash, hash_type: 'type' as const, args: '0x00' };
+    expect(
+      areUdtTypeScriptsEqual(script, {
+        ...script,
+        code_hash: validCodeHash.toUpperCase().replace('0X', '0x'),
+      }),
+    ).toBe(true);
+    expect(areUdtTypeScriptsEqual(script, { ...script, args: '0x01' })).toBe(false);
+    expect(areUdtTypeScriptsEqual(script, { ...script, args: '0x0' })).toBe(false);
   });
 });
 
@@ -109,7 +134,9 @@ describe('parsePaymentAmount', () => {
   });
 
   it('rejects zero CKB amount', () => {
-    expect(() => parsePaymentAmount('0', { kind: 'ckb' })).toThrow('CKB amount must be greater than 0');
+    expect(() => parsePaymentAmount('0', { kind: 'ckb' })).toThrow(
+      'CKB amount must be greater than 0',
+    );
   });
 
   it('rejects zero UDT amount', () => {

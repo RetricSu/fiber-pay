@@ -130,6 +130,7 @@ export type {
   UdtTypeScript,
 } from '../udt/index.js';
 export {
+  areUdtTypeScriptsEqual,
   DEFAULT_CKB_ASSET,
   formatAssetName,
   formatChannelBalances,
@@ -137,6 +138,7 @@ export {
   parsePaymentAmount,
   parseUdtTypeScript,
   resolveUdtAsset,
+  serializeUdtTypeScript,
   validateUdtTypeScript,
 } from '../udt/index.js';
 export {

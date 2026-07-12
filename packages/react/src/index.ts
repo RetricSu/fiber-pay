@@ -4,8 +4,12 @@ export type {
   FiberWasmFactory,
   NodeInfoResult,
   PasskeySupportReason,
+  UdtAsset,
+  UdtTypeScript,
+  UdtWhitelistEntry,
 } from '@fiber-pay/sdk/browser';
 export {
+  areUdtTypeScriptsEqual,
   ChannelState,
   ConfigBuilder,
   ckbHash,
@@ -20,8 +24,10 @@ export {
   PasswordCredentialProvider,
   RawKeyCredentialProvider,
   scriptToAddress,
+  serializeUdtTypeScript,
   shannonsToCkb,
   toHex,
+  validateUdtTypeScript,
 } from '@fiber-pay/sdk/browser';
 export type {
   ConnectButtonConnectedDropdownContext,
@@ -59,5 +65,9 @@ export type {
 export { useChannelOpenFlow } from './use-channel-open-flow.js';
 export type { UseFiberNodeOptions, UseFiberNodeResult } from './use-fiber-node.js';
 export { useFiberNode } from './use-fiber-node.js';
-export type { UseFiberPaymentResult } from './use-fiber-payment.js';
+export type {
+  FiberPaymentOptions,
+  UseFiberPaymentOptions,
+  UseFiberPaymentResult,
+} from './use-fiber-payment.js';
 export { useFiberPayment } from './use-fiber-payment.js';

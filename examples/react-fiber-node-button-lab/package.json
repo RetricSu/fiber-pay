@@ -14,7 +14,7 @@
     "@ckb-ccc/core": "^1.12.5",
     "@fiber-pay/react": "workspace:*",
     "@fiber-pay/sdk": "workspace:*",
-    "@nervosnetwork/fiber-js": "~0.8.1",
+    "@nervosnetwork/fiber-js": "catalog:",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },

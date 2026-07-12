@@ -24,7 +24,7 @@ export type {
 
 export function FiberNodeButton(props: FiberNodeButtonProps) {
   const {
-    network = 'testnet',
+    network: requestedNetwork,
     fiber: externalFiber,
     strategy = 'passkey',
     externalWallet = false,
@@ -53,6 +53,8 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
     renderAction,
     t,
   } = props;
+
+  const network = requestedNetwork ?? externalFiber?.network ?? 'testnet';
 
   const managedFiber = useFiberNode({
     network,

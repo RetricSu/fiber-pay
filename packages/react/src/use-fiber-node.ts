@@ -24,6 +24,8 @@ export interface UseFiberNodeOptions {
 }
 
 export interface UseFiberNodeResult {
+  /** Network used by this node. Exposed so composed components do not need duplicate config. */
+  network?: 'testnet' | 'mainnet';
   state: BrowserNodeState;
   node: FiberBrowserNode | null;
   nodeInfo: NodeInfoResult | null;
@@ -369,6 +371,7 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
   const isRunning = useMemo(() => state === 'running', [state]);
 
   return {
+    network: options.network,
     state,
     node: nodeRef.current,
     nodeInfo,

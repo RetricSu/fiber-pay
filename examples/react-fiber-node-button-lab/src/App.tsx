@@ -3,6 +3,8 @@ import {
   FiberNodeButton,
   type FiberNodeButtonRenderAction,
   type FiberNodeButtonTabConfig,
+  type UdtAsset,
+  type UseFiberNodeOptions,
   useFiberNode,
 } from '@fiber-pay/react';
 import {
@@ -19,15 +21,42 @@ interface EventLogEntry {
 }
 
 const TESTNET_CKB_RPC_URL = 'https://testnet.ckbapp.dev/';
+const RUSD_SCRIPT = {
+  code_hash: '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a',
+  hash_type: 'type',
+  args: '0x878fcc6f1f08d48e87bb1c3b3d5083f23f8a39c5d5c764f253b55b998526439b',
+} as const;
+const RUSD_ASSET: UdtAsset = { kind: 'udt', name: 'RUSD', script: RUSD_SCRIPT };
+const CKB_ASSET: UdtAsset = { kind: 'ckb' };
+const RUSD_NODE_CONFIG = {
+  udtWhitelist: [
+    {
+      name: 'RUSD',
+      script: RUSD_SCRIPT,
+      cellDeps: [
+        {
+          typeId: {
+            code_hash: '0x00000000000000000000000000000000000000000000000000545950455f4944',
+            hash_type: 'type',
+            args: '0x97d30b723c0b2c66e9cb8d4d0df4ab5d7222cbb00d4a9a2055ce2e5d7f0d8b0f',
+          },
+        },
+      ],
+      autoAcceptAmount: '1000000000',
+    },
+  ],
+} satisfies NonNullable<UseFiberNodeOptions['nodeConfig']>;
 
 const integrationSnippet = `const fiber = useFiberNode({
   network: 'testnet',
   walletId: 'my-app-fiber-session',
   externalWallet,
+  nodeConfig: { udtWhitelist: [RUSD_WHITELIST_ENTRY] },
 });
 
 <FiberNodeButton
   fiber={fiber}
+  asset={selectedAsset}
   strategy={strategy}
   password={strategy === 'password' ? password : undefined}
   externalFunding={{ enabled: externalWallet, resolve: resolveExternalFunding }}
@@ -307,6 +336,7 @@ export function App() {
 
   const [strategy, setStrategy] = useState<ConnectStrategy>('password');
   const [externalWallet, setExternalWallet] = useState(false);
+  const [assetKind, setAssetKind] = useState<'ckb' | 'rusd'>('ckb');
   const [customTabMode, setCustomTabMode] = useState(false);
   const [password, setPassword] = useState('demo-secret');
   const [externalWalletAddress, setExternalWalletAddress] = useState<string | null>(null);
@@ -316,7 +346,9 @@ export function App() {
     network: 'testnet',
     walletId: 'quick-card-connect-demo',
     externalWallet,
+    nodeConfig: RUSD_NODE_CONFIG,
   });
+  const selectedAsset = assetKind === 'rusd' ? RUSD_ASSET : CKB_ASSET;
 
   const addLog = useCallback((message: string) => {
     const now = new Date();
@@ -415,7 +447,8 @@ export function App() {
               {t('demo.customTab.activeChannels', 'Active channels')}: {state.activeChannelCount}
             </p>
             <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#475569' }}>
-              {t('demo.customTab.paymentStatus', 'Payment status')}: {state.paymentResult?.status ?? 'Idle'}
+              {t('demo.customTab.paymentStatus', 'Payment status')}:{' '}
+              {state.paymentResult?.status ?? 'Idle'}
             </p>
           </section>
         ),
@@ -470,32 +503,43 @@ export function App() {
         <header style={styles.hero}>
           <h1 style={styles.title}>FiberNodeButton Developer Demo</h1>
           <p style={styles.subtitle}>
-            One component, one page: learn FiberNodeButton integration fast, then verify behavior in the
-            live panel and runtime logs.
+            One component, one page: learn FiberNodeButton integration fast, then verify behavior in
+            the live panel and runtime logs.
           </p>
         </header>
 
         <div style={styles.layout}>
           <aside style={styles.panel}>
             <h2 style={styles.panelTitle}>Integration Guide</h2>
-            <p style={styles.panelLead}>Copy this wiring model and replace wallet/session config with your app values.</p>
+            <p style={styles.panelLead}>
+              Copy this wiring model and replace wallet/session config with your app values.
+            </p>
 
             <ol style={styles.stepList}>
               <li style={styles.stepItem}>
                 <p style={styles.stepTitle}>Step 1. Create one shared fiber hook</p>
-                <p style={styles.stepDesc}>Keep useFiberNode in your page or provider and pass the same fiber object into FiberNodeButton.</p>
+                <p style={styles.stepDesc}>
+                  Keep useFiberNode in your page or provider and pass the same fiber object into
+                  FiberNodeButton.
+                </p>
               </li>
               <li style={styles.stepItem}>
                 <p style={styles.stepTitle}>Step 2. Choose auth strategy at runtime</p>
-                <p style={styles.stepDesc}>Password and passkey can share one component, switch via strategy prop.</p>
+                <p style={styles.stepDesc}>
+                  Password and passkey can share one component, switch via strategy prop.
+                </p>
               </li>
               <li style={styles.stepItem}>
                 <p style={styles.stepTitle}>Step 3. Plug external funding only when needed</p>
-                <p style={styles.stepDesc}>Use externalFunding.enabled plus resolve callback for CCC signer handoff.</p>
+                <p style={styles.stepDesc}>
+                  Use externalFunding.enabled plus resolve callback for CCC signer handoff.
+                </p>
               </li>
               <li style={styles.stepItem}>
                 <p style={styles.stepTitle}>Step 4. Subscribe to callback events</p>
-                <p style={styles.stepDesc}>onConnect, onDisconnect, onError, onLog cover most app-level telemetry needs.</p>
+                <p style={styles.stepDesc}>
+                  onConnect, onDisconnect, onError, onLog cover most app-level telemetry needs.
+                </p>
               </li>
             </ol>
 
@@ -518,7 +562,9 @@ export function App() {
 
           <section style={styles.panel}>
             <h2 style={styles.panelTitle}>Live Playground</h2>
-            <p style={styles.panelLead}>Choose strategy, toggle funding mode, then open FiberNodeButton.</p>
+            <p style={styles.panelLead}>
+              Choose strategy, toggle funding mode, then open FiberNodeButton.
+            </p>
 
             <div style={styles.row}>
               <button
@@ -581,8 +627,42 @@ export function App() {
               ) : null}
             </div>
 
+            <div style={styles.row}>
+              <button
+                type="button"
+                onClick={() => setAssetKind('ckb')}
+                disabled={externalWalletToggleLocked}
+                style={{
+                  ...styles.modeButton,
+                  ...(assetKind === 'ckb' ? styles.modeButtonActive : {}),
+                }}
+              >
+                CKB
+              </button>
+              <button
+                type="button"
+                onClick={() => setAssetKind('rusd')}
+                disabled={externalWalletToggleLocked}
+                style={{
+                  ...styles.modeButton,
+                  ...(assetKind === 'rusd' ? styles.modeButtonActive : {}),
+                }}
+              >
+                RUSD (base units)
+              </button>
+            </div>
+
+            <p style={styles.helperText}>
+              {assetKind === 'rusd'
+                ? 'RUSD mode uses the explicit testnet whitelist above. Amounts are raw integer base units.'
+                : 'CKB mode uses human-readable CKB amounts.'}
+            </p>
+
             <FiberNodeButton
               fiber={fiber}
+              asset={selectedAsset}
+              initialFundingAmount={assetKind === 'rusd' ? '1000000000' : '1000'}
+              invoiceAmount={assetKind === 'rusd' ? '100000000' : '1'}
               strategy={strategy}
               password={strategy === 'password' ? password : undefined}
               onLog={addLog}
@@ -607,7 +687,8 @@ export function App() {
                   ? () => (
                       <div style={{ display: 'grid', gap: 6 }}>
                         <div style={{ fontSize: 12, color: '#475569' }}>
-                          CCC wallet: <strong>{connectedExternalWallet?.name ?? 'Not connected'}</strong>
+                          CCC wallet:{' '}
+                          <strong>{connectedExternalWallet?.name ?? 'Not connected'}</strong>
                           {connectedExternalWallet && externalWalletAddress
                             ? ` | address: ${shorten(externalWalletAddress, 20, 10)}`
                             : ''}
@@ -628,7 +709,9 @@ export function App() {
                               fontWeight: 700,
                             }}
                           >
-                            {connectedExternalWallet ? 'Switch External Wallet' : 'Connect External Wallet'}
+                            {connectedExternalWallet
+                              ? 'Switch External Wallet'
+                              : 'Connect External Wallet'}
                           </button>
                           <button
                             type="button"
@@ -674,7 +757,9 @@ export function App() {
                 Use External Wallet (CCC Signer)
               </label>
 
-              <p style={styles.helperText}>{externalWallet ? 'External mode enabled.' : 'Internal mode enabled.'}</p>
+              <p style={styles.helperText}>
+                {externalWallet ? 'External mode enabled.' : 'Internal mode enabled.'}
+              </p>
 
               {externalWalletToggleLocked ? (
                 <p style={styles.warningText}>Disconnect the node before switching funding mode.</p>
@@ -682,7 +767,8 @@ export function App() {
             </div>
 
             <p style={styles.compactMeta}>
-              Node: {fiber.nodeInfo?.pubkey ? shorten(fiber.nodeInfo.pubkey, 18, 12) : 'Not connected'}
+              Node:{' '}
+              {fiber.nodeInfo?.pubkey ? shorten(fiber.nodeInfo.pubkey, 18, 12) : 'Not connected'}
             </p>
 
             <div style={styles.statusGrid}>

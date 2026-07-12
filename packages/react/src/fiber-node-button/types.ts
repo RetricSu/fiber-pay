@@ -126,6 +126,10 @@ export interface FiberNodeButtonExternalFundingResolved {
 export interface FiberNodeButtonExternalFundingResolverContext {
   node: FiberBrowserNode;
   pubkey: HexString;
+  asset: UdtAsset;
+  /** Funding amount in CKB display units or raw UDT base units. */
+  fundingAmount: string;
+  /** @deprecated Use `fundingAmount` and `asset` instead. */
   fundingAmountCkb: string;
 }
 
@@ -144,6 +148,7 @@ export interface FiberNodeButtonConnectorSectionContext {
 }
 
 export interface FiberNodeButtonProps {
+  /** Defaults to the provided fiber.network, then testnet. */
   network?: 'testnet' | 'mainnet';
   fiber?: UseFiberNodeResult;
   strategy?: ConnectStrategy;
@@ -165,9 +170,9 @@ export interface FiberNodeButtonProps {
   initialPeerPubkey?: string;
   initialPeerAddress?: string;
   initialFundingAmountCkb?: string;
-  /** Generic funding amount (CKB or UDT units). Takes precedence over initialFundingAmountCkb. */
+  /** CKB display amount or raw integer UDT base units. Takes precedence over initialFundingAmountCkb. */
   initialFundingAmount?: string;
-  /** Invoice amount in CKB or UDT units. Defaults to 1 (CKB or UDT). */
+  /** CKB display amount or raw integer UDT base units. Defaults to 1. */
   invoiceAmount?: string;
   externalFunding?: FiberNodeButtonExternalFundingConfig;
   renderConnectorSection?: (context: FiberNodeButtonConnectorSectionContext) => ReactNode;
