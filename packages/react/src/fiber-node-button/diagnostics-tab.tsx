@@ -1,7 +1,7 @@
 import type { HexString, Script } from '@fiber-pay/sdk/browser';
 import { shannonsToCkb } from '@fiber-pay/sdk/browser';
 import { useMemo } from 'react';
-import { formatRawUdtAmount } from './assets.js';
+import { formatRawUdtAmount, localizeAssetLabel } from './assets.js';
 import { styles } from './styles.js';
 import type { FiberNodeButtonTabContext } from './types.js';
 import type { FiberNodeButtonPanelState } from './use-panel-state.js';
@@ -13,7 +13,11 @@ function formatGraphChannelCapacity(
   assetLabel: string,
 ): string {
   if (udtTypeScript) {
-    return `${formatRawUdtAmount(capacity)} ${assetLabel}`;
+    try {
+      return `${formatRawUdtAmount(BigInt(capacity).toString(10))} ${assetLabel}`;
+    } catch {
+      return `${capacity} ${assetLabel}`;
+    }
   }
   const ckb = shannonsToCkb(capacity as HexString);
   return Number.isFinite(ckb) ? `${ckb.toFixed(4)} ${assetLabel}` : `${capacity} shannons`;
@@ -47,13 +51,7 @@ export function DiagnosticsTab({ state, t }: DiagnosticsTabProps) {
   const formattedGraphChannels = useMemo(
     () =>
       graphChannels.slice(0, 2).map((channel) => {
-        const rawAssetLabel = getUdtAssetLabel(channel.udt_type_script);
-        const assetLabel =
-          rawAssetLabel === 'CKB'
-            ? t('asset.ckb', 'CKB')
-            : rawAssetLabel === 'UDT'
-              ? t('asset.udt', 'UDT')
-              : rawAssetLabel;
+        const assetLabel = localizeAssetLabel(getUdtAssetLabel(channel.udt_type_script), t);
         return {
           ...channel,
           displayCapacity: formatGraphChannelCapacity(
@@ -191,7 +189,7 @@ export function DiagnosticsTab({ state, t }: DiagnosticsTabProps) {
 
         {formattedGraphChannels.map((channel) => (
           <p
-            key={`${channel.node1}-${channel.node2}-${channel.channel_outpoint.tx_hash}`}
+            key={`${channel.node1}-${channel.node2}-${channel.channel_outpoint.tx_hash}-${channel.channel_outpoint.index}`}
             style={styles.inlineCode}
           >
             {shorten(channel.node1, 10, 6)} to {shorten(channel.node2, 10, 6)};{' '}

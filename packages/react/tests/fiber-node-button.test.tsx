@@ -8,6 +8,7 @@ import { validUdtScript } from './fixtures/udt.js';
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 function createNodeMock() {
@@ -431,9 +432,9 @@ describe('FiberNodeButton', () => {
     });
   });
 
-  it('recovers the Open Channel action after an invalid UDT script error', async () => {
+  it('ignores an invalid initial UDT asset and falls back to CKB', async () => {
     const node = createNodeMock();
-    const onError = vi.fn();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const fiber = createFiberMock({
       state: 'running',
       isRunning: true,
@@ -447,20 +448,174 @@ describe('FiberNodeButton', () => {
         strategy="passkey"
         asset={{ kind: 'udt', script: { ...validUdtScript, code_hash: '0x00' } }}
         initialPeerPubkey="0xpeer"
-        onError={onError}
       />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+    expect(screen.queryByLabelText('Open Channel Asset')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Open Channel' }));
 
     await waitFor(() => {
-      expect(onError).toHaveBeenCalledWith(expect.stringContaining('code_hash must be 66'));
+      expect(warn).toHaveBeenCalledWith(
+        '[FiberNodeButton] Ignoring invalid initial UDT asset.',
+        expect.stringContaining('code_hash must be 66'),
+      );
+      expect(node.openChannel).toHaveBeenCalled();
+    });
+  });
+
+  it('disables asset actions until nodeInfo is available', async () => {
+    const node = createNodeMock();
+    const fiberWithoutInfo = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: null,
+    });
+    const { rerender } = render(
+      <FiberNodeButton
+        fiber={fiberWithoutInfo}
+        strategy="passkey"
+        asset={{ kind: 'udt', script: validUdtScript, name: 'RUSD' }}
+        initialPeerPubkey="0xpeer"
+        initialFundingAmount="100"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Connected' }));
+    expect(screen.getByRole('button', { name: 'Open Channel' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+
+    const fiberWithInfo = createFiberMock({
+      ...fiberWithoutInfo,
+      nodeInfo: {
+        pubkey: '0x0123456789abcdef0123456789abcdef',
+        udt_cfg_infos: [{ name: 'RUSD', script: validUdtScript, cell_deps: [] }],
+      } as UseFiberNodeResult['nodeInfo'],
+    });
+    rerender(
+      <FiberNodeButton
+        fiber={fiberWithInfo}
+        strategy="passkey"
+        asset={{ kind: 'udt', script: validUdtScript, name: 'RUSD' }}
+        initialPeerPubkey="0xpeer"
+        initialFundingAmount="100"
+      />,
+    );
+
+    await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Open Channel' }).hasAttribute('disabled')).toBe(
         false,
       );
     });
-    expect(node.openChannel).not.toHaveBeenCalled();
+  });
+
+  it('restores the higher-priority initial funding amount when switching back to CKB', () => {
+    const node = createNodeMock();
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: {
+        pubkey: '0x0123456789abcdef0123456789abcdef',
+        udt_cfg_infos: [{ name: 'RUSD', script: validUdtScript, cell_deps: [] }],
+      } as UseFiberNodeResult['nodeInfo'],
+    });
+
+    render(
+      <FiberNodeButton
+        fiber={fiber}
+        strategy="passkey"
+        initialFundingAmount="42"
+        initialFundingAmountCkb="7"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+
+    selectAsset('Open Channel Asset', 'RUSD');
+    expect(
+      (screen.getByLabelText('Funding Amount (UDT raw units)') as HTMLInputElement).value,
+    ).toBe('');
+    selectAsset('Open Channel Asset', 'CKB');
+    expect((screen.getByLabelText('Funding Amount (CKB)') as HTMLInputElement).value).toBe('42');
+  });
+
+  it('resets all action selectors and inputs when the asset prop changes', async () => {
+    const secondUdtScript = { ...validUdtScript, args: '0x01' };
+    const node = createNodeMock();
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: {
+        pubkey: '0x0123456789abcdef0123456789abcdef',
+        udt_cfg_infos: [
+          { name: 'RUSD', script: validUdtScript, cell_deps: [] },
+          { name: 'USDT', script: secondUdtScript, cell_deps: [] },
+        ],
+      } as UseFiberNodeResult['nodeInfo'],
+    });
+    const { rerender } = render(
+      <FiberNodeButton
+        fiber={fiber}
+        strategy="passkey"
+        asset={{ kind: 'udt', script: validUdtScript, name: 'RUSD' }}
+        initialFundingAmount="100"
+        invoiceAmount="10"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+    selectAsset('Open Channel Asset', 'CKB');
+    selectAsset('Create Invoice Asset', 'CKB');
+    selectAsset('Pay Invoice Asset', 'CKB');
+    fireEvent.change(screen.getByLabelText('Invoice'), { target: { value: 'stale invoice' } });
+
+    rerender(
+      <FiberNodeButton
+        fiber={fiber}
+        strategy="passkey"
+        asset={{ kind: 'udt', script: secondUdtScript, name: 'USDT' }}
+        initialFundingAmount="200"
+        invoiceAmount="20"
+      />,
+    );
+
+    await waitFor(() => {
+      for (const label of ['Open Channel Asset', 'Create Invoice Asset', 'Pay Invoice Asset']) {
+        expect((screen.getByLabelText(label) as HTMLSelectElement).selectedOptions[0]?.text).toBe(
+          'USDT',
+        );
+      }
+      expect(
+        (screen.getByLabelText('Funding Amount (UDT raw units)') as HTMLInputElement).value,
+      ).toBe('200');
+      expect(
+        (screen.getByLabelText('Invoice Amount (UDT raw units)') as HTMLInputElement).value,
+      ).toBe('20');
+      expect((screen.getByLabelText('Invoice') as HTMLInputElement).value).toBe('');
+    });
+  });
+
+  it('disables actions for an unresolved custom asset', () => {
+    const node = createNodeMock();
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: {
+        pubkey: '0x0123456789abcdef0123456789abcdef',
+        udt_cfg_infos: [{ name: 'RUSD', script: validUdtScript, cell_deps: [] }],
+      } as UseFiberNodeResult['nodeInfo'],
+    });
+
+    render(<FiberNodeButton fiber={fiber} strategy="passkey" initialPeerPubkey="0xpeer" />);
+    fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+    selectAsset('Open Channel Asset', 'Custom');
+
+    expect(screen.getByRole('button', { name: 'Open Channel' }).hasAttribute('disabled')).toBe(
+      true,
+    );
   });
 
   it('reports an actionable error when the UDT is absent from the node whitelist', async () => {
@@ -610,6 +765,7 @@ describe('FiberNodeButton', () => {
   });
 
   it('uses configured UDT names in graph diagnostics', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const node = createNodeMock();
     node.graphChannels = vi.fn(async () => ({
       channels: [
@@ -618,6 +774,13 @@ describe('FiberNodeButton', () => {
           node2: '0xnode2',
           channel_outpoint: { tx_hash: '0xtx', index: '0x0' },
           capacity: '0x64',
+          udt_type_script: validUdtScript,
+        },
+        {
+          node1: '0xnode1',
+          node2: '0xnode2',
+          channel_outpoint: { tx_hash: '0xtx', index: '0x1' },
+          capacity: '0xc8',
           udt_type_script: validUdtScript,
         },
       ],
@@ -639,7 +802,11 @@ describe('FiberNodeButton', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/100 RUSD/)).toBeTruthy();
+      expect(screen.getByText(/200 RUSD/)).toBeTruthy();
     });
+    expect(consoleError.mock.calls.some((args) => String(args[0]).includes('same key'))).toBe(
+      false,
+    );
   });
 
   it('keeps the CKB-only panel quiet and constrains the dropdown for narrow viewports', () => {

@@ -31,7 +31,6 @@ import {
   buildPanelAssetOptions,
   CKB_ASSET_KEY,
   getAssetKey,
-  getAssetLabelForScript,
   getChannelAssetKey,
   type PanelAssetOption,
   resolvePanelAsset,
@@ -71,6 +70,29 @@ export interface PanelChannelAssetCount {
   key: string;
   label: string;
   count: number;
+}
+
+function getDefaultFundingAmountForAsset(
+  key: string,
+  initialAssetKey: string,
+  initialFundingAmount: string | undefined,
+  initialFundingAmountCkb: string | undefined,
+): string {
+  if (key === initialAssetKey || key === CKB_ASSET_KEY) {
+    return initialFundingAmount ?? initialFundingAmountCkb ?? '1000';
+  }
+  return '';
+}
+
+function getDefaultInvoiceAmountForAsset(
+  key: string,
+  initialAssetKey: string,
+  initialInvoiceAmount: string | undefined,
+): string {
+  if (key === initialAssetKey && initialInvoiceAmount !== undefined) {
+    return initialInvoiceAmount;
+  }
+  return key === CKB_ASSET_KEY ? '1' : '';
 }
 
 export interface FiberNodeButtonPanelState {
@@ -171,7 +193,14 @@ export function useFiberNodeButtonPanelState(
     externalFunding,
   } = props;
   const t = props.t ?? defaultFiberNodeButtonI18n;
-  const initialAssetKey = getAssetKey(asset);
+  const requestedInitialAssetKey = getAssetKey(asset);
+  const availableAssets = useMemo(
+    () => buildPanelAssetOptions(fiber.nodeInfo?.udt_cfg_infos, asset),
+    [asset, fiber.nodeInfo?.udt_cfg_infos],
+  );
+  const initialAssetKey = availableAssets.some((option) => option.key === requestedInitialAssetKey)
+    ? requestedInitialAssetKey
+    : CKB_ASSET_KEY;
 
   const [activeTab, setActiveTab] = useState<PanelTab>('workbench');
 
@@ -181,7 +210,7 @@ export function useFiberNodeButtonPanelState(
     initialFundingAmount ?? initialFundingAmountCkb ?? '1000',
   );
   const [invoiceAmount, setInvoiceAmount] = useState(
-    initialInvoiceAmount ?? (asset.kind === 'ckb' ? '1' : ''),
+    initialInvoiceAmount ?? (initialAssetKey === CKB_ASSET_KEY ? '1' : ''),
   );
   const [openChannelAssetKey, setOpenChannelAssetKey] = useState(initialAssetKey);
   const [openChannelCustomUdt, setOpenChannelCustomUdt] = useState('');
@@ -224,24 +253,25 @@ export function useFiberNodeButtonPanelState(
     onLog,
   });
 
-  const availableAssets = useMemo(
-    () => buildPanelAssetOptions(fiber.nodeInfo?.udt_cfg_infos, asset),
-    [asset, fiber.nodeInfo?.udt_cfg_infos],
-  );
   const showAssetSelectors = availableAssets.some((option) => option.asset.kind === 'udt');
 
-  const openChannelAsset = useMemo(
+  const openChannelAssetResolution = useMemo(
     () => tryResolvePanelAsset(openChannelAssetKey, openChannelCustomUdt, availableAssets),
     [availableAssets, openChannelAssetKey, openChannelCustomUdt],
   );
-  const createInvoiceAsset = useMemo(
+  const openChannelAsset = openChannelAssetResolution.ok ? openChannelAssetResolution.asset : null;
+  const createInvoiceAssetResolution = useMemo(
     () => tryResolvePanelAsset(createInvoiceAssetKey, createInvoiceCustomUdt, availableAssets),
     [availableAssets, createInvoiceAssetKey, createInvoiceCustomUdt],
   );
-  const paymentAsset = useMemo(
+  const createInvoiceAsset = createInvoiceAssetResolution.ok
+    ? createInvoiceAssetResolution.asset
+    : null;
+  const paymentAssetResolution = useMemo(
     () => tryResolvePanelAsset(paymentAssetKey, paymentCustomUdt, availableAssets),
     [availableAssets, paymentAssetKey, paymentCustomUdt],
   );
+  const paymentAsset = paymentAssetResolution.ok ? paymentAssetResolution.asset : null;
 
   const paymentOptions = useMemo(
     () => ({ asset: paymentAsset ?? DEFAULT_CKB_ASSET, network }),
@@ -255,7 +285,7 @@ export function useFiberNodeButtonPanelState(
     error: paymentError,
   } = useFiberPayment(fiber.node, paymentOptions);
 
-  const isNodeReady = fiber.isRunning && !!fiber.node;
+  const isNodeReady = fiber.isRunning && !!fiber.node && !!fiber.nodeInfo;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -270,13 +300,14 @@ export function useFiberNodeButtonPanelState(
   const selectOpenChannelAsset = useCallback(
     (key: string) => {
       setOpenChannelAssetKey(key);
-      const nextAmount =
-        key === initialAssetKey
-          ? (initialFundingAmount ?? initialFundingAmountCkb ?? '1000')
-          : key === CKB_ASSET_KEY
-            ? (initialFundingAmountCkb ?? '1000')
-            : '';
-      setFundingAmount(nextAmount);
+      setFundingAmount(
+        getDefaultFundingAmountForAsset(
+          key,
+          initialAssetKey,
+          initialFundingAmount,
+          initialFundingAmountCkb,
+        ),
+      );
       setLatestError(null);
     },
     [initialAssetKey, initialFundingAmount, initialFundingAmountCkb],
@@ -285,13 +316,7 @@ export function useFiberNodeButtonPanelState(
   const selectCreateInvoiceAsset = useCallback(
     (key: string) => {
       setCreateInvoiceAssetKey(key);
-      const nextAmount =
-        key === initialAssetKey && initialInvoiceAmount !== undefined
-          ? initialInvoiceAmount
-          : key === CKB_ASSET_KEY
-            ? '1'
-            : '';
-      setInvoiceAmount(nextAmount);
+      setInvoiceAmount(getDefaultInvoiceAmountForAsset(key, initialAssetKey, initialInvoiceAmount));
       setCreatedInvoice('');
       setLatestError(null);
     },
@@ -305,7 +330,7 @@ export function useFiberNodeButtonPanelState(
   }, []);
 
   useEffect(() => {
-    const nextIdentity = getAssetKey(asset);
+    const nextIdentity = initialAssetKey;
     if (previousAssetIdentityRef.current === nextIdentity) {
       return;
     }
@@ -318,11 +343,11 @@ export function useFiberNodeButtonPanelState(
     setCreateInvoiceCustomUdt('');
     setPaymentCustomUdt('');
     setFundingAmount(initialFundingAmount ?? initialFundingAmountCkb ?? '1000');
-    setInvoiceAmount(initialInvoiceAmount ?? (asset.kind === 'ckb' ? '1' : ''));
+    setInvoiceAmount(initialInvoiceAmount ?? (initialAssetKey === CKB_ASSET_KEY ? '1' : ''));
     setInvoiceInput('');
     setCreatedInvoice('');
     setLatestError(null);
-  }, [asset, initialFundingAmount, initialFundingAmountCkb, initialInvoiceAmount]);
+  }, [initialAssetKey, initialFundingAmount, initialFundingAmountCkb, initialInvoiceAmount]);
 
   const flashStatus = useCallback((text: string, tone: 'info' | 'success' = 'info') => {
     setStatusNotice({ tone, text });
@@ -375,7 +400,16 @@ export function useFiberNodeButtonPanelState(
 
       const configuredUdts = fiber.nodeInfo?.udt_cfg_infos ?? [];
 
-      if (configuredUdts.some((entry) => areUdtTypeScriptsEqual(entry.script, validatedScript))) {
+      if (
+        configuredUdts.some((entry) => {
+          try {
+            const configuredScript = validateUdtTypeScript(entry.script, 'node UDT config');
+            return areUdtTypeScriptsEqual(configuredScript, validatedScript);
+          } catch {
+            return false;
+          }
+        })
+      ) {
         return true;
       }
 
@@ -783,9 +817,19 @@ export function useFiberNodeButtonPanelState(
     onLog?.(`Payment status: ${paymentResult.status}`);
   }, [flashStatus, onLog, paymentResult]);
 
-  const getUdtAssetLabel = useCallback(
-    (script: Script | null | undefined) => getAssetLabelForScript(script, availableAssets),
+  const assetLabelsByKey = useMemo(
+    () => new Map(availableAssets.map((option) => [option.key, option.label])),
     [availableAssets],
+  );
+
+  const getUdtAssetLabel = useCallback(
+    (script: Script | null | undefined) => {
+      if (!script) {
+        return 'CKB';
+      }
+      return assetLabelsByKey.get(getChannelAssetKey(script)) ?? 'UDT';
+    },
+    [assetLabelsByKey],
   );
 
   const getChannelAssetLabel = useCallback(
@@ -813,7 +857,7 @@ export function useFiberNodeButtonPanelState(
       } else {
         counts.set(key, {
           key,
-          label: getChannelAssetLabel(channel),
+          label: assetLabelsByKey.get(key) ?? (key === CKB_ASSET_KEY ? 'CKB' : 'UDT'),
           count: 1,
         });
       }
@@ -825,7 +869,7 @@ export function useFiberNodeButtonPanelState(
         (assetOrder.get(left.key) ?? Number.MAX_SAFE_INTEGER) -
         (assetOrder.get(right.key) ?? Number.MAX_SAFE_INTEGER),
     );
-  }, [availableAssets, channels, getChannelAssetLabel]);
+  }, [assetLabelsByKey, availableAssets, channels]);
 
   useEffect(() => {
     if (

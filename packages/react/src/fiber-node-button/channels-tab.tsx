@@ -2,7 +2,7 @@ import type { FormattedChannelBalances } from '@fiber-pay/sdk/browser';
 import { formatChannelBalances } from '@fiber-pay/sdk/browser';
 import { useMemo } from 'react';
 import type { UseFiberNodeResult } from '../use-fiber-node.js';
-import { formatRawUdtAmount } from './assets.js';
+import { formatRawUdtAmount, localizeAssetLabel } from './assets.js';
 import { renderPanelAction } from './render-action.js';
 import { styles } from './styles.js';
 import {
@@ -14,12 +14,6 @@ import {
 import type { FiberNodeButtonPanelState } from './use-panel-state.js';
 import { shorten, withDisabledStyle } from './utils.js';
 
-function localizeAssetLabel(label: string, t: FiberNodeButtonTabContext['t']): string {
-  if (label === 'CKB') return t('asset.ckb', 'CKB');
-  if (label === 'UDT') return t('asset.udt', 'UDT');
-  return label;
-}
-
 function formatChannelBalanceValue(
   balances: FormattedChannelBalances,
   side: 'local' | 'remote',
@@ -27,10 +21,6 @@ function formatChannelBalanceValue(
   const value =
     balances.kind === 'udt' ? formatRawUdtAmount(balances[side]) : balances[side].toFixed(4);
   return value;
-}
-
-function formatChannelBalanceUnit(assetLabel: string): string {
-  return assetLabel;
 }
 
 function SelectedChannelBalance({
@@ -53,7 +43,7 @@ function SelectedChannelBalance({
   return (
     <span style={styles.badge}>
       {side === 'local' ? 'Local' : 'Remote'} {formatChannelBalanceValue(balances, side)}{' '}
-      {formatChannelBalanceUnit(assetLabel)}
+      {assetLabel}
     </span>
   );
 }
@@ -228,8 +218,7 @@ export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTa
                   </span>
                   <span style={styles.compactText}>
                     L {formatChannelBalanceValue(balances, 'local')} / R{' '}
-                    {formatChannelBalanceValue(balances, 'remote')}{' '}
-                    {formatChannelBalanceUnit(assetLabel)}
+                    {formatChannelBalanceValue(balances, 'remote')} {assetLabel}
                   </span>
                 </button>
               );

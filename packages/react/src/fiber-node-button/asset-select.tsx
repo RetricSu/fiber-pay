@@ -1,4 +1,4 @@
-import { CKB_ASSET_KEY, CUSTOM_ASSET_KEY, type PanelAssetOption } from './assets.js';
+import { CUSTOM_ASSET_KEY, localizeAssetLabel, type PanelAssetOption } from './assets.js';
 import { styles } from './styles.js';
 import type { FiberNodeButtonI18n } from './types.js';
 
@@ -35,11 +35,7 @@ export function AssetSelect({
         >
           {options.map((option) => (
             <option key={option.key} value={option.key}>
-              {option.key === CKB_ASSET_KEY
-                ? t('asset.ckb', 'CKB')
-                : option.label === 'UDT'
-                  ? t('asset.udt', 'UDT')
-                  : option.label}
+              {localizeAssetLabel(option.label, t)}
             </option>
           ))}
           <option value={CUSTOM_ASSET_KEY}>{t('asset.custom', 'Custom')}</option>

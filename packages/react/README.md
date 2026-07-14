@@ -322,6 +322,8 @@ When the node is connected, `FiberNodeButton` reads `nodeInfo.udt_cfg_infos` and
 
 The `asset` prop remains supported as the initial selection for all three actions. Users can later switch each action independently or choose `Custom` and paste a UDT type script JSON object. Selecting an asset does **not** configure the Fiber node: the same type script must be present in `nodeConfig.udtWhitelist`, including the token's official cell deps. Both channel peers must support the token.
 
+UDTs are keyed by their validated type script. If `nodeInfo.udt_cfg_infos` contains duplicate scripts, the first configured entry supplies the display name; an explicit valid `asset` prop with a non-empty name overrides that name. Invalid configured entries and invalid initial assets are ignored with a console warning, so they cannot become actionable selections.
+
 UDT amounts are raw integer base units. For a token with 8 decimals, `100000000` represents one display token.
 
 ```tsx

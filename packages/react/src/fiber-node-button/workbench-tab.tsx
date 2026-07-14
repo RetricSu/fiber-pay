@@ -1,6 +1,6 @@
 import { formatAssetName } from '@fiber-pay/sdk/browser';
 import { AssetSelect } from './asset-select.js';
-import { CUSTOM_ASSET_KEY } from './assets.js';
+import { CUSTOM_ASSET_KEY, localizeAssetLabel } from './assets.js';
 import { renderPanelAction } from './render-action.js';
 import { styles } from './styles.js';
 import type {
@@ -52,6 +52,7 @@ export function WorkbenchTab({
     setCreateInvoiceCustomUdt,
     createInvoiceAsset,
     paymentAssetKey,
+    paymentAsset,
     selectPaymentAsset,
     paymentCustomUdt,
     setPaymentCustomUdt,
@@ -74,12 +75,7 @@ export function WorkbenchTab({
   const rawCreateInvoiceAssetName = createInvoiceAsset
     ? formatAssetName(createInvoiceAsset)
     : t('asset.udt', 'UDT');
-  const createInvoiceAssetName =
-    rawCreateInvoiceAssetName === 'CKB'
-      ? t('asset.ckb', 'CKB')
-      : rawCreateInvoiceAssetName === 'UDT'
-        ? t('asset.udt', 'UDT')
-        : rawCreateInvoiceAssetName;
+  const createInvoiceAssetName = localizeAssetLabel(rawCreateInvoiceAssetName, t);
   const fundingAmountUnit = openChannelUsesUdt
     ? t('asset.udt.rawUnits', 'UDT raw units')
     : t('asset.ckb', 'CKB');
@@ -181,7 +177,11 @@ export function WorkbenchTab({
               id: 'open-channel',
               label: t('actions.openChannel', 'Open Channel'),
               loadingLabel: t('actions.openChannel.loading', 'Opening...'),
-              disabled: !isNodeReady || channelOpenFlow.isOpening || !peerPubkey.trim(),
+              disabled:
+                !isNodeReady ||
+                channelOpenFlow.isOpening ||
+                !peerPubkey.trim() ||
+                !openChannelAsset,
               loading: channelOpenFlow.isOpening,
               onTrigger: openChannel,
             } satisfies FiberNodeButtonActionDefaultProps,
@@ -245,7 +245,8 @@ export function WorkbenchTab({
                 `Create Invoice (${invoiceAmount || '—'} ${createInvoiceAssetName})`,
               ),
               loadingLabel: t('actions.createInvoice.loading', 'Creating...'),
-              disabled: isCreatingInvoice || !isNodeReady || !invoiceAmount.trim(),
+              disabled:
+                isCreatingInvoice || !isNodeReady || !invoiceAmount.trim() || !createInvoiceAsset,
               loading: isCreatingInvoice,
               onTrigger: createInvoice,
             } satisfies FiberNodeButtonActionDefaultProps,
@@ -290,7 +291,7 @@ export function WorkbenchTab({
               id: 'pay-invoice',
               label: t('actions.payInvoice', 'Pay Invoice'),
               loadingLabel: t('actions.payInvoice.loading', 'Paying...'),
-              disabled: isPaying || !isNodeReady || !invoiceInput.trim(),
+              disabled: isPaying || !isNodeReady || !invoiceInput.trim() || !paymentAsset,
               loading: isPaying,
               onTrigger: submitPayment,
             } satisfies FiberNodeButtonActionDefaultProps,

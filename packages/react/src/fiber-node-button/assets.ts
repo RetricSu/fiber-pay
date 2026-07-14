@@ -4,6 +4,7 @@ import {
   parseUdtTypeScript,
   validateUdtTypeScript,
 } from '@fiber-pay/sdk/browser';
+import type { FiberNodeButtonI18n } from './types.js';
 
 export const CKB_ASSET_KEY = 'ckb';
 export const CUSTOM_ASSET_KEY = 'custom';
@@ -20,14 +21,18 @@ interface ConfiguredUdt {
 }
 
 function getRawScriptKey(script: unknown): string {
-  if (!script || typeof script !== 'object') {
-    return 'udt:invalid';
+  try {
+    const validated = validateUdtTypeScript(script);
+    return `udt:${validated.code_hash}:${validated.hash_type}:${validated.args}`.toLowerCase();
+  } catch {
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(script) ?? String(script);
+    } catch {
+      serialized = String(script);
+    }
+    return `udt:invalid:${serialized}`.toLowerCase();
   }
-
-  const record = script as Record<string, unknown>;
-  return `udt:${String(record.code_hash ?? '')}:${String(record.hash_type ?? '')}:${String(
-    record.args ?? '',
-  )}`.toLowerCase();
 }
 
 export function getUdtAssetKey(script: unknown): string {
@@ -62,27 +67,45 @@ export function buildPanelAssetOptions(
         name: configured.name?.trim() || undefined,
       };
       const key = getAssetKey(asset);
-      options.set(key, {
-        key,
-        asset,
-        label: configured.name?.trim() || 'UDT',
-      });
-    } catch {
-      // Invalid node config entries cannot be used safely as an action asset.
+      if (!options.has(key)) {
+        options.set(key, {
+          key,
+          asset,
+          label: configured.name?.trim() || 'UDT',
+        });
+      }
+    } catch (error) {
+      console.warn(
+        '[FiberNodeButton] Ignoring invalid node UDT configuration.',
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 
   if (initialAsset.kind === 'udt') {
-    const key = getAssetKey(initialAsset);
-    const existing = options.get(key);
-    const preferredAsset = initialAsset.name?.trim()
-      ? initialAsset
-      : (existing?.asset ?? initialAsset);
-    options.set(key, {
-      key,
-      asset: preferredAsset,
-      label: initialAsset.name?.trim() || existing?.label || 'UDT',
-    });
+    try {
+      const script = validateUdtTypeScript(initialAsset.script, 'initial UDT asset');
+      const validatedInitialAsset: UdtAsset = {
+        kind: 'udt',
+        script,
+        name: initialAsset.name?.trim() || undefined,
+      };
+      const key = getAssetKey(validatedInitialAsset);
+      const existing = options.get(key);
+      const preferredAsset = validatedInitialAsset.name
+        ? validatedInitialAsset
+        : (existing?.asset ?? validatedInitialAsset);
+      options.set(key, {
+        key,
+        asset: preferredAsset,
+        label: validatedInitialAsset.name || existing?.label || 'UDT',
+      });
+    } catch (error) {
+      console.warn(
+        '[FiberNodeButton] Ignoring invalid initial UDT asset.',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   }
 
   return Array.from(options.values());
@@ -94,6 +117,9 @@ export function resolvePanelAsset(
   options: ReadonlyArray<PanelAssetOption>,
 ): UdtAsset {
   if (key === CUSTOM_ASSET_KEY) {
+    if (!customScript.trim()) {
+      throw new Error('Custom UDT script is required.');
+    }
     const script = parseUdtTypeScript(customScript, 'custom UDT script');
     if (!script) {
       throw new Error('Custom UDT script is required.');
@@ -108,15 +134,20 @@ export function resolvePanelAsset(
   return option.asset;
 }
 
+export type PanelAssetResolution = { ok: true; asset: UdtAsset } | { ok: false; error: Error };
+
 export function tryResolvePanelAsset(
   key: string,
   customScript: string,
   options: ReadonlyArray<PanelAssetOption>,
-): UdtAsset | null {
+): PanelAssetResolution {
   try {
-    return resolvePanelAsset(key, customScript, options);
-  } catch {
-    return null;
+    return { ok: true, asset: resolvePanelAsset(key, customScript, options) };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
   }
 }
 
@@ -132,9 +163,19 @@ export function getAssetLabelForScript(
 }
 
 export function formatRawUdtAmount(value: string): string {
+  if (value.length > 64 || !/^\d+$/.test(value)) {
+    return value;
+  }
+
   try {
     return BigInt(value).toLocaleString('en-US');
   } catch {
     return value;
   }
+}
+
+export function localizeAssetLabel(label: string, t: FiberNodeButtonI18n): string {
+  if (label === 'CKB') return t('asset.ckb', 'CKB');
+  if (label === 'UDT') return t('asset.udt', 'UDT');
+  return label;
 }
