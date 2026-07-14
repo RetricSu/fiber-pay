@@ -1,5 +1,40 @@
 # @fiber-pay/cli
 
+## 0.2.8
+
+### Patch Changes
+
+- f9c208a: Make channel list/detail formatting UDT-aware, showing raw UDT units and the channel's `funding_udt_type_script`.
+- 240cc94: Add UDT channel support to `fiber-pay channel open`. The new `--funding-udt-type-script` option accepts a JSON CKB script (`code_hash`, `hash_type`, `args`) and routes the funding amount as raw UDT units instead of CKB.
+
+  BREAKING CHANGE: The JSON and human-readable output of `fiber-pay channel open` and `fiber-pay channel accept` now uses `fundingAmount` (in shannons for CKB, or raw UDT units) plus `fundingLabel` (`CKB` or `UDT`) instead of the previous `fundingCkb` field. The `--funding` option semantics are unchanged.
+
+- f9c208a: Add UDT support to `invoice create` via `--udt-type-script` and `--udt-name`.
+- f9c208a: Add UDT support to `payment route` via `--udt-type-script` and `--udt-name`.
+- f9c208a: Add UDT support to `payment send` via `--udt-type-script` and `--udt-name`.
+- f9c208a: Add UDT support to `payment rebalance` and `channel rebalance` via `--udt-type-script` and `--udt-name`.
+- ca02a01: Move UDT support down into the core `@fiber-pay/sdk` package and reuse it across the React SDK and CLI.
+
+  - `@fiber-pay/sdk` now exports UDT helpers: `UdtAsset`, `UdtTypeScript`, `parseUdtTypeScript`, `validateUdtTypeScript`, `parsePaymentAmount`, `parseFundingAmount`, `resolveUdtAsset`, and `formatChannelBalances`.
+    - `resolveUdtAsset` no longer requires an RPC client when resolving by raw script.
+    - `parseUdtTypeScript` and `validateUdtTypeScript` enforce a 32-byte `code_hash`, a reasonable `args` length limit, and an overall JSON length cap.
+    - CKB amount parsing now tolerates trailing zeros beyond 8 decimal places (e.g. `1.000000000`).
+    - `FormattedChannelBalances` is now a tagged union (`kind: 'ckb' | 'udt'`) instead of a weak `string | number` union.
+  - `@fiber-pay/react` hooks (`useChannelOpenFlow`, `useFiberPayment`) accept an optional UDT asset, validate the UDT script before passing it to RPC, and avoid callback identity churn via an options ref.
+    - `useChannelOpenFlow` now treats an empty `fundingAmount` string as missing so it correctly falls back to the deprecated `fundingAmountCkb`.
+  - `@fiber-pay/cli` UDT parsing, asset resolution, and channel formatting are now delegated to the SDK instead of living in the CLI.
+    - Added a unified `resolveAssetFromOptions` helper in `packages/cli/src/lib/udt.ts` to remove the repeated UDT resolution boilerplate across commands.
+    - `formatChannel` now reuses the values returned by `formatChannelBalances` instead of recomputing them.
+
+- Updated dependencies [240cc94]
+- Updated dependencies [42724a3]
+- Updated dependencies [2aa9402]
+- Updated dependencies [42724a3]
+- Updated dependencies [ca02a01]
+  - @fiber-pay/node@0.2.8
+  - @fiber-pay/sdk@0.2.8
+  - @fiber-pay/runtime@0.2.8
+
 ## 0.2.7
 
 ### Patch Changes

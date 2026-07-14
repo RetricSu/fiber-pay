@@ -1,5 +1,44 @@
 # @fiber-pay/sdk
 
+## 0.2.8
+
+### Patch Changes
+
+- 42724a3: Add UDT support to high-level React SDK components
+
+  - `ConnectButton` now accepts an optional `asset` prop and exposes it to custom dropdown renderers.
+  - `FiberNodeButton` and its panel accept `asset`, `initialFundingAmount`, and `invoiceAmount` props. Channel open, invoice creation, and payment flows now respect the selected asset.
+  - `FiberNodeButton` channel lists and details display CKB or UDT balances using `formatChannelBalances`.
+  - `FiberPayQuickCard` accepts `asset` and `invoiceAmount` and uses them when creating invoices and sending payments.
+  - `NodeInfoPanel` accepts `asset` and displays the corresponding balance (CKB or UDT).
+  - Added `getUdtBalance` to `@fiber-pay/sdk/browser` for querying UDT balances by lock script and type script.
+
+- 2aa9402: Harden high-level React UDT flows by fixing StrictMode state handling, validating invoice network and serialized UDT identity before payment, recovering channel actions after invalid scripts, matching channel labels by type script, inheriting network from shared Fiber sessions, and exposing asset-aware external funding context. Also add canonical UDT script serialization/equality helpers and reject incomplete hex bytes.
+- 42724a3: Address PR review feedback for React UDT components
+
+  - SDK: moved `getUdtBalance` to `@fiber-pay/sdk/browser/udt-balance` and added `parseUdtAmountFromCellData` with rigorous output_data validation.
+  - SDK: added `formatAssetName` and `DEFAULT_CKB_ASSET` helpers to reduce duplicated asset-label logic.
+  - SDK: added unit tests for `parseUdtAmountFromCellData` and `formatAssetName`.
+  - React: fixed `DiagnosticsTab` UDT capacity formatting so malformed capacity values no longer crash the tab.
+  - React: invoice creation in `FiberNodeButton` and `FiberPayQuickCard` now validates UDT scripts and sanitizes user input in descriptions via a shared `buildNewInvoiceParams` helper.
+  - React: `NodeInfoPanel` validates the UDT script before querying `getUdtBalance`.
+  - React: `ChannelsTab` now shows the specific UDT token name when available and memoizes balance formatting.
+  - React: replaced inline `{ kind: 'ckb' }` fallbacks with the shared `DEFAULT_CKB_ASSET` constant and stabilized `useFiberPayment` option references with `useMemo`.
+  - React: added `node-info-panel` UDT tests and a shared UDT script fixture.
+
+- ca02a01: Move UDT support down into the core `@fiber-pay/sdk` package and reuse it across the React SDK and CLI.
+
+  - `@fiber-pay/sdk` now exports UDT helpers: `UdtAsset`, `UdtTypeScript`, `parseUdtTypeScript`, `validateUdtTypeScript`, `parsePaymentAmount`, `parseFundingAmount`, `resolveUdtAsset`, and `formatChannelBalances`.
+    - `resolveUdtAsset` no longer requires an RPC client when resolving by raw script.
+    - `parseUdtTypeScript` and `validateUdtTypeScript` enforce a 32-byte `code_hash`, a reasonable `args` length limit, and an overall JSON length cap.
+    - CKB amount parsing now tolerates trailing zeros beyond 8 decimal places (e.g. `1.000000000`).
+    - `FormattedChannelBalances` is now a tagged union (`kind: 'ckb' | 'udt'`) instead of a weak `string | number` union.
+  - `@fiber-pay/react` hooks (`useChannelOpenFlow`, `useFiberPayment`) accept an optional UDT asset, validate the UDT script before passing it to RPC, and avoid callback identity churn via an options ref.
+    - `useChannelOpenFlow` now treats an empty `fundingAmount` string as missing so it correctly falls back to the deprecated `fundingAmountCkb`.
+  - `@fiber-pay/cli` UDT parsing, asset resolution, and channel formatting are now delegated to the SDK instead of living in the CLI.
+    - Added a unified `resolveAssetFromOptions` helper in `packages/cli/src/lib/udt.ts` to remove the repeated UDT resolution boilerplate across commands.
+    - `formatChannel` now reuses the values returned by `formatChannelBalances` instead of recomputing them.
+
 ## 0.2.7
 
 ### Patch Changes

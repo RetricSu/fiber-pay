@@ -1,5 +1,16 @@
 # react-quick-card
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [42724a3]
+- Updated dependencies [2aa9402]
+- Updated dependencies [42724a3]
+- Updated dependencies [ca02a01]
+  - @fiber-pay/sdk@0.2.8
+  - @fiber-pay/react@0.2.8
+
 ## 0.0.5
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # @fiber-pay/agent
 
+## 0.2.8
+
+### Patch Changes
+
+- Updated dependencies [240cc94]
+- Updated dependencies [42724a3]
+- Updated dependencies [2aa9402]
+- Updated dependencies [42724a3]
+- Updated dependencies [ca02a01]
+  - @fiber-pay/node@0.2.8
+  - @fiber-pay/sdk@0.2.8
+  - @fiber-pay/runtime@0.2.8
+
 ## 0.2.7
 
 ### Patch Changes

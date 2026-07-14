@@ -1,5 +1,16 @@
 # @fiber-pay/node
 
+## 0.2.8
+
+### Patch Changes
+
+- 240cc94: Bump default Fiber binary version from `v0.9.0-rc4` to `v0.9.0-rc7`. The `v0.9.0-rc4` GitHub release assets are no longer available, which caused fresh installs and CI smoke tests to fail during binary download.
+- Updated dependencies [42724a3]
+- Updated dependencies [2aa9402]
+- Updated dependencies [42724a3]
+- Updated dependencies [ca02a01]
+  - @fiber-pay/sdk@0.2.8
+
 ## 0.2.7
 
 ### Patch Changes
