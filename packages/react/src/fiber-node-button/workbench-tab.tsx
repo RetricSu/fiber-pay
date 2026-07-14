@@ -1,5 +1,6 @@
-import type { UdtAsset } from '@fiber-pay/sdk/browser';
 import { formatAssetName } from '@fiber-pay/sdk/browser';
+import { AssetSelect } from './asset-select.js';
+import { CUSTOM_ASSET_KEY, localizeAssetLabel } from './assets.js';
 import { renderPanelAction } from './render-action.js';
 import { styles } from './styles.js';
 import type {
@@ -14,7 +15,6 @@ import { shorten } from './utils.js';
 export interface WorkbenchTabProps {
   state: FiberNodeButtonPanelState;
   fiber: FiberNodeButtonPanelProps['fiber'];
-  asset: UdtAsset;
   externalFunding: FiberNodeButtonPanelProps['externalFunding'];
   renderConnectorSection: FiberNodeButtonPanelProps['renderConnectorSection'];
   renderAction?: FiberNodeButtonRenderAction;
@@ -24,14 +24,11 @@ export interface WorkbenchTabProps {
 export function WorkbenchTab({
   state,
   fiber,
-  asset,
   externalFunding,
   renderConnectorSection,
   renderAction,
   t,
 }: WorkbenchTabProps) {
-  const assetName = formatAssetName(asset);
-  const amountUnit = asset.kind === 'udt' ? `${assetName} base units` : assetName;
   const {
     isNodeReady,
     connectorContext,
@@ -42,6 +39,23 @@ export function WorkbenchTab({
     connectedPeers,
     fundingAmount,
     setFundingAmount,
+    availableAssets,
+    showAssetSelectors,
+    openChannelAssetKey,
+    selectOpenChannelAsset,
+    openChannelCustomUdt,
+    setOpenChannelCustomUdt,
+    openChannelAsset,
+    createInvoiceAssetKey,
+    selectCreateInvoiceAsset,
+    createInvoiceCustomUdt,
+    setCreateInvoiceCustomUdt,
+    createInvoiceAsset,
+    paymentAssetKey,
+    paymentAsset,
+    selectPaymentAsset,
+    paymentCustomUdt,
+    setPaymentCustomUdt,
     openChannel,
     isCreatingInvoice,
     createInvoice,
@@ -54,6 +68,20 @@ export function WorkbenchTab({
     submitPayment,
     paymentResult,
   } = state;
+  const openChannelUsesUdt =
+    openChannelAssetKey === CUSTOM_ASSET_KEY || openChannelAsset?.kind === 'udt';
+  const createInvoiceUsesUdt =
+    createInvoiceAssetKey === CUSTOM_ASSET_KEY || createInvoiceAsset?.kind === 'udt';
+  const rawCreateInvoiceAssetName = createInvoiceAsset
+    ? formatAssetName(createInvoiceAsset)
+    : t('asset.udt', 'UDT');
+  const createInvoiceAssetName = localizeAssetLabel(rawCreateInvoiceAssetName, t);
+  const fundingAmountUnit = openChannelUsesUdt
+    ? t('asset.udt.rawUnits', 'UDT raw units')
+    : t('asset.ckb', 'CKB');
+  const invoiceAmountUnit = createInvoiceUsesUdt
+    ? t('asset.udt.rawUnits', 'UDT raw units')
+    : t('asset.ckb', 'CKB');
 
   return (
     <>
@@ -112,13 +140,28 @@ export function WorkbenchTab({
           </datalist>
         </label>
 
+        {showAssetSelectors ? (
+          <AssetSelect
+            label={t('workbench.openChannel.asset', 'Asset')}
+            ariaLabel={t('workbench.openChannel.asset.aria', 'Open Channel Asset')}
+            value={openChannelAssetKey}
+            options={availableAssets}
+            customScript={openChannelCustomUdt}
+            onChange={selectOpenChannelAsset}
+            onCustomScriptChange={setOpenChannelCustomUdt}
+            t={t}
+          />
+        ) : null}
+
         <label style={styles.fieldLabel}>
-          {t('workbench.openChannel.fundingAmount', `Funding Amount (${amountUnit})`)}
+          {t('workbench.openChannel.fundingAmount', `Funding Amount (${fundingAmountUnit})`)}
           <input
             style={styles.input}
             value={fundingAmount}
             onChange={(event) => setFundingAmount(event.target.value)}
-            placeholder="1000"
+            inputMode={openChannelUsesUdt ? 'numeric' : 'decimal'}
+            pattern={openChannelUsesUdt ? '[0-9]*' : '[0-9]+(?:\\.[0-9]{0,8})?'}
+            placeholder={openChannelUsesUdt ? '0' : '1000'}
           />
         </label>
 
@@ -134,7 +177,11 @@ export function WorkbenchTab({
               id: 'open-channel',
               label: t('actions.openChannel', 'Open Channel'),
               loadingLabel: t('actions.openChannel.loading', 'Opening...'),
-              disabled: !isNodeReady || channelOpenFlow.isOpening || !peerPubkey.trim(),
+              disabled:
+                !isNodeReady ||
+                channelOpenFlow.isOpening ||
+                !peerPubkey.trim() ||
+                !openChannelAsset,
               loading: channelOpenFlow.isOpening,
               onTrigger: openChannel,
             } satisfies FiberNodeButtonActionDefaultProps,
@@ -159,13 +206,28 @@ export function WorkbenchTab({
       <section style={styles.section}>
         <h4 style={styles.sectionTitle}>{t('workbench.payments.title', 'Payments')}</h4>
 
+        {showAssetSelectors ? (
+          <AssetSelect
+            label={t('workbench.payments.asset', 'Asset')}
+            ariaLabel={t('workbench.payments.createAsset.aria', 'Create Invoice Asset')}
+            value={createInvoiceAssetKey}
+            options={availableAssets}
+            customScript={createInvoiceCustomUdt}
+            onChange={selectCreateInvoiceAsset}
+            onCustomScriptChange={setCreateInvoiceCustomUdt}
+            t={t}
+          />
+        ) : null}
+
         <label style={styles.fieldLabel}>
-          {t('workbench.payments.invoiceAmount', `Invoice Amount (${amountUnit})`)}
+          {t('workbench.payments.invoiceAmount', `Invoice Amount (${invoiceAmountUnit})`)}
           <input
             style={styles.input}
             value={invoiceAmount}
             onChange={(event) => setInvoiceAmount(event.target.value)}
-            placeholder="1"
+            inputMode={createInvoiceUsesUdt ? 'numeric' : 'decimal'}
+            pattern={createInvoiceUsesUdt ? '[0-9]*' : '[0-9]+(?:\\.[0-9]{0,8})?'}
+            placeholder={createInvoiceUsesUdt ? 'Required' : '1'}
           />
         </label>
 
@@ -180,10 +242,11 @@ export function WorkbenchTab({
               id: 'create-invoice',
               label: t(
                 'actions.createInvoice',
-                `Create Invoice (${invoiceAmount || '—'} ${assetName})`,
+                `Create Invoice (${invoiceAmount || '—'} ${createInvoiceAssetName})`,
               ),
               loadingLabel: t('actions.createInvoice.loading', 'Creating...'),
-              disabled: isCreatingInvoice || !isNodeReady || !invoiceAmount.trim(),
+              disabled:
+                isCreatingInvoice || !isNodeReady || !invoiceAmount.trim() || !createInvoiceAsset,
               loading: isCreatingInvoice,
               onTrigger: createInvoice,
             } satisfies FiberNodeButtonActionDefaultProps,
@@ -192,6 +255,19 @@ export function WorkbenchTab({
             <span style={styles.compactText}>{shorten(createdInvoice, 20, 10)}</span>
           ) : null}
         </div>
+
+        {showAssetSelectors ? (
+          <AssetSelect
+            label={t('workbench.payments.asset', 'Asset')}
+            ariaLabel={t('workbench.payments.payAsset.aria', 'Pay Invoice Asset')}
+            value={paymentAssetKey}
+            options={availableAssets}
+            customScript={paymentCustomUdt}
+            onChange={selectPaymentAsset}
+            onCustomScriptChange={setPaymentCustomUdt}
+            t={t}
+          />
+        ) : null}
 
         <label style={styles.fieldLabel}>
           {t('workbench.payments.invoice', 'Invoice')}
@@ -215,7 +291,7 @@ export function WorkbenchTab({
               id: 'pay-invoice',
               label: t('actions.payInvoice', 'Pay Invoice'),
               loadingLabel: t('actions.payInvoice.loading', 'Paying...'),
-              disabled: isPaying || !isNodeReady || !invoiceInput.trim(),
+              disabled: isPaying || !isNodeReady || !invoiceInput.trim() || !paymentAsset,
               loading: isPaying,
               onTrigger: submitPayment,
             } satisfies FiberNodeButtonActionDefaultProps,

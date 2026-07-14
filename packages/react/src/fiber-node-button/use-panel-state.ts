@@ -3,7 +3,9 @@ import type {
   Channel,
   GetPaymentResult,
   HexString,
+  Script,
   ShutdownChannelParams,
+  UdtAsset,
   UdtTypeScript,
 } from '@fiber-pay/sdk/browser';
 import {
@@ -25,6 +27,16 @@ import {
 import { buildNewInvoiceParams } from '../invoice-params.js';
 import { type UseChannelOpenFlowResult, useChannelOpenFlow } from '../use-channel-open-flow.js';
 import { useFiberPayment } from '../use-fiber-payment.js';
+import {
+  buildPanelAssetOptions,
+  CKB_ASSET_KEY,
+  getAssetKey,
+  getChannelAssetKey,
+  type PanelAssetOption,
+  resolvePanelAsset,
+  tryResolvePanelAsset,
+} from './assets.js';
+import { defaultFiberNodeButtonI18n } from './i18n.js';
 import type {
   ChannelFilter,
   FiberNodeButtonConnectorSectionContext,
@@ -54,6 +66,35 @@ export interface PanelChannelCounts {
   all: number;
 }
 
+export interface PanelChannelAssetCount {
+  key: string;
+  label: string;
+  count: number;
+}
+
+function getDefaultFundingAmountForAsset(
+  key: string,
+  initialAssetKey: string,
+  initialFundingAmount: string | undefined,
+  initialFundingAmountCkb: string | undefined,
+): string {
+  if (key === initialAssetKey || key === CKB_ASSET_KEY) {
+    return initialFundingAmount ?? initialFundingAmountCkb ?? '1000';
+  }
+  return '';
+}
+
+function getDefaultInvoiceAmountForAsset(
+  key: string,
+  initialAssetKey: string,
+  initialInvoiceAmount: string | undefined,
+): string {
+  if (key === initialAssetKey && initialInvoiceAmount !== undefined) {
+    return initialInvoiceAmount;
+  }
+  return key === CKB_ASSET_KEY ? '1' : '';
+}
+
 export interface FiberNodeButtonPanelState {
   activeTab: PanelTab;
   switchTab: (next: PanelTab) => void;
@@ -68,6 +109,23 @@ export interface FiberNodeButtonPanelState {
   fundingAmountCkb: string;
   invoiceAmount: string;
   setInvoiceAmount: Dispatch<SetStateAction<string>>;
+  availableAssets: PanelAssetOption[];
+  showAssetSelectors: boolean;
+  openChannelAssetKey: string;
+  selectOpenChannelAsset: (key: string) => void;
+  openChannelCustomUdt: string;
+  setOpenChannelCustomUdt: Dispatch<SetStateAction<string>>;
+  openChannelAsset: UdtAsset | null;
+  createInvoiceAssetKey: string;
+  selectCreateInvoiceAsset: (key: string) => void;
+  createInvoiceCustomUdt: string;
+  setCreateInvoiceCustomUdt: Dispatch<SetStateAction<string>>;
+  createInvoiceAsset: UdtAsset | null;
+  paymentAssetKey: string;
+  selectPaymentAsset: (key: string) => void;
+  paymentCustomUdt: string;
+  setPaymentCustomUdt: Dispatch<SetStateAction<string>>;
+  paymentAsset: UdtAsset | null;
   peerListId: string;
   connectedPeers: PeerInfo[];
   isRefreshingPeers: boolean;
@@ -81,6 +139,12 @@ export interface FiberNodeButtonPanelState {
   channels: Channel[];
   channelFilter: ChannelFilter;
   setChannelFilter: Dispatch<SetStateAction<ChannelFilter>>;
+  channelAssetFilter: string;
+  setChannelAssetFilter: Dispatch<SetStateAction<string>>;
+  channelAssetCounts: PanelChannelAssetCount[];
+  channelFilterCounts: PanelChannelCounts;
+  getChannelAssetLabel: (channel: Channel) => string;
+  getUdtAssetLabel: (script: Script | null | undefined) => string;
   isRefreshingChannels: boolean;
   refreshChannels: () => Promise<void>;
   closeChannel: (channelId: string, force?: boolean) => Promise<void>;
@@ -112,16 +176,6 @@ export interface FiberNodeButtonPanelState {
   connectorContext: FiberNodeButtonConnectorSectionContext;
 }
 
-function getAssetIdentity(asset: FiberNodeButtonPanelProps['asset']): string {
-  if (!asset || asset.kind === 'ckb') {
-    return 'ckb';
-  }
-  if (!asset.script) {
-    return 'udt:invalid';
-  }
-  return `${asset.script.code_hash}:${asset.script.hash_type}:${asset.script.args}`.toLowerCase();
-}
-
 export function useFiberNodeButtonPanelState(
   props: FiberNodeButtonPanelProps,
 ): FiberNodeButtonPanelState {
@@ -138,6 +192,15 @@ export function useFiberNodeButtonPanelState(
     invoiceAmount: initialInvoiceAmount,
     externalFunding,
   } = props;
+  const t = props.t ?? defaultFiberNodeButtonI18n;
+  const requestedInitialAssetKey = getAssetKey(asset);
+  const availableAssets = useMemo(
+    () => buildPanelAssetOptions(fiber.nodeInfo?.udt_cfg_infos, asset),
+    [asset, fiber.nodeInfo?.udt_cfg_infos],
+  );
+  const initialAssetKey = availableAssets.some((option) => option.key === requestedInitialAssetKey)
+    ? requestedInitialAssetKey
+    : CKB_ASSET_KEY;
 
   const [activeTab, setActiveTab] = useState<PanelTab>('workbench');
 
@@ -146,7 +209,15 @@ export function useFiberNodeButtonPanelState(
   const [fundingAmount, setFundingAmount] = useState(
     initialFundingAmount ?? initialFundingAmountCkb ?? '1000',
   );
-  const [invoiceAmount, setInvoiceAmount] = useState(initialInvoiceAmount ?? '1');
+  const [invoiceAmount, setInvoiceAmount] = useState(
+    initialInvoiceAmount ?? (initialAssetKey === CKB_ASSET_KEY ? '1' : ''),
+  );
+  const [openChannelAssetKey, setOpenChannelAssetKey] = useState(initialAssetKey);
+  const [openChannelCustomUdt, setOpenChannelCustomUdt] = useState('');
+  const [createInvoiceAssetKey, setCreateInvoiceAssetKey] = useState(initialAssetKey);
+  const [createInvoiceCustomUdt, setCreateInvoiceCustomUdt] = useState('');
+  const [paymentAssetKey, setPaymentAssetKey] = useState(initialAssetKey);
+  const [paymentCustomUdt, setPaymentCustomUdt] = useState('');
 
   const [connectedPeers, setConnectedPeers] = useState<PeerInfo[]>([]);
   const [isRefreshingPeers, setIsRefreshingPeers] = useState(false);
@@ -158,6 +229,7 @@ export function useFiberNodeButtonPanelState(
 
   const [channels, setChannels] = useState<Channel[]>([]);
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('active');
+  const [channelAssetFilter, setChannelAssetFilter] = useState('all');
   const [isRefreshingChannels, setIsRefreshingChannels] = useState(false);
   const [closingChannelId, setClosingChannelId] = useState<string | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
@@ -172,7 +244,7 @@ export function useFiberNodeButtonPanelState(
 
   const statusTimerRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
-  const previousAssetIdentityRef = useRef(getAssetIdentity(asset));
+  const previousAssetIdentityRef = useRef(initialAssetKey);
   const peerListId = useId();
   const tabPanelId = useId();
 
@@ -181,7 +253,30 @@ export function useFiberNodeButtonPanelState(
     onLog,
   });
 
-  const paymentOptions = useMemo(() => ({ asset, network }), [asset, network]);
+  const showAssetSelectors = availableAssets.some((option) => option.asset.kind === 'udt');
+
+  const openChannelAssetResolution = useMemo(
+    () => tryResolvePanelAsset(openChannelAssetKey, openChannelCustomUdt, availableAssets),
+    [availableAssets, openChannelAssetKey, openChannelCustomUdt],
+  );
+  const openChannelAsset = openChannelAssetResolution.ok ? openChannelAssetResolution.asset : null;
+  const createInvoiceAssetResolution = useMemo(
+    () => tryResolvePanelAsset(createInvoiceAssetKey, createInvoiceCustomUdt, availableAssets),
+    [availableAssets, createInvoiceAssetKey, createInvoiceCustomUdt],
+  );
+  const createInvoiceAsset = createInvoiceAssetResolution.ok
+    ? createInvoiceAssetResolution.asset
+    : null;
+  const paymentAssetResolution = useMemo(
+    () => tryResolvePanelAsset(paymentAssetKey, paymentCustomUdt, availableAssets),
+    [availableAssets, paymentAssetKey, paymentCustomUdt],
+  );
+  const paymentAsset = paymentAssetResolution.ok ? paymentAssetResolution.asset : null;
+
+  const paymentOptions = useMemo(
+    () => ({ asset: paymentAsset ?? DEFAULT_CKB_ASSET, network }),
+    [network, paymentAsset],
+  );
 
   const {
     payInvoice,
@@ -190,7 +285,7 @@ export function useFiberNodeButtonPanelState(
     error: paymentError,
   } = useFiberPayment(fiber.node, paymentOptions);
 
-  const isNodeReady = fiber.isRunning && !!fiber.node;
+  const isNodeReady = fiber.isRunning && !!fiber.node && !!fiber.nodeInfo;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -202,19 +297,57 @@ export function useFiberNodeButtonPanelState(
     };
   }, []);
 
+  const selectOpenChannelAsset = useCallback(
+    (key: string) => {
+      setOpenChannelAssetKey(key);
+      setFundingAmount(
+        getDefaultFundingAmountForAsset(
+          key,
+          initialAssetKey,
+          initialFundingAmount,
+          initialFundingAmountCkb,
+        ),
+      );
+      setLatestError(null);
+    },
+    [initialAssetKey, initialFundingAmount, initialFundingAmountCkb],
+  );
+
+  const selectCreateInvoiceAsset = useCallback(
+    (key: string) => {
+      setCreateInvoiceAssetKey(key);
+      setInvoiceAmount(getDefaultInvoiceAmountForAsset(key, initialAssetKey, initialInvoiceAmount));
+      setCreatedInvoice('');
+      setLatestError(null);
+    },
+    [initialAssetKey, initialInvoiceAmount],
+  );
+
+  const selectPaymentAsset = useCallback((key: string) => {
+    setPaymentAssetKey(key);
+    setInvoiceInput('');
+    setLatestError(null);
+  }, []);
+
   useEffect(() => {
-    const nextIdentity = getAssetIdentity(asset);
+    const nextIdentity = initialAssetKey;
     if (previousAssetIdentityRef.current === nextIdentity) {
       return;
     }
 
     previousAssetIdentityRef.current = nextIdentity;
+    setOpenChannelAssetKey(nextIdentity);
+    setCreateInvoiceAssetKey(nextIdentity);
+    setPaymentAssetKey(nextIdentity);
+    setOpenChannelCustomUdt('');
+    setCreateInvoiceCustomUdt('');
+    setPaymentCustomUdt('');
     setFundingAmount(initialFundingAmount ?? initialFundingAmountCkb ?? '1000');
-    setInvoiceAmount(initialInvoiceAmount ?? '1');
+    setInvoiceAmount(initialInvoiceAmount ?? (initialAssetKey === CKB_ASSET_KEY ? '1' : ''));
     setInvoiceInput('');
     setCreatedInvoice('');
     setLatestError(null);
-  }, [asset, initialFundingAmount, initialFundingAmountCkb, initialInvoiceAmount]);
+  }, [initialAssetKey, initialFundingAmount, initialFundingAmountCkb, initialInvoiceAmount]);
 
   const flashStatus = useCallback((text: string, tone: 'info' | 'success' = 'info') => {
     setStatusNotice({ tone, text });
@@ -236,30 +369,61 @@ export function useFiberNodeButtonPanelState(
     [onError, onLog],
   );
 
-  const ensureAssetConfigured = useCallback(() => {
-    if (asset.kind !== 'udt') {
-      return true;
-    }
+  const resolveActionAsset = useCallback(
+    (key: string, customScript: string): UdtAsset | null => {
+      try {
+        return resolvePanelAsset(key, customScript, availableAssets);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        reportError(
+          t('asset.error.invalidSelection', 'Invalid asset selection: {message}', { message }),
+        );
+        return null;
+      }
+    },
+    [availableAssets, reportError, t],
+  );
 
-    let validatedScript: UdtTypeScript;
-    try {
-      validatedScript = validateUdtTypeScript(asset.script);
-    } catch (error) {
-      reportError(error instanceof Error ? error.message : String(error));
+  const ensureAssetConfigured = useCallback(
+    (selectedAsset: UdtAsset) => {
+      if (selectedAsset.kind !== 'udt') {
+        return true;
+      }
+
+      let validatedScript: UdtTypeScript;
+      try {
+        validatedScript = validateUdtTypeScript(selectedAsset.script);
+      } catch (error) {
+        reportError(error instanceof Error ? error.message : String(error));
+        return false;
+      }
+
+      const configuredUdts = fiber.nodeInfo?.udt_cfg_infos ?? [];
+
+      if (
+        configuredUdts.some((entry) => {
+          try {
+            const configuredScript = validateUdtTypeScript(entry.script, 'node UDT config');
+            return areUdtTypeScriptsEqual(configuredScript, validatedScript);
+          } catch {
+            return false;
+          }
+        })
+      ) {
+        return true;
+      }
+
+      reportError(
+        t(
+          'asset.error.notConfigured',
+          'UDT asset {asset} is not present in the node whitelist. Configure nodeConfig.udtWhitelist with the same type script and cell deps before using it.',
+          { asset: selectedAsset.name?.trim() || t('asset.udt', 'UDT') },
+        ),
+      );
       return false;
-    }
-
-    const configuredUdts = fiber.nodeInfo?.udt_cfg_infos ?? [];
-
-    if (configuredUdts.some((entry) => areUdtTypeScriptsEqual(entry.script, validatedScript))) {
-      return true;
-    }
-
-    reportError(
-      `UDT asset ${asset.name?.trim() || 'UDT'} is not present in the node whitelist. Configure nodeConfig.udtWhitelist with the same type script and cell deps before using it.`,
-    );
-    return false;
-  }, [asset, fiber.nodeInfo?.udt_cfg_infos, reportError]);
+    },
+    [fiber.nodeInfo?.udt_cfg_infos, reportError, t],
+  );
 
   const refreshConnectedPeers = useCallback(async () => {
     if (!fiber.node) {
@@ -474,7 +638,8 @@ export function useFiberNodeButtonPanelState(
       return;
     }
 
-    if (!ensureAssetConfigured()) {
+    const selectedAsset = resolveActionAsset(openChannelAssetKey, openChannelCustomUdt);
+    if (!selectedAsset || !ensureAssetConfigured(selectedAsset)) {
       return;
     }
 
@@ -488,7 +653,7 @@ export function useFiberNodeButtonPanelState(
           pubkey,
           fundingAmount,
           externalWallet: false,
-          asset,
+          asset: selectedAsset,
         });
         if (!openResult) {
           return;
@@ -502,7 +667,7 @@ export function useFiberNodeButtonPanelState(
       const resolved = await externalFunding.resolve({
         node: fiber.node,
         pubkey,
-        asset,
+        asset: selectedAsset,
         fundingAmount,
         fundingAmountCkb: fundingAmount,
       });
@@ -511,7 +676,7 @@ export function useFiberNodeButtonPanelState(
         pubkey,
         fundingAmount,
         externalWallet: true,
-        asset,
+        asset: selectedAsset,
         shutdownScript: resolved.shutdownScript,
         fundingLockScript: resolved.fundingLockScript,
         fundingLockScriptCellDeps: resolved.fundingLockScriptCellDeps,
@@ -530,7 +695,6 @@ export function useFiberNodeButtonPanelState(
       onLog?.(`Open channel failed: ${message}`);
     }
   }, [
-    asset,
     channelOpenFlow,
     externalFunding,
     ensureAssetConfigured,
@@ -538,9 +702,12 @@ export function useFiberNodeButtonPanelState(
     flashStatus,
     fundingAmount,
     onLog,
+    openChannelAssetKey,
+    openChannelCustomUdt,
     peerPubkey,
     refreshChannels,
     reportError,
+    resolveActionAsset,
   ]);
 
   const createInvoice = useCallback(async () => {
@@ -549,7 +716,8 @@ export function useFiberNodeButtonPanelState(
       return;
     }
 
-    if (!ensureAssetConfigured()) {
+    const selectedAsset = resolveActionAsset(createInvoiceAssetKey, createInvoiceCustomUdt);
+    if (!selectedAsset || !ensureAssetConfigured(selectedAsset)) {
       return;
     }
 
@@ -559,7 +727,7 @@ export function useFiberNodeButtonPanelState(
       const amountInput = invoiceAmount.trim();
       const params = buildNewInvoiceParams({
         amountInput,
-        asset,
+        asset: selectedAsset,
         network,
         descriptionPrefix: 'FiberNodeButton invoice',
       });
@@ -575,7 +743,8 @@ export function useFiberNodeButtonPanelState(
       setIsCreatingInvoice(false);
     }
   }, [
-    asset,
+    createInvoiceAssetKey,
+    createInvoiceCustomUdt,
     ensureAssetConfigured,
     fiber.node,
     flashStatus,
@@ -583,6 +752,7 @@ export function useFiberNodeButtonPanelState(
     network,
     onLog,
     reportError,
+    resolveActionAsset,
   ]);
 
   const submitPayment = useCallback(async () => {
@@ -592,13 +762,24 @@ export function useFiberNodeButtonPanelState(
       return;
     }
 
-    if (!ensureAssetConfigured()) {
+    const selectedAsset = resolveActionAsset(paymentAssetKey, paymentCustomUdt);
+    if (!selectedAsset || !ensureAssetConfigured(selectedAsset)) {
       return;
     }
 
     onLog?.('fiber_panel_primary_action_clicked: pay_invoice');
-    await payInvoice(normalizedInvoice);
-  }, [ensureAssetConfigured, invoiceInput, onLog, payInvoice, reportError]);
+    await payInvoice(normalizedInvoice, { asset: selectedAsset, network });
+  }, [
+    ensureAssetConfigured,
+    invoiceInput,
+    network,
+    onLog,
+    payInvoice,
+    paymentAssetKey,
+    paymentCustomUdt,
+    reportError,
+    resolveActionAsset,
+  ]);
 
   useEffect(() => {
     if (!fiber.isRunning || !fiber.node) {
@@ -636,6 +817,26 @@ export function useFiberNodeButtonPanelState(
     onLog?.(`Payment status: ${paymentResult.status}`);
   }, [flashStatus, onLog, paymentResult]);
 
+  const assetLabelsByKey = useMemo(
+    () => new Map(availableAssets.map((option) => [option.key, option.label])),
+    [availableAssets],
+  );
+
+  const getUdtAssetLabel = useCallback(
+    (script: Script | null | undefined) => {
+      if (!script) {
+        return 'CKB';
+      }
+      return assetLabelsByKey.get(getChannelAssetKey(script)) ?? 'UDT';
+    },
+    [assetLabelsByKey],
+  );
+
+  const getChannelAssetLabel = useCallback(
+    (channel: Channel) => getUdtAssetLabel(channel.funding_udt_type_script),
+    [getUdtAssetLabel],
+  );
+
   const channelCounts = useMemo(() => {
     const counts = { active: 0, pending: 0, closed: 0, all: channels.length };
 
@@ -646,12 +847,63 @@ export function useFiberNodeButtonPanelState(
     return counts;
   }, [channels]);
 
+  const channelAssetCounts = useMemo(() => {
+    const counts = new Map<string, PanelChannelAssetCount>();
+    for (const channel of channels) {
+      const key = getChannelAssetKey(channel.funding_udt_type_script);
+      const existing = counts.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        counts.set(key, {
+          key,
+          label: assetLabelsByKey.get(key) ?? (key === CKB_ASSET_KEY ? 'CKB' : 'UDT'),
+          count: 1,
+        });
+      }
+    }
+
+    const assetOrder = new Map(availableAssets.map((option, index) => [option.key, index]));
+    return Array.from(counts.values()).sort(
+      (left, right) =>
+        (assetOrder.get(left.key) ?? Number.MAX_SAFE_INTEGER) -
+        (assetOrder.get(right.key) ?? Number.MAX_SAFE_INTEGER),
+    );
+  }, [assetLabelsByKey, availableAssets, channels]);
+
+  useEffect(() => {
+    if (
+      channelAssetFilter !== 'all' &&
+      !channelAssetCounts.some((entry) => entry.key === channelAssetFilter)
+    ) {
+      setChannelAssetFilter('all');
+    }
+  }, [channelAssetCounts, channelAssetFilter]);
+
+  const channelsForAsset = useMemo(
+    () =>
+      channelAssetFilter === 'all'
+        ? channels
+        : channels.filter(
+            (channel) => getChannelAssetKey(channel.funding_udt_type_script) === channelAssetFilter,
+          ),
+    [channelAssetFilter, channels],
+  );
+
+  const channelFilterCounts = useMemo(() => {
+    const counts = { active: 0, pending: 0, closed: 0, all: channelsForAsset.length };
+    for (const channel of channelsForAsset) {
+      counts[getChannelFilterState(channel)] += 1;
+    }
+    return counts;
+  }, [channelsForAsset]);
+
   const visibleChannels = useMemo(
     () =>
       channelFilter === 'all'
-        ? channels
-        : channels.filter((channel) => getChannelFilterState(channel) === channelFilter),
-    [channelFilter, channels],
+        ? channelsForAsset
+        : channelsForAsset.filter((channel) => getChannelFilterState(channel) === channelFilter),
+    [channelFilter, channelsForAsset],
   );
 
   const activeChannelCount = channelCounts.active;
@@ -695,11 +947,11 @@ export function useFiberNodeButtonPanelState(
   const connectorContext: FiberNodeButtonConnectorSectionContext = useMemo(
     () => ({
       fiber,
-      asset,
+      asset: openChannelAsset ?? asset,
       externalFundingEnabled: !!externalFunding?.enabled,
       isOpeningChannel: channelOpenFlow.isOpening,
     }),
-    [asset, channelOpenFlow.isOpening, externalFunding?.enabled, fiber],
+    [asset, channelOpenFlow.isOpening, externalFunding?.enabled, fiber, openChannelAsset],
   );
 
   const switchTab = useCallback(
@@ -730,6 +982,23 @@ export function useFiberNodeButtonPanelState(
     fundingAmountCkb: fundingAmount,
     invoiceAmount,
     setInvoiceAmount,
+    availableAssets,
+    showAssetSelectors,
+    openChannelAssetKey,
+    selectOpenChannelAsset,
+    openChannelCustomUdt,
+    setOpenChannelCustomUdt,
+    openChannelAsset,
+    createInvoiceAssetKey,
+    selectCreateInvoiceAsset,
+    createInvoiceCustomUdt,
+    setCreateInvoiceCustomUdt,
+    createInvoiceAsset,
+    paymentAssetKey,
+    selectPaymentAsset,
+    paymentCustomUdt,
+    setPaymentCustomUdt,
+    paymentAsset,
     peerListId,
     // peers
     connectedPeers,
@@ -746,6 +1015,12 @@ export function useFiberNodeButtonPanelState(
     channels,
     channelFilter,
     setChannelFilter,
+    channelAssetFilter,
+    setChannelAssetFilter,
+    channelAssetCounts,
+    channelFilterCounts,
+    getChannelAssetLabel,
+    getUdtAssetLabel,
     isRefreshingChannels,
     refreshChannels,
     closeChannel,

@@ -128,7 +128,12 @@ export function FiberNodeButton(props: FiberNodeButtonProps) {
       onError={handleConnectButtonError}
       className={className}
       style={style}
-      dropdownStyle={{ maxWidth: 460, width: 'calc(100vw - 1rem)', ...dropdownStyle }}
+      dropdownStyle={{
+        maxWidth: 520,
+        width: 'calc(100vw - 1rem)',
+        boxSizing: 'border-box',
+        ...dropdownStyle,
+      }}
       renderConnectedDropdown={renderDropdown}
     />
   );

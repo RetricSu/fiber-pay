@@ -187,8 +187,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
   const tabListStyle = useMemo(
     () => ({
       ...styles.tabList,
-      gridTemplateColumns: `repeat(${Math.max(1, resolvedTabs.length)}, minmax(112px, 1fr))`,
-      overflowX: 'auto' as const,
+      gridTemplateColumns: `repeat(${Math.max(1, resolvedTabs.length)}, minmax(0, 1fr))`,
     }),
     [resolvedTabs.length],
   );
@@ -206,7 +205,6 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
         <WorkbenchTab
           state={state}
           fiber={fiber}
-          asset={asset}
           externalFunding={externalFunding}
           renderConnectorSection={renderConnectorSection}
           renderAction={renderAction}
@@ -215,14 +213,7 @@ export function FiberNodeButtonPanel(props: FiberNodeButtonPanelProps) {
       );
     } else if (effectiveActiveTab === 'channels') {
       tabContent = (
-        <ChannelsTab
-          state={state}
-          fiber={fiber}
-          asset={asset}
-          onLog={onLog}
-          renderAction={renderAction}
-          t={t}
-        />
+        <ChannelsTab state={state} fiber={fiber} onLog={onLog} renderAction={renderAction} t={t} />
       );
     } else if (effectiveActiveTab === 'diagnostics') {
       tabContent = <DiagnosticsTab state={state} t={t} />;

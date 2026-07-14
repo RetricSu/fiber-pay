@@ -6,9 +6,11 @@ export const styles = {
     display: 'grid',
     gridTemplateRows: 'auto auto minmax(0, 1fr)',
     gap: '0.7rem',
-    minWidth: '280px',
-    width: 'min(460px, calc(100vw - 1rem))',
+    minWidth: 0,
+    width: '100%',
+    maxWidth: '100%',
     maxHeight: '72vh',
+    boxSizing: 'border-box',
   } satisfies CSSProperties,
 
   globalBar: {
@@ -18,14 +20,18 @@ export const styles = {
     padding: '0.52rem 0.56rem',
     display: 'grid',
     gap: '0.45rem',
+    minWidth: 0,
+    maxWidth: '100%',
+    boxSizing: 'border-box',
   } satisfies CSSProperties,
 
   globalRow: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: '0.35rem',
     flexWrap: 'wrap',
+    minWidth: 0,
   } satisfies CSSProperties,
 
   globalMetrics: {
@@ -34,6 +40,7 @@ export const styles = {
     gap: '0.5rem',
     flexWrap: 'wrap',
     minWidth: 0,
+    flex: '1 1 280px',
   } satisfies CSSProperties,
 
   metricInline: {
@@ -99,6 +106,9 @@ export const styles = {
     gap: '0.36rem',
     justifyContent: 'flex-end',
     flexWrap: 'wrap',
+    minWidth: 0,
+    maxWidth: '100%',
+    marginLeft: 'auto',
   } satisfies CSSProperties,
 
   globalActionButton: {
@@ -110,6 +120,9 @@ export const styles = {
     background: '#fff',
     color: 'var(--fpay-text-primary, #111827)',
     cursor: 'pointer',
+    maxWidth: '100%',
+    whiteSpace: 'normal',
+    overflowWrap: 'anywhere',
   } satisfies CSSProperties,
 
   tabList: {
@@ -121,6 +134,9 @@ export const styles = {
     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
     gap: '0.14rem',
     boxShadow: 'inset 0 0 0 1px var(--fpay-border, #d8dee8)',
+    minWidth: 0,
+    maxWidth: '100%',
+    overflow: 'hidden',
   } satisfies CSSProperties,
 
   tabButton: {
@@ -132,6 +148,11 @@ export const styles = {
     fontWeight: 700,
     padding: '0.44rem 0.45rem',
     cursor: 'pointer',
+    minWidth: 0,
+    width: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   } satisfies CSSProperties,
 
   tabButtonActive: {
@@ -144,6 +165,11 @@ export const styles = {
     padding: '0.44rem 0.45rem',
     cursor: 'pointer',
     boxShadow: 'none',
+    minWidth: 0,
+    width: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   } satisfies CSSProperties,
 
   content: {
@@ -152,6 +178,9 @@ export const styles = {
     display: 'grid',
     gap: '0.7rem',
     minHeight: 0,
+    minWidth: 0,
+    maxWidth: '100%',
+    overflowX: 'hidden',
   } satisfies CSSProperties,
 
   section: {
@@ -162,6 +191,8 @@ export const styles = {
     background: 'transparent',
     display: 'grid',
     gap: '0.44rem',
+    minWidth: 0,
+    maxWidth: '100%',
   } satisfies CSSProperties,
 
   sectionTitle: {
@@ -177,6 +208,7 @@ export const styles = {
     alignItems: 'center',
     gap: '0.45rem',
     flexWrap: 'wrap',
+    minWidth: 0,
   } satisfies CSSProperties,
 
   rowBetween: {
@@ -185,6 +217,7 @@ export const styles = {
     justifyContent: 'space-between',
     gap: '0.45rem',
     flexWrap: 'wrap',
+    minWidth: 0,
   } satisfies CSSProperties,
 
   compactText: {
@@ -192,6 +225,9 @@ export const styles = {
     fontSize: '0.74rem',
     color: 'var(--fpay-text-secondary, #64748b)',
     lineHeight: 1.4,
+    minWidth: 0,
+    maxWidth: '100%',
+    overflowWrap: 'anywhere',
   } satisfies CSSProperties,
 
   inlineCode: {
@@ -200,6 +236,9 @@ export const styles = {
     fontSize: '0.72rem',
     color: 'var(--fpay-text-primary, #111827)',
     wordBreak: 'break-all',
+    overflowWrap: 'anywhere',
+    maxWidth: '100%',
+    minWidth: 0,
     lineHeight: 1.4,
   } satisfies CSSProperties,
 
@@ -210,6 +249,8 @@ export const styles = {
     fontWeight: 700,
     color: 'var(--fpay-text-secondary, #64748b)',
     textTransform: 'uppercase',
+    minWidth: 0,
+    maxWidth: '100%',
   } satisfies CSSProperties,
 
   input: {
@@ -220,6 +261,25 @@ export const styles = {
     fontSize: '0.8rem',
     background: '#fff',
     color: 'var(--fpay-text-primary, #0f172a)',
+    minWidth: 0,
+    maxWidth: '100%',
+    boxSizing: 'border-box',
+  } satisfies CSSProperties,
+
+  textarea: {
+    width: '100%',
+    border: '1px solid var(--fpay-border, #cbd5e1)',
+    borderRadius: '0.45rem',
+    padding: '0.38rem 0.48rem',
+    fontSize: '0.75rem',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    lineHeight: 1.4,
+    resize: 'vertical',
+    background: '#fff',
+    color: 'var(--fpay-text-primary, #0f172a)',
+    minWidth: 0,
+    maxWidth: '100%',
+    boxSizing: 'border-box',
   } satisfies CSSProperties,
 
   actionButton: {
@@ -231,6 +291,9 @@ export const styles = {
     background: '#fff',
     color: 'var(--fpay-text-primary, #111827)',
     cursor: 'pointer',
+    maxWidth: '100%',
+    whiteSpace: 'normal',
+    overflowWrap: 'anywhere',
   } satisfies CSSProperties,
 
   primaryButton: {
@@ -242,6 +305,9 @@ export const styles = {
     background: 'var(--fpay-accent, #1d4ed8)',
     color: '#fff',
     cursor: 'pointer',
+    maxWidth: '100%',
+    whiteSpace: 'normal',
+    overflowWrap: 'anywhere',
   } satisfies CSSProperties,
 
   ghostButton: {
@@ -253,6 +319,9 @@ export const styles = {
     background: 'transparent',
     color: 'var(--fpay-text-secondary, #475569)',
     cursor: 'pointer',
+    maxWidth: '100%',
+    whiteSpace: 'normal',
+    overflowWrap: 'anywhere',
   } satisfies CSSProperties,
 
   dangerButton: {
@@ -264,6 +333,9 @@ export const styles = {
     background: '#fff1f2',
     color: '#9f1239',
     cursor: 'pointer',
+    maxWidth: '100%',
+    whiteSpace: 'normal',
+    overflowWrap: 'anywhere',
   } satisfies CSSProperties,
 
   badge: {
@@ -278,6 +350,11 @@ export const styles = {
     fontSize: '0.66rem',
     fontWeight: 700,
     lineHeight: 1.1,
+    maxWidth: '100%',
+    minWidth: 0,
+    whiteSpace: 'normal',
+    wordBreak: 'break-all',
+    overflowWrap: 'anywhere',
   } satisfies CSSProperties,
 
   notice: {
@@ -342,12 +419,31 @@ export const styles = {
     gap: '0.28rem',
   } satisfies CSSProperties,
 
+  filterStack: {
+    display: 'grid',
+    gap: '0.34rem',
+    minWidth: 0,
+  } satisfies CSSProperties,
+
+  filterFieldset: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '0.28rem',
+    minWidth: 0,
+    margin: 0,
+    padding: 0,
+    border: 0,
+  } satisfies CSSProperties,
+
   list: {
     display: 'grid',
     gap: '0.34rem',
     maxHeight: '240px',
     overflowY: 'auto',
+    overflowX: 'hidden',
     paddingRight: '0.1rem',
+    minWidth: 0,
+    maxWidth: '100%',
   } satisfies CSSProperties,
 
   compactChannelRow: {
@@ -359,6 +455,11 @@ export const styles = {
     display: 'grid',
     gap: '0.22rem',
     textAlign: 'left',
+    width: '100%',
+    minWidth: 0,
+    maxWidth: '100%',
+    boxSizing: 'border-box',
+    overflow: 'hidden',
   } satisfies CSSProperties,
 
   compactChannelRowActive: {
@@ -369,9 +470,20 @@ export const styles = {
 
   compactChannelTop: {
     display: 'grid',
-    gridTemplateColumns: '1fr auto',
+    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, auto)',
     alignItems: 'center',
     gap: '0.35rem',
+    minWidth: 0,
+  } satisfies CSSProperties,
+
+  badgeGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+    gap: '0.24rem',
+    minWidth: 0,
+    maxWidth: '100%',
   } satisfies CSSProperties,
 
   detailPanel: {
@@ -381,6 +493,25 @@ export const styles = {
     padding: '0.6rem',
     display: 'grid',
     gap: '0.45rem',
+    minWidth: 0,
+    maxWidth: '100%',
+    boxSizing: 'border-box',
+  } satisfies CSSProperties,
+
+  scriptCode: {
+    margin: '0.42rem 0 0',
+    maxWidth: '100%',
+    maxHeight: '160px',
+    overflow: 'auto',
+    borderRadius: '0.45rem',
+    background: '#eef2f7',
+    padding: '0.45rem',
+    boxSizing: 'border-box',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: '0.68rem',
+    lineHeight: 1.4,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-all',
   } satisfies CSSProperties,
 
   dialogBackdrop: {
@@ -401,6 +532,8 @@ export const styles = {
     padding: '0.72rem',
     display: 'grid',
     gap: '0.55rem',
+    maxWidth: '100%',
+    boxSizing: 'border-box',
   } satisfies CSSProperties,
 
   srOnly: {
