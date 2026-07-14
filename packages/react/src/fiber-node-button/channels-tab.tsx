@@ -1,11 +1,8 @@
-import type { FormattedChannelBalances, UdtAsset } from '@fiber-pay/sdk/browser';
-import {
-  areUdtTypeScriptsEqual,
-  formatAssetName,
-  formatChannelBalances,
-} from '@fiber-pay/sdk/browser';
+import type { FormattedChannelBalances } from '@fiber-pay/sdk/browser';
+import { formatChannelBalances } from '@fiber-pay/sdk/browser';
 import { useMemo } from 'react';
 import type { UseFiberNodeResult } from '../use-fiber-node.js';
+import { formatRawUdtAmount } from './assets.js';
 import { renderPanelAction } from './render-action.js';
 import { styles } from './styles.js';
 import {
@@ -17,48 +14,46 @@ import {
 import type { FiberNodeButtonPanelState } from './use-panel-state.js';
 import { shorten, withDisabledStyle } from './utils.js';
 
+function localizeAssetLabel(label: string, t: FiberNodeButtonTabContext['t']): string {
+  if (label === 'CKB') return t('asset.ckb', 'CKB');
+  if (label === 'UDT') return t('asset.udt', 'UDT');
+  return label;
+}
+
 function formatChannelBalanceValue(
   balances: FormattedChannelBalances,
   side: 'local' | 'remote',
 ): string {
-  const value = balances.kind === 'udt' ? balances[side] : balances[side].toFixed(4);
+  const value =
+    balances.kind === 'udt' ? formatRawUdtAmount(balances[side]) : balances[side].toFixed(4);
   return value;
 }
 
-function formatChannelBalanceUnit(balances: FormattedChannelBalances, asset?: UdtAsset): string {
-  if (balances.kind === 'udt') {
-    if (
-      asset?.kind === 'udt' &&
-      areUdtTypeScriptsEqual(balances.fundingUdtTypeScript, asset.script)
-    ) {
-      return formatAssetName(asset);
-    }
-    const codeHash = balances.fundingUdtTypeScript?.code_hash;
-    if (!codeHash) {
-      return 'UDT';
-    }
-    return `UDT · ${codeHash.slice(0, 10)}…${codeHash.slice(-6)}`;
-  }
-  return 'CKB';
+function formatChannelBalanceUnit(assetLabel: string): string {
+  return assetLabel;
 }
 
 function SelectedChannelBalance({
   balances,
   side,
-  asset,
+  assetLabel,
 }: {
   balances: FormattedChannelBalances | null;
   side: 'local' | 'remote';
-  asset?: UdtAsset;
+  assetLabel: string;
 }) {
   if (!balances) {
-    return <span style={styles.badge}>{side === 'local' ? 'Local' : 'Remote'} — CKB</span>;
+    return (
+      <span style={styles.badge}>
+        {side === 'local' ? 'Local' : 'Remote'} — {assetLabel}
+      </span>
+    );
   }
 
   return (
     <span style={styles.badge}>
       {side === 'local' ? 'Local' : 'Remote'} {formatChannelBalanceValue(balances, side)}{' '}
-      {formatChannelBalanceUnit(balances, asset)}
+      {formatChannelBalanceUnit(assetLabel)}
     </span>
   );
 }
@@ -66,19 +61,23 @@ function SelectedChannelBalance({
 export interface ChannelsTabProps {
   state: FiberNodeButtonPanelState;
   fiber: UseFiberNodeResult;
-  asset?: UdtAsset;
   onLog?: (message: string) => void;
   renderAction?: FiberNodeButtonRenderAction;
   t: FiberNodeButtonTabContext['t'];
 }
 
-export function ChannelsTab({ state, fiber, asset, onLog, renderAction, t }: ChannelsTabProps) {
+export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTabProps) {
   const {
     isRefreshingChannels,
     refreshChannels,
     channelCounts,
     channelFilter,
     setChannelFilter,
+    channelAssetFilter,
+    setChannelAssetFilter,
+    channelAssetCounts,
+    channelFilterCounts,
+    getChannelAssetLabel,
     visibleChannels,
     selectedChannelId,
     setSelectedChannelId,
@@ -101,6 +100,9 @@ export function ChannelsTab({ state, fiber, asset, onLog, renderAction, t }: Cha
   const selectedChannelBalances = selectedChannel
     ? (channelBalances.get(selectedChannel.channel_id) ?? formatChannelBalances(selectedChannel))
     : null;
+  const selectedChannelAssetLabel = selectedChannel
+    ? localizeAssetLabel(getChannelAssetLabel(selectedChannel), t)
+    : t('asset.ckb', 'CKB');
 
   return (
     <>
@@ -128,19 +130,58 @@ export function ChannelsTab({ state, fiber, asset, onLog, renderAction, t }: Cha
           {t('channels.summary.total', 'Total')} {channelCounts.all}
         </p>
 
-        <div style={styles.filterBar}>
-          {FILTER_ITEMS.map((filter) => (
-            <button
-              key={filter}
-              type="button"
-              style={channelFilter === filter ? styles.primaryButton : styles.actionButton}
-              onClick={() => setChannelFilter(filter)}
-            >
-              {filter === 'all'
-                ? `${t('channels.filter.all', 'All')} (${channelCounts.all})`
-                : `${filter} (${channelCounts[filter]})`}
-            </button>
-          ))}
+        {channelAssetCounts.length > 1 ? (
+          <p style={styles.summaryInline}>
+            {t('channels.summary.assets', 'Assets: {assets}', {
+              assets: channelAssetCounts
+                .map((entry) => `${localizeAssetLabel(entry.label, t)} ${entry.count}`)
+                .join(' · '),
+            })}
+          </p>
+        ) : null}
+
+        <div style={styles.filterStack}>
+          <div style={styles.filterBar}>
+            {FILTER_ITEMS.map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                style={channelFilter === filter ? styles.primaryButton : styles.actionButton}
+                onClick={() => setChannelFilter(filter)}
+              >
+                {filter === 'all'
+                  ? `${t('channels.filter.all', 'All')} (${channelFilterCounts.all})`
+                  : `${filter} (${channelFilterCounts[filter]})`}
+              </button>
+            ))}
+          </div>
+
+          {channelAssetCounts.length > 1 ? (
+            <fieldset style={styles.filterFieldset}>
+              <legend style={styles.srOnly}>
+                {t('channels.filter.asset.aria', 'Channel asset filter')}
+              </legend>
+              <button
+                type="button"
+                style={channelAssetFilter === 'all' ? styles.primaryButton : styles.actionButton}
+                onClick={() => setChannelAssetFilter('all')}
+              >
+                {t('channels.filter.asset.all', 'All')}
+              </button>
+              {channelAssetCounts.map((entry) => (
+                <button
+                  key={entry.key}
+                  type="button"
+                  style={
+                    channelAssetFilter === entry.key ? styles.primaryButton : styles.actionButton
+                  }
+                  onClick={() => setChannelAssetFilter(entry.key)}
+                >
+                  {localizeAssetLabel(entry.label, t)} ({entry.count})
+                </button>
+              ))}
+            </fieldset>
+          ) : null}
         </div>
 
         <div style={styles.list}>
@@ -153,6 +194,7 @@ export function ChannelsTab({ state, fiber, asset, onLog, renderAction, t }: Cha
               const selected = channel.channel_id === selectedChannelId;
               const balances =
                 channelBalances.get(channel.channel_id) ?? formatChannelBalances(channel);
+              const assetLabel = localizeAssetLabel(getChannelAssetLabel(channel), t);
 
               return (
                 <button
@@ -176,7 +218,10 @@ export function ChannelsTab({ state, fiber, asset, onLog, renderAction, t }: Cha
                     <span style={styles.inlineCode}>
                       {t('channels.list.id', 'ID')}: {shorten(channel.channel_id, 12, 8)}
                     </span>
-                    <span style={styles.badge}>{channel.state.state_name}</span>
+                    <span style={styles.badgeGroup}>
+                      <span style={styles.badge}>{assetLabel}</span>
+                      <span style={styles.badge}>{channel.state.state_name}</span>
+                    </span>
                   </span>
                   <span style={styles.compactText}>
                     {t('channels.list.peer', 'Peer')}: {shorten(channel.pubkey, 16, 10)}
@@ -184,7 +229,7 @@ export function ChannelsTab({ state, fiber, asset, onLog, renderAction, t }: Cha
                   <span style={styles.compactText}>
                     L {formatChannelBalanceValue(balances, 'local')} / R{' '}
                     {formatChannelBalanceValue(balances, 'remote')}{' '}
-                    {formatChannelBalanceUnit(balances, asset)}
+                    {formatChannelBalanceUnit(assetLabel)}
                   </span>
                 </button>
               );
@@ -197,7 +242,10 @@ export function ChannelsTab({ state, fiber, asset, onLog, renderAction, t }: Cha
         <section style={styles.detailPanel}>
           <div style={styles.rowBetween}>
             <h4 style={styles.sectionTitle}>{t('channels.details.title', 'Channel Details')}</h4>
-            <span style={styles.badge}>{selectedChannel.state.state_name}</span>
+            <span style={styles.badgeGroup}>
+              <span style={styles.badge}>{selectedChannelAssetLabel}</span>
+              <span style={styles.badge}>{selectedChannel.state.state_name}</span>
+            </span>
           </div>
 
           <p style={styles.inlineCode}>
@@ -208,11 +256,15 @@ export function ChannelsTab({ state, fiber, asset, onLog, renderAction, t }: Cha
           </p>
 
           <div style={styles.row}>
-            <SelectedChannelBalance balances={selectedChannelBalances} side="local" asset={asset} />
+            <SelectedChannelBalance
+              balances={selectedChannelBalances}
+              side="local"
+              assetLabel={selectedChannelAssetLabel}
+            />
             <SelectedChannelBalance
               balances={selectedChannelBalances}
               side="remote"
-              asset={asset}
+              assetLabel={selectedChannelAssetLabel}
             />
             <span
               style={styles.badge}
@@ -221,6 +273,17 @@ export function ChannelsTab({ state, fiber, asset, onLog, renderAction, t }: Cha
               {t('channels.details.tlcs', 'TLCs')} {selectedChannel.pending_tlcs.length}
             </span>
           </div>
+
+          {selectedChannel.funding_udt_type_script ? (
+            <details>
+              <summary style={{ ...styles.compactText, cursor: 'pointer' }}>
+                {t('channels.details.udtScript', 'Funding UDT Script')}
+              </summary>
+              <pre style={styles.scriptCode}>
+                {JSON.stringify(selectedChannel.funding_udt_type_script, null, 2)}
+              </pre>
+            </details>
+          ) : null}
 
           {selectedChannel.failure_detail ? (
             <p style={styles.compactText}>

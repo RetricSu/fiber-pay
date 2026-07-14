@@ -1,6 +1,7 @@
-import type { HexString } from '@fiber-pay/sdk/browser';
+import type { HexString, Script } from '@fiber-pay/sdk/browser';
 import { shannonsToCkb } from '@fiber-pay/sdk/browser';
 import { useMemo } from 'react';
+import { formatRawUdtAmount } from './assets.js';
 import { styles } from './styles.js';
 import type { FiberNodeButtonTabContext } from './types.js';
 import type { FiberNodeButtonPanelState } from './use-panel-state.js';
@@ -8,17 +9,14 @@ import { shorten, withDisabledStyle } from './utils.js';
 
 function formatGraphChannelCapacity(
   capacity: string,
-  udtTypeScript: { code_hash: string } | null | undefined,
+  udtTypeScript: Script | null | undefined,
+  assetLabel: string,
 ): string {
   if (udtTypeScript) {
-    try {
-      return `${BigInt(capacity).toString()} UDT`;
-    } catch {
-      return `${capacity} UDT`;
-    }
+    return `${formatRawUdtAmount(capacity)} ${assetLabel}`;
   }
   const ckb = shannonsToCkb(capacity as HexString);
-  return Number.isFinite(ckb) ? `${ckb.toFixed(4)} CKB` : `${capacity} shannons`;
+  return Number.isFinite(ckb) ? `${ckb.toFixed(4)} ${assetLabel}` : `${capacity} shannons`;
 }
 
 export interface DiagnosticsTabProps {
@@ -43,15 +41,29 @@ export function DiagnosticsTab({ state, t }: DiagnosticsTabProps) {
     graphNodes,
     graphChannels,
     channelOpenFlow,
+    getUdtAssetLabel,
   } = state;
 
   const formattedGraphChannels = useMemo(
     () =>
-      graphChannels.slice(0, 2).map((channel) => ({
-        ...channel,
-        displayCapacity: formatGraphChannelCapacity(channel.capacity, channel.udt_type_script),
-      })),
-    [graphChannels],
+      graphChannels.slice(0, 2).map((channel) => {
+        const rawAssetLabel = getUdtAssetLabel(channel.udt_type_script);
+        const assetLabel =
+          rawAssetLabel === 'CKB'
+            ? t('asset.ckb', 'CKB')
+            : rawAssetLabel === 'UDT'
+              ? t('asset.udt', 'UDT')
+              : rawAssetLabel;
+        return {
+          ...channel,
+          displayCapacity: formatGraphChannelCapacity(
+            channel.capacity,
+            channel.udt_type_script,
+            assetLabel,
+          ),
+        };
+      }),
+    [getUdtAssetLabel, graphChannels, t],
   );
 
   return (

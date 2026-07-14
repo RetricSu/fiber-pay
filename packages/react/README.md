@@ -296,7 +296,7 @@ export function WalletEntry() {
 | `passkeyUsername` | `string` | `"User"` | Display name for passkey registration. |
 | `wasmFactory` | `FiberWasmFactory` | — | Optional WASM factory override. |
 | `nodeConfig` | `UseFiberNodeOptions["nodeConfig"]` | — | Additional node configuration. |
-| `asset` | `UdtAsset` | `{ kind: "ckb" }` | Asset used for channel funding, invoices, and payments. |
+| `asset` | `UdtAsset` | `{ kind: "ckb" }` | Initial asset for channel funding, invoices, and payments. |
 | `className` | `string` | — | Additional CSS class for the root container. |
 | `style` | `CSSProperties` | — | Inline styles for the root container. |
 | `dropdownStyle` | `CSSProperties` | — | Inline styles for the dropdown panel. |
@@ -308,7 +308,7 @@ export function WalletEntry() {
 | `initialPeerAddress` | `string` | `""` | Pre-filled peer address for the open-channel form. |
 | `initialFundingAmountCkb` | `string` | `"1000"` | Pre-filled funding amount (in CKB) for the open-channel form. |
 | `initialFundingAmount` | `string` | — | CKB display amount or raw integer UDT base units. Takes precedence over `initialFundingAmountCkb`. |
-| `invoiceAmount` | `string` | `"1"` | CKB display amount or raw integer UDT base units. |
+| `invoiceAmount` | `string` | `"1"` for CKB | CKB display amount or raw integer UDT base units. UDT invoices require an amount. |
 | `externalFunding` | `FiberNodeButtonExternalFundingConfig` | — | External funding resolver configuration. |
 | `renderConnectorSection` | `(context) => ReactNode` | — | Custom renderer for the connector section inside the panel. |
 | `tabs` | `FiberNodeButtonTabConfig[]` | — | Reorder, hide, or extend built-in tabs. |
@@ -318,7 +318,9 @@ export function WalletEntry() {
 
 ### UDT setup
 
-Passing `asset` selects the token for UI and RPC calls, but it does **not** configure the Fiber node. The same type script must be present in `nodeConfig.udtWhitelist`, including the token's official cell deps. Both channel peers must support the token.
+When the node is connected, `FiberNodeButton` reads `nodeInfo.udt_cfg_infos` and exposes CKB plus every configured UDT in independent selectors for opening channels, creating invoices, and paying invoices. Channels and graph diagnostics resolve the same configuration to show the correct asset name and unit. A CKB-only node keeps the compact CKB-only interface without additional selectors.
+
+The `asset` prop remains supported as the initial selection for all three actions. Users can later switch each action independently or choose `Custom` and paste a UDT type script JSON object. Selecting an asset does **not** configure the Fiber node: the same type script must be present in `nodeConfig.udtWhitelist`, including the token's official cell deps. Both channel peers must support the token.
 
 UDT amounts are raw integer base units. For a token with 8 decimals, `100000000` represents one display token.
 

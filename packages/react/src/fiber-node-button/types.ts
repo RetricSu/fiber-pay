@@ -158,7 +158,7 @@ export interface FiberNodeButtonProps {
   passkeyUsername?: string;
   wasmFactory?: FiberWasmFactory;
   nodeConfig?: UseFiberNodeOptions['nodeConfig'];
-  /** Asset for channel funding, invoices, and payments. Defaults to CKB. */
+  /** Initial asset for channel funding, invoices, and payments. Defaults to CKB. */
   asset?: UdtAsset;
   className?: string;
   style?: CSSProperties;
