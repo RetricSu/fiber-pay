@@ -24,13 +24,17 @@ The preview requires cross-origin isolation for threaded WASM. The Vite developm
 
 ## Deploy with Vercel
 
-Import the repository root as a Vercel project. The root [`vercel.json`](../../vercel.json) provides:
+Import the repository as a Vercel project, leave **Root Directory** at the repository root (`./`),
+and click **Deploy**. Do not select this example directory as the project root because the build
+needs access to the workspace packages and the root [`vercel.json`](../../vercel.json).
+
+The checked-in configuration provides:
 
 - the workspace-aware install and build commands;
 - `examples/react-fiber-node-button-lab/dist` as the output directory;
 - the COOP, COEP and CORP response headers required by Fiber WASM.
 
-No environment variables are required for the default testnet preview.
+No dashboard overrides or environment variables are required for the default testnet preview.
 
 ## Safety
 

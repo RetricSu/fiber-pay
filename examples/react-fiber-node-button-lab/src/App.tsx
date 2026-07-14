@@ -1,5 +1,5 @@
 import { FiberNodeButton, type UseFiberNodeOptions, useFiberNode } from '@fiber-pay/react';
-import { type CSSProperties, useCallback, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 
 type ConnectStrategy = 'password' | 'passkey';
 
@@ -46,6 +46,15 @@ const componentTheme = {
   '--fpay-error': 'oklch(0.55 0.2 25)',
 } as CSSProperties;
 
+const DEFAULT_ASSET = { kind: 'ckb' } as const;
+
+const DROPDOWN_STYLE = {
+  width: 'min(520px, calc(100vw - 2rem))',
+  maxHeight: 'min(760px, calc(100vh - 7rem))',
+} as CSSProperties;
+
+let logIdCounter = 0;
+
 function shorten(value: string, head = 12, tail = 10): string {
   if (!value || value.length <= head + tail + 3) {
     return value;
@@ -64,12 +73,18 @@ export function App() {
     nodeConfig: RUSD_NODE_CONFIG,
   });
 
+  useEffect(() => {
+    if (fiber.passkeySupportReason && !fiber.isPasskeySupported) {
+      setStrategy('password');
+    }
+  }, [fiber.isPasskeySupported, fiber.passkeySupportReason]);
+
   const addLog = useCallback((message: string) => {
     const now = new Date();
     setEventLogs((previous) =>
       [
         {
-          id: `${now.getTime()}-${crypto.randomUUID()}`,
+          id: `${now.getTime()}-${logIdCounter++}`,
           text: `${now.toLocaleTimeString([], { hour12: false })}  ${message}`,
         },
         ...previous,
@@ -175,7 +190,10 @@ export function App() {
               <button
                 type="button"
                 aria-pressed={strategy === 'passkey'}
-                disabled={interactionLocked}
+                disabled={
+                  interactionLocked ||
+                  (fiber.passkeySupportReason !== null && !fiber.isPasskeySupported)
+                }
                 onClick={() => setStrategy('passkey')}
               >
                 Passkey
@@ -219,17 +237,13 @@ export function App() {
             <div className="component-anchor">
               <FiberNodeButton
                 fiber={fiber}
-                network="testnet"
                 strategy={strategy}
                 password={strategy === 'password' ? password : undefined}
-                asset={{ kind: 'ckb' }}
+                asset={DEFAULT_ASSET}
                 initialFundingAmount="1000"
                 invoiceAmount="1"
                 style={componentTheme}
-                dropdownStyle={{
-                  width: 'min(520px, calc(100vw - 2rem))',
-                  maxHeight: 'min(760px, calc(100vh - 7rem))',
-                }}
+                dropdownStyle={DROPDOWN_STYLE}
                 onConnect={(_node, info) => addLog(`Connected ${shorten(info.pubkey)}`)}
                 onDisconnect={() => addLog('Disconnected')}
                 onError={(message) => addLog(`Error: ${message}`)}
