@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ccc } from '@ckb-ccc/connector-react';
 import { App } from './App.tsx';
+import './app.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -10,8 +10,6 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <ccc.Provider defaultClient={new ccc.ClientPublicTestnet()}>
-      <App />
-    </ccc.Provider>
+    <App />
   </StrictMode>,
 );

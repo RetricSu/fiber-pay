@@ -1,48 +1,39 @@
-# React FiberNodeButton Lab
+# FiberNodeButton Live Preview
 
-Layer: React component layer (FiberNodeButton)
+A deployable, component-first preview of the current `FiberNodeButton` from `@fiber-pay/react`.
 
-Audience:
+The page runs a real browser Fiber node on testnet. It supports Passkey and password credentials, exposes the complete built-in management panel, and reads CKB plus the configured RUSD testnet asset from the node. No node state, balance, channel or payment is mocked.
 
-- Teams integrating FiberNodeButton into application UI and extending panel behavior.
+## Workspace source
 
-You will learn:
+This example depends on `@fiber-pay/react` through `workspace:*`. Building from the repository root compiles the current package source before Vite bundles the preview, so a deployment tracks the exact code in its Git commit rather than an older npm release.
 
-1. useFiberNode plus FiberNodeButton default management panel flow.
-2. Custom tabs configuration (add/hide/reorder tabs).
-3. renderAction override for selected actions.
-4. t callback for lightweight i18n overrides.
-5. externalFunding.resolve integration path with CCC signer handoff.
-6. CKB/RUSD asset switching with an explicit UDT whitelist and raw base-unit amounts.
+## Run locally
 
-Out of scope:
-
-1. Minimal connection-only integration (see react-min-connect).
-2. Direct browser SDK client/helper usage without React wrappers.
-3. Node-side recipe scripting.
-
-## Run
+From the repository root:
 
 ```bash
-pnpm -C examples/react-fiber-node-button-lab dev
+pnpm install
+pnpm --filter example-react-fiber-node-button-lab... build
+pnpm --filter example-react-fiber-node-button-lab dev
 ```
 
-Build:
+Open <http://localhost:5174>.
 
-```bash
-pnpm -C examples/react-fiber-node-button-lab build
-```
+The preview requires cross-origin isolation for threaded WASM. The Vite development and preview servers set the required headers automatically.
 
-Then open http://localhost:5174.
+## Deploy with Vercel
 
-## API Index
+Import the repository root as a Vercel project. The root [`vercel.json`](../../vercel.json) provides:
 
-- useFiberNode
-- FiberNodeButton
-- FiberNodeButton tabs prop
-- FiberNodeButton renderAction prop
-- FiberNodeButton t prop
+- the workspace-aware install and build commands;
+- `examples/react-fiber-node-button-lab/dist` as the output directory;
+- the COOP, COEP and CORP response headers required by Fiber WASM.
 
-## Next Step
+No environment variables are required for the default testnet preview.
 
-If you need direct browser RPC and helper operations without React helper components, continue to examples/browser-sdk-playground.
+## Safety
+
+- Use testnet funds only.
+- Passwords and credential material stay in browser storage and are not sent to the preview host.
+- Passkey mode requires HTTPS or localhost and an authenticator with WebAuthn PRF support.

@@ -8,7 +8,7 @@ This folder contains the canonical demos grouped by SDK integration layer.
 
 2. react-fiber-node-button-lab
 - Layer: React component
-- Focus: FiberNodeButton default panel and custom extension points
+- Focus: deployable, real-testnet FiberNodeButton live preview built from workspace packages
 
 3. browser-sdk-playground
 - Layer: Browser SDK
