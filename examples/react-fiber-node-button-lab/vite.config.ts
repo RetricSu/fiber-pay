@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { defineConfig, type Plugin } from 'vite';
 
 /**
  * Vite plugin to set Cross-Origin Isolation headers on all responses.
@@ -23,6 +23,14 @@ export default defineConfig({
   plugins: [react(), crossOriginIsolation()],
   server: {
     port: 5174,
+  },
+  preview: {
+    port: 4174,
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Cross-Origin-Resource-Policy': 'same-origin',
+    },
   },
   build: {
     // Browser Fiber WASM artifacts are intentionally large in this demo app.
