@@ -3,17 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>fiber-pay | CKB Fiber CLI + SDK Toolchain</title>
+    <title>fiber-pay | Fiber Network payments, from node to interface</title>
     <meta
       name="description"
-      content="fiber-pay is an AI-friendly toolchain for CKB Lightning on Fiber Network. Build with a stable CLI and a typed SDK stack for Node and Browser."
+      content="Build CKB Fiber payments with a typed SDK, production-ready React components, and an automation-friendly CLI."
     />
-    <meta property="og:title" content="fiber-pay | CLI + SDK Toolchain" />
+    <meta property="og:title" content="fiber-pay | Fiber Network payment toolkit" />
     <meta
       property="og:description"
-      content="Promotional site for fiber-pay: operator-grade CLI and developer-first SDK on Fiber Network."
+      content="One toolkit for browser payment interfaces, Fiber node operations, and agent-native payment flows."
     />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://retricsu.github.io/fiber-pay/" />
+    <meta name="theme-color" content="#f5f4ed" />
+    <link rel="canonical" href="https://retricsu.github.io/fiber-pay/" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23504fd6'/%3E%3Cpath d='M18 17h30v9H28v8h16v9H28v12H18V17Z' fill='%23f8f7f0'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./styles.css" />
     <script
       defer
@@ -23,160 +36,316 @@
     ></script>
   </head>
   <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+
     <header class="site-header">
-      <a class="brand" href="#top">@fiber-pay</a>
-      <nav aria-label="Main navigation">
-        <a href="#sdk">SDK</a>
-        <a href="#cli">CLI</a>
-        <a href="https://github.com/RetricSu/fiber-pay" target="_blank" rel="noreferrer">GitHub</a>
-      </nav>
+      <div class="header-inner">
+        <a class="brand" href="#top" aria-label="fiber-pay home">
+          <span class="brand-mark" aria-hidden="true">fp</span>
+          <span>fiber-pay</span>
+        </a>
+
+        <nav aria-label="Main navigation">
+          <a href="#react">React</a>
+          <a href="#cli">CLI</a>
+          <a href="https://github.com/RetricSu/fiber-pay" target="_blank" rel="noreferrer">GitHub</a>
+          <a
+            class="nav-demo"
+            href="https://fiber-pay-wasm-dual-node.vercel.app"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span class="live-dot" aria-hidden="true"></span>
+            Live demo
+            <span aria-hidden="true">↗</span>
+          </a>
+        </nav>
+      </div>
     </header>
 
-    <main id="top">
-      <section class="hero">
-        <h1>SDK and CLI toolchain for Fiber Network</h1>
-        <p class="tagline">
-          Integrate Fiber payments with one React component. <br />Start Fiber node with one CLI command.
-        </p>
-        <p>
-          fiber-pay is an AI-friendly toolchain for CKB Lightning on Fiber Network. Build
-          production payment flows with a React-first SDK layer and run AI-agent-native command
-          workflows with a CLI designed for automation.
-        </p>
-        <p>
-          <a href="#sdk">Get started with the React SDK</a> ·
-          <a href="#cli">Try the CLI workflows</a> ·
-          <a href="https://github.com/RetricSu/fiber-pay/tree/master/examples" target="_blank" rel="noreferrer">Browse examples</a>
-        </p>
+    <main id="content">
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow"><span>CKB · Fiber Network</span> Payment toolkit</p>
+          <h1>Payments,<br /><strong>from node to interface.</strong></h1>
+          <p class="hero-lede">
+            Build on Fiber without stitching the stack together yourself. Use one typed SDK for
+            payment logic, polished React primitives for the browser, and a CLI designed for both
+            people and agents.
+          </p>
 
-        <ul>
-          <li><strong>React plug-and-play.</strong> <code>FiberPayQuickCard</code> and <code>FiberNodeButton</code> for rapid payment UI integration.</li>
-          <li><strong>CLI Node and channel operations.</strong> Start, inspect, and manage Fiber node state with the CLI.</li>
-          <li><strong>L402 paywall in one command.</strong> Use <code>fiber-pay l402 proxy</code> to turn an HTTP endpoint into a paid, token-gated experience.</li>
-        </ul>
+          <div class="hero-actions">
+            <a
+              class="button button-primary"
+              href="https://fiber-pay-wasm-dual-node.vercel.app"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span>Try FiberNodeButton live</span>
+              <span aria-hidden="true">↗</span>
+            </a>
+            <a class="button button-secondary" href="#react">
+              Explore the toolkit
+              <span aria-hidden="true">↓</span>
+            </a>
+          </div>
+
+          <ul class="hero-facts" aria-label="Toolkit highlights">
+            <li>Real CKB testnet</li>
+            <li>Browser-hosted node</li>
+            <li>Typed end to end</li>
+          </ul>
+        </div>
+
+        <aside class="stack-map" aria-label="fiber-pay stack overview">
+          <div class="stack-map-header">
+            <span>THE FIBER-PAY STACK</span>
+            <span>ONE TYPED SURFACE</span>
+          </div>
+
+          <div class="stack-layer stack-layer-react">
+            <div class="stack-layer-index">01 / INTERFACE</div>
+            <strong>@fiber-pay/react</strong>
+            <span>Components and hooks</span>
+          </div>
+          <div class="stack-connector" aria-hidden="true"><span></span></div>
+          <div class="stack-layer stack-layer-sdk">
+            <div class="stack-layer-index">02 / LOGIC</div>
+            <strong>@fiber-pay/sdk</strong>
+            <span>Payments, channels, policies</span>
+          </div>
+          <div class="stack-connector" aria-hidden="true"><span></span></div>
+          <div class="stack-layer stack-layer-node">
+            <div class="stack-layer-index">03 / NETWORK</div>
+            <strong>Fiber node</strong>
+            <span>Browser or local runtime</span>
+          </div>
+
+          <div class="install-line">
+            <span aria-hidden="true">$</span>
+            <code>npm i @fiber-pay/react</code>
+            <span class="cursor" aria-hidden="true"></span>
+          </div>
+        </aside>
       </section>
 
-      <hr />
+      <section class="demo-callout" id="demo" aria-labelledby="demo-title">
+        <div class="section-number" aria-hidden="true">01</div>
+        <div class="demo-copy">
+          <p class="section-label"><span class="live-dot" aria-hidden="true"></span> Live reference</p>
+          <h2 id="demo-title">Don’t imagine the integration. Run it.</h2>
+          <p>
+            Open the actual <code>FiberNodeButton</code>, start a browser-hosted node, and inspect
+            the full component workflow against CKB testnet. No mocked balance, no simulated state.
+          </p>
+          <ul class="demo-proof" aria-label="Live demo capabilities">
+            <li><span>01</span> Passkey and password startup</li>
+            <li><span>02</span> Asset-aware channel controls</li>
+            <li><span>03</span> Diagnostics and live events</li>
+          </ul>
+        </div>
+        <a
+          class="demo-launch"
+          href="https://fiber-pay-wasm-dual-node.vercel.app"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Open the FiberNodeButton live preview in a new tab"
+        >
+          <span class="demo-launch-kicker">RUNNING ON VERCEL</span>
+          <strong>FiberNodeButton<br />live preview</strong>
+          <span class="demo-launch-action">Launch demo <span aria-hidden="true">↗</span></span>
+        </a>
+      </section>
 
-      <section id="sdk">
-        <h2>React-First SDK</h2>
-        <p>
-          Most teams integrate through <code>@fiber-pay/react</code> first, then drop down to
-          lower-level SDK APIs only for advanced control. Start with component primitives,
-          keep the browser-node lifecycle in hooks, and customize the panel UX as needed.
-        </p>
-        <ul>
-          <li>Quick entry: <code>FiberPayQuickCard</code> for invoice + payment flows.</li>
-          <li>Full panel: <code>FiberNodeButton</code> with tabs customization and i18n override.</li>
-          <li>Hooks: <code>useFiberNode</code> and <code>useFiberPayment</code> for controlled app state.</li>
-        </ul>
+      <section class="product-section" id="react" aria-labelledby="react-title">
+        <div class="product-heading">
+          <div class="section-number" aria-hidden="true">02</div>
+          <p class="section-label">React-first SDK</p>
+          <h2 id="react-title">A payment interface with the hard parts already wired.</h2>
+        </div>
 
-        <pre><code><span class="token-keyword">import</span> { <span class="token-function">FiberPayQuickCard</span>, <span class="token-function">FiberNodeButton</span>, <span class="token-function">useFiberNode</span> } <span class="token-keyword">from</span> <span class="token-string">'@fiber-pay/react'</span>;
+        <div class="product-body">
+          <div class="product-copy">
+            <p>
+              Start with a production-ready component, then drop down to hooks and typed SDK APIs
+              only when your product needs more control.
+            </p>
 
-<span class="token-keyword">export</span> <span class="token-keyword">function</span> <span class="token-function">WalletPanel</span>() {
-  <span class="token-keyword">const</span> fiber = <span class="token-function">useFiberNode</span>({ network: <span class="token-string">'testnet'</span>, walletId: <span class="token-string">'demo-wallet'</span> });
+            <dl class="feature-list">
+              <div>
+                <dt><code>FiberNodeButton</code></dt>
+                <dd>Node lifecycle, channels, assets, diagnostics, and extensible tabs.</dd>
+              </div>
+              <div>
+                <dt><code>FiberPayQuickCard</code></dt>
+                <dd>A compact path from invoice to completed payment.</dd>
+              </div>
+              <div>
+                <dt><code>useFiberNode</code></dt>
+                <dd>Controlled browser-node state for custom interfaces.</dd>
+              </div>
+            </dl>
+
+            <a
+              class="text-link"
+              href="https://github.com/RetricSu/fiber-pay/tree/master/packages/react"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Read the React package docs <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+
+          <div class="code-window" aria-label="FiberNodeButton React example">
+            <div class="code-window-bar">
+              <span>WalletPanel.tsx</span>
+              <span>REACT</span>
+            </div>
+            <pre><code><span class="token-keyword">import</span> {
+  <span class="token-function">FiberNodeButton</span>,
+  <span class="token-function">useFiberNode</span>,
+} <span class="token-keyword">from</span> <span class="token-string">'@fiber-pay/react'</span>;
+
+<span class="token-keyword">export function</span> <span class="token-function">WalletPanel</span>() {
+  <span class="token-keyword">const</span> fiber = <span class="token-function">useFiberNode</span>({
+    network: <span class="token-string">'testnet'</span>,
+    walletId: <span class="token-string">'my-app'</span>,
+  });
 
   <span class="token-keyword">return</span> (
-    &lt;&gt;
-      &lt;<span class="token-tag">FiberNodeButton</span>
-        fiber={fiber}
-        strategy=<span class="token-string">"passkey"</span>
-        tabs={[{ id: <span class="token-string">'workbench'</span> }, { id: <span class="token-string">'channels'</span> }]}
-        t={(key, fallback) =&gt; key === <span class="token-string">'tabs.workbench'</span> ? <span class="token-string">'Workbench'</span> : fallback}
-      /&gt;
-      &lt;<span class="token-tag">FiberPayQuickCard</span> fiber={fiber} network=<span class="token-string">"testnet"</span> /&gt;
-    &lt;/&gt;
+    &lt;<span class="token-tag">FiberNodeButton</span>
+      fiber={fiber}
+      strategy=<span class="token-string">"passkey"</span>
+    /&gt;
   );
 }</code></pre>
-
-        <details>
-          <summary>Advanced: low-level SDK API (<code>FiberRpcClient</code>)</summary>
-          <pre><code><span class="token-keyword">import</span> { <span class="token-function">FiberRpcClient</span> } <span class="token-keyword">from</span> <span class="token-string">'@fiber-pay/sdk'</span>;
-
-<span class="token-keyword">const</span> client = <span class="token-keyword">new</span> <span class="token-function">FiberRpcClient</span>({
-  url: <span class="token-string">'http://127.0.0.1:8227'</span>,
-  biscuitToken: process.env.FIBER_RPC_BISCUIT_TOKEN,
-});
-
-<span class="token-keyword">const</span> info = <span class="token-keyword">await</span> client.nodeInfo();
-console.log(info.pubkey);</code></pre>
-        </details>
+            <div class="code-window-foot">
+              <span>REAL COMPONENT</span>
+              <span>13 LINES</span>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <hr />
+      <section class="product-section product-section-cli" id="cli" aria-labelledby="cli-title">
+        <div class="product-heading">
+          <div class="section-number" aria-hidden="true">03</div>
+          <p class="section-label">Operator CLI</p>
+          <h2 id="cli-title">Node operations that read cleanly in a terminal or an agent trace.</h2>
+        </div>
 
-      <section id="cli">
-        <h2>CLI for Fiber operations and L402 paywalls</h2>
-        <p>
-          The CLI is most useful for everyday Fiber operations: launch a local node, inspect
-          network state, open or list channels, and put a simple paywall in front of any HTTP API
-          with <code>l402 proxy</code>.
-        </p>
-        <ul>
-          <li>One-command node startup and status checks with <code>node start</code> and <code>node info</code>.</li>
-          <li>Channel lifecycle helpers with <code>channel open</code> and <code>channel list</code>.</li>
-          <li><code>l402 proxy</code> for monetizing existing HTTP APIs with a lightweight paywall.</li>
-        </ul>
+        <div class="product-body product-body-cli">
+          <div class="cli-sequence" aria-label="CLI workflow">
+            <div class="cli-command">
+              <span class="cli-step">01</span>
+              <code>fiber-pay node start --json</code>
+              <span class="cli-result">NODE READY</span>
+            </div>
+            <div class="cli-command">
+              <span class="cli-step">02</span>
+              <code>fiber-pay channel open ...</code>
+              <span class="cli-result">CHANNEL OPEN</span>
+            </div>
+            <div class="cli-command">
+              <span class="cli-step">03</span>
+              <code>fiber-pay payment send ...</code>
+              <span class="cli-result">PAYMENT SENT</span>
+            </div>
+            <div class="cli-command cli-command-accent">
+              <span class="cli-step">04</span>
+              <code>fiber-pay l402 proxy ...</code>
+              <span class="cli-result">API METERED</span>
+            </div>
+          </div>
 
-        <pre><code><span class="token-function">npm</span> install -g <span class="token-string">@fiber-pay/cli</span>
+          <div class="product-copy cli-copy">
+            <p>
+              Launch and inspect nodes, manage channel lifecycle, send payments, and put an L402
+              paywall in front of an existing HTTP API. Stable JSON output keeps every workflow
+              automatable.
+            </p>
 
-<span class="token-comment"># 1) start local Fiber node</span>
-<span class="token-function">fiber-pay</span> --profile demo node start --json
+            <ul class="plain-list">
+              <li>Profile-aware local runtimes</li>
+              <li>Channel and liquidity operations</li>
+              <li>Background jobs, logs, and health checks</li>
+              <li>Agent-facing calls and L402 proxying</li>
+            </ul>
 
-<span class="token-comment"># 2) open a channel</span>
-<span class="token-function">fiber-pay</span> --profile demo channel open --peer &lt;pubkeyOrMultiaddr&gt; --funding <span class="token-number">1000</span> --json
-
-<span class="token-comment"># 3) inspect channel state</span>
-<span class="token-function">fiber-pay</span> --profile demo channel list --json
-
-<span class="token-comment"># 4) monetize any HTTP API with L402</span>
-<span class="token-function">fiber-pay</span> l402 proxy --target <span class="token-string">http://localhost:3000</span> --price <span class="token-number">0.1</span> --root-key &lt;hex&gt;</code></pre>
-
-        
-        <p>
-          For more experimental agent-native flows, <code>agent serve</code> and <code>agent call</code> are still available, but they are best treated as advanced use cases rather than the main entry point.
-        </p>
-
-          <p>
-            The CLI is also built for automation and agent-style workflows:
-          </p>
-          <ul>
-            <li><code>logs</code> and <code>runtime</code> for debugging, streaming, and health checks.</li>
-            <li><code>job list</code>, <code>job get</code>, and <code>job trace</code> for following background work and retries.</li>
-            <li><code>binary</code> and <code>config</code> to manage local Fiber binaries and multiple-profile settings.</li>
-          </ul>
-          <pre><code><span class="token-comment"># inspect recent runtime activity</span>
-<span class="token-function">fiber-pay</span> logs --tail <span class="token-number">100</span>
-
-<span class="token-comment"># start the runtime monitor and inspect status</span>
-<span class="token-function">fiber-pay</span> runtime start
-<span class="token-function">fiber-pay</span> runtime status
-
-<span class="token-comment"># inspect jobs emitted by automation or agent workflows</span>
-<span class="token-function">fiber-pay</span> job list --json
-
-<span class="token-comment"># manage the local Fiber binary and profile config</span>
-<span class="token-function">fiber-pay</span> binary info
-<span class="token-function">fiber-pay</span> config list</code></pre>
+            <a
+              class="text-link"
+              href="https://github.com/RetricSu/fiber-pay/tree/master/packages/cli"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Read the CLI docs <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+        </div>
       </section>
 
-      <hr />
+      <section class="workflow" aria-labelledby="workflow-title">
+        <div class="workflow-heading">
+          <p class="section-label">One stack, three entry points</p>
+          <h2 id="workflow-title">Start where your product is.</h2>
+        </div>
+        <ol>
+          <li>
+            <span>UI</span>
+            <strong>Ship a payment surface</strong>
+            <p>Use React primitives for the shortest path into a browser app.</p>
+          </li>
+          <li>
+            <span>SDK</span>
+            <strong>Own the product logic</strong>
+            <p>Compose typed payments, channels, funding, and security policies.</p>
+          </li>
+          <li>
+            <span>CLI</span>
+            <strong>Automate the runtime</strong>
+            <p>Run repeatable Fiber operations locally, in CI, or through an agent.</p>
+          </li>
+        </ol>
+      </section>
 
-      <section id="start">
-        <h2>Start building on fiber-pay today</h2>
-        <p>
-          Choose your path: automate operations with CLI, implement core logic with SDK,
-          or ship UI fast with React on top.
-        </p>
-        <p>
-          <a href="https://github.com/RetricSu/fiber-pay" target="_blank" rel="noreferrer">Open repository</a> ·
-          <a href="https://github.com/RetricSu/fiber-pay/tree/master/examples" target="_blank" rel="noreferrer">View examples</a>
-        </p>
+      <section class="final-cta" id="start" aria-labelledby="start-title">
+        <p class="section-label">Ready on testnet</p>
+        <h2 id="start-title">See the component work.<br />Then make it yours.</h2>
+        <div class="final-actions">
+          <a
+            class="button button-light"
+            href="https://fiber-pay-wasm-dual-node.vercel.app"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open live demo <span aria-hidden="true">↗</span>
+          </a>
+          <a
+            class="button button-ghost"
+            href="https://github.com/RetricSu/fiber-pay"
+            target="_blank"
+            rel="noreferrer"
+          >
+            View on GitHub <span aria-hidden="true">↗</span>
+          </a>
+        </div>
       </section>
     </main>
 
     <footer class="site-footer">
-      <p>fiber-pay — AI-friendly toolchain for CKB Lightning on Fiber Network.</p>
+      <div>
+        <a class="brand footer-brand" href="#top">
+          <span class="brand-mark" aria-hidden="true">fp</span>
+          <span>fiber-pay</span>
+        </a>
+        <p>Fiber Network payments, from node to interface.</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/RetricSu/fiber-pay" target="_blank" rel="noreferrer">GitHub</a>
+        <a href="https://www.npmjs.com/org/fiber-pay" target="_blank" rel="noreferrer">npm</a>
+        <a href="#react">React</a>
+        <a href="#cli">CLI</a>
+      </div>
     </footer>
   </body>
 </html>
