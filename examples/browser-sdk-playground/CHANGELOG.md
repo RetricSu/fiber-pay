@@ -1,5 +1,11 @@
 # browser-wallet
 
+## 0.0.10
+
+### Patch Changes
+
+- @fiber-pay/sdk@0.3.0
+
 ## 0.0.9
 
 ### Patch Changes

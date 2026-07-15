@@ -1,5 +1,15 @@
 # @fiber-pay/react
 
+## 0.3.0
+
+### Minor Changes
+
+- c1a1dee: Add multi-asset CKB/UDT selectors, asset-aware channel filtering and diagnostics, custom UDT scripts, and responsive FiberNodeButton panel layout.
+
+### Patch Changes
+
+- @fiber-pay/sdk@0.3.0
+
 ## 0.2.8
 
 ### Patch Changes
