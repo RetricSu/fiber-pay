@@ -32,7 +32,10 @@ export function isPendingChannelState(state: ChannelState): boolean {
     state === ChannelState.CollaboratingFundingTx ||
     state === ChannelState.SigningCommitment ||
     state === ChannelState.AwaitingTxSignatures ||
-    state === ChannelState.AwaitingChannelReady
+    state === ChannelState.AwaitingChannelReady ||
+    // Stale (fnn v0.9.0+): awaiting passive audit after a database restore,
+    // not usable until it settles back to a live state.
+    state === ChannelState.Stale
   );
 }
 

@@ -222,4 +222,4 @@ if (balances.kind === 'udt') {
 ## Compatibility
 
 - Node.js `>=20`
-- Fiber target: `v0.9.0-rc7`
+- Fiber target: `v0.9.0`

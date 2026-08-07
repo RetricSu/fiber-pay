@@ -1,3 +1,4 @@
+import { DEFAULT_FIBER_VERSION } from '@fiber-pay/node';
 import { Command } from 'commander';
 import type { CliConfig } from '../lib/config.js';
 import { runNodeInfoCommand } from '../lib/node-info.js';
@@ -64,7 +65,10 @@ export function createNodeCommand(config: CliConfig): Command {
     .description(
       'Run migration-aware upgrade flow (managed binaries download+upgrade; custom binaries migrate-only)',
     )
-    .option('--version <version>', 'Target Fiber version (default: bundled default v0.9.0-rc4)')
+    .option(
+      '--version <version>',
+      `Target Fiber version (default: bundled default ${DEFAULT_FIBER_VERSION})`,
+    )
     .option('--no-backup', 'Skip creating a store backup before migration')
     .option('--check-only', 'Only check if migration is needed, do not migrate')
     .option('--json')

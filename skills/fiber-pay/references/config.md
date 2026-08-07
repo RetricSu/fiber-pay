@@ -1,4 +1,4 @@
-# FNN Config Reference (v0.9.0-rc7)
+# FNN Config Reference (v0.9.0)
 
 - Structured reference for `config.yml` used by the Fiber Network Node (`fnn`). 
 - All values are set via `fiber-pay config set <path> <value>`.
@@ -140,8 +140,9 @@ Requires `cch` in `services`.
 | `cch.lnd_macaroon_path` | string | none | LND macaroon path |
 | `cch.wrapped_btc_type_script_args` | string | *required* | Wrapped BTC type script args |
 | `cch.expiry_delta_seconds` | number | `3600` | Order expiry delta (seconds) |
-| `cch.base_fee_sats` | number | `0` | Base fee per order (sats) |
-| `cch.fee_rate_per_million_sats` | number | `1` | Proportional fee |
+| `cch.base_fee_sats` | number | `100` | Base fee per order (sats) |
+| `cch.fee_rate_per_million_sats` | number | `3000` | Proportional fee |
+| `cch.max_outgoing_fee_percentage` | number | `80` | Max share of collected fee spent on outgoing routing (%) |
 | `cch.btc_final_tlc_expiry` | number | `36` | BTC final TLC expiry (seconds) |
 
 ---

@@ -397,6 +397,21 @@ export class FiberRpcClient implements IFiberClient {
   }
 
   // ===========================================================================
+  // Admin Module
+  // ===========================================================================
+
+  /**
+   * Backup the node database (fnn v0.9.0+).
+   *
+   * Writes a backup of the node store to disk on the node host. After a
+   * restore, channels enter the `STALE` state until a passive audit with the
+   * peer completes.
+   */
+  async backup(): Promise<void> {
+    return this.call<void>('backup', []);
+  }
+
+  // ===========================================================================
   // Utility Methods
   // ===========================================================================
 

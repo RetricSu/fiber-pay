@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       fiber_binary_version:
-        description: 'Override Fiber binary version (e.g. v0.9.0-rc4). Leave empty to use default.'
+        description: 'Override Fiber binary version (e.g. v0.9.0). Leave empty to use default.'
         required: false
         default: ''
 

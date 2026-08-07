@@ -238,7 +238,7 @@ Useful env overrides:
 
 - `SKIP_BUILD=1`
 - `SKIP_BINARY_DOWNLOAD=1`
-- `FIBER_BINARY_VERSION=v0.9.0-rc7`
+- `FIBER_BINARY_VERSION=v0.9.0`
 - `CHANNEL_FUNDING_CKB` (default `200`)
 - `INVOICE_AMOUNT_CKB` (default `1`, keep tiny for long-term reuse)
 - `MIN_FUNDING_BALANCE_CKB`

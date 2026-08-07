@@ -20,7 +20,7 @@ fiber-pay agent call http://host:8402 --prompt "your question"
 
 ## UDT (User-Defined Token) Support
 
-The CLI supports UDT channels, invoices, payments, and rebalances on Fiber `v0.9.0-rc7`:
+The CLI supports UDT channels, invoices, payments, and rebalances on Fiber `v0.9.0`:
 
 ```bash
 # Open a UDT channel
@@ -44,5 +44,5 @@ See [docs/l402-agent-guide.md](./docs/l402-agent-guide.md) for L402 and agent de
 ## Compatibility
 
 - Node.js `>=20`
-- Fiber target: `v0.9.0-rc7`
+- Fiber target: `v0.9.0`
 

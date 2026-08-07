@@ -1,8 +1,8 @@
 /**
- * Fiber Network Node RPC Types (Fiber v0.9.0-rc4)
+ * Fiber Network Node RPC Types (Fiber v0.9.0)
  *
  * The types in this file are intended to align with the upstream RPC spec:
- * https://github.com/nervosnetwork/fiber/blob/v0.9.0-rc4/crates/fiber-lib/src/rpc/README.md
+ * https://github.com/nervosnetwork/fiber/blob/v0.9.0/crates/fiber-lib/src/rpc/README.md
  */
 
 // =============================================================================
@@ -135,6 +135,11 @@ export enum ChannelState {
   ChannelReady = 'CHANNEL_READY',
   ShuttingDown = 'SHUTTING_DOWN',
   Closed = 'CLOSED',
+  /**
+   * The channel state is potentially outdated (e.g., after a database restore).
+   * fnn v0.9.0+ performs a passive audit with the peer before resuming operations.
+   */
+  Stale = 'STALE',
 }
 
 /** Channel state flags are serialized as a pipe-delimited SCREAMING_SNAKE_CASE string. */
@@ -214,6 +219,8 @@ export interface SessionRoute {
 
 export interface PaymentInfo {
   payment_hash: PaymentHash;
+  /** The preimage learned from a successful payment attempt (fnn v0.9.0+). */
+  payment_preimage?: Hash256;
   status: PaymentStatus;
   created_at: HexString;
   last_updated_at: HexString;
