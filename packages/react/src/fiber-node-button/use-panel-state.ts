@@ -48,6 +48,7 @@ import type {
 } from './types.js';
 import {
   getChannelFilterState,
+  isAbandonableChannelState,
   isPendingChannelState,
   shorten,
   summarizeError,
@@ -153,6 +154,7 @@ export interface FiberNodeButtonPanelState {
   selectedChannel: Channel | null;
   selectedPending: boolean;
   selectedCanClose: boolean;
+  selectedStale: boolean;
   selectedIsClosing: boolean;
   forceCloseConfirmOpen: boolean;
   setForceCloseConfirmOpen: Dispatch<SetStateAction<boolean>>;
@@ -569,7 +571,17 @@ export function useFiberNodeButtonPanelState(
           return;
         }
 
-        if (isPendingChannelState(target.state.state_name)) {
+        // Stale channels are funded and awaiting the post-restore passive
+        // audit; upstream `abandon_channel` does not protect Stale, so refuse
+        // the close instead of destroying local state with funds inside.
+        if (target.state.state_name === ChannelState.Stale) {
+          setChannels(latest.channels);
+          flashStatus('Channel is awaiting a post-restore audit and cannot be closed yet.', 'info');
+          onLog?.(`Refused to close stale channel (audit pending): ${channelId}`);
+          return;
+        }
+
+        if (isAbandonableChannelState(target.state.state_name)) {
           const params: AbandonChannelParams = {
             channel_id: channelId as HexString,
           };
@@ -941,7 +953,10 @@ export function useFiberNodeButtonPanelState(
   const selectedCanClose =
     !!selectedChannel &&
     selectedState !== ChannelState.Closed &&
-    selectedState !== ChannelState.ShuttingDown;
+    selectedState !== ChannelState.ShuttingDown &&
+    // Stale: awaiting post-restore audit — neither shutdown nor abandon is safe.
+    selectedState !== ChannelState.Stale;
+  const selectedStale = selectedState === ChannelState.Stale;
   const selectedIsClosing = !!selectedChannel && closingChannelId === selectedChannel.channel_id;
 
   const connectorContext: FiberNodeButtonConnectorSectionContext = useMemo(
@@ -1029,6 +1044,7 @@ export function useFiberNodeButtonPanelState(
     selectedChannel,
     selectedPending,
     selectedCanClose,
+    selectedStale,
     selectedIsClosing,
     forceCloseConfirmOpen,
     setForceCloseConfirmOpen,

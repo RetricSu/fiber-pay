@@ -121,6 +121,8 @@ export function stateLabel(state: ChannelState): string {
       return '🛑 Shutting Down';
     case ChannelState.Closed:
       return '❌ Closed';
+    case ChannelState.Stale:
+      return '⚠️ Stale (audit pending)';
     default:
       return state;
   }

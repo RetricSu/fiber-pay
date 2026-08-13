@@ -1,4 +1,4 @@
-import type { FiberRpcClient } from '@fiber-pay/sdk';
+import type { FiberRpcClient, PaymentInfo } from '@fiber-pay/sdk';
 import type { AlertManager } from '../alerts/alert-manager.js';
 import type { Store } from '../storage/types.js';
 import { BaseMonitor, type BaseMonitorHooks } from './base-monitor.js';
@@ -7,6 +7,24 @@ import { isExpectedTrackerError, isNotFoundError } from './tracker-utils.js';
 export interface PaymentTrackerConfig {
   intervalMs: number;
   completedItemTtlSeconds: number;
+}
+
+/**
+ * Field-whitelisted payment view for alert payloads.
+ *
+ * Alerts are fanned out to file (on by default), webhook, and websocket
+ * backends, so the full PaymentInfo must not be embedded: since fnn v0.9.0 it
+ * can carry `payment_preimage`, the cryptographic proof of payment, which
+ * should not be persisted to alert logs or pushed to external endpoints.
+ * Mirrors the whitelist used by payment-executor job results.
+ */
+function toAlertPaymentSummary(payment: PaymentInfo) {
+  return {
+    payment_hash: payment.payment_hash,
+    status: payment.status,
+    fee: payment.fee,
+    failed_error: payment.failed_error,
+  };
 }
 
 export class PaymentTracker extends BaseMonitor {
@@ -58,7 +76,7 @@ export class PaymentTracker extends BaseMonitor {
                 paymentHash: payment.paymentHash,
                 previousStatus,
                 currentStatus,
-                payment: next,
+                payment: toAlertPaymentSummary(next),
               },
             });
           }
@@ -72,7 +90,7 @@ export class PaymentTracker extends BaseMonitor {
                 paymentHash: payment.paymentHash,
                 previousStatus,
                 currentStatus,
-                payment: next,
+                payment: toAlertPaymentSummary(next),
               },
             });
           }

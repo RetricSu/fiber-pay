@@ -7,7 +7,7 @@ description: Operate CKB Lightning payments through fiber-pay CLI, including UDT
 
 fiber-pay is an AI payment layer over Fiber Network for CKB Lightning. It provides an AI-friendly CLI to manage node lifecycle, channels, invoices, payments, UDT (User-Defined Token) support, and more.
 
-- Last updated: 2026-07-09
+- Last updated: 2026-08-13
 - Fiber node target: v0.9.0
 - Fiber RPC reference: https://github.com/nervosnetwork/fiber/blob/v0.9.0/crates/fiber-lib/src/rpc/README.md
 

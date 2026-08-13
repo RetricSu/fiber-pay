@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   createKeyManager,
+  DEFAULT_FIBER_VERSION,
   ensureFiberBinary,
   type FiberNodeConfig,
   ProcessManager,
@@ -269,7 +270,7 @@ export async function runNodeStartCommand(
         message: `Fiber node exited during startup${details}`,
         recoverable: true,
         suggestion: isDbTooOld
-          ? 'The store is too old for fnn v0.9.0-rc4. Run `fiber-pay node upgrade` first.'
+          ? `The store is too old for fnn ${DEFAULT_FIBER_VERSION}. Run \`fiber-pay node upgrade\` first.`
           : 'Inspect fnn logs and verify config ports are free before retrying.',
         details: earlyStop ?? undefined,
       });

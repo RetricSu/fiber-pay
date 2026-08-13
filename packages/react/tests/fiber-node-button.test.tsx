@@ -242,6 +242,66 @@ describe('FiberNodeButton', () => {
     });
   });
 
+  it('refuses to close a stale channel instead of routing it to abandon', async () => {
+    const staleChannel = {
+      channel_id: '0xchannel',
+      is_public: false,
+      is_acceptor: false,
+      is_one_way: false,
+      channel_outpoint: null,
+      pubkey: '0xpeer',
+      funding_udt_type_script: null,
+      state: {
+        state_name: ChannelState.Stale,
+      },
+      local_balance: '0x5f5e100',
+      offered_tlc_balance: '0x0',
+      remote_balance: '0x3b9aca00',
+      received_tlc_balance: '0x0',
+      pending_tlcs: [],
+      latest_commitment_transaction_hash: null,
+      created_at: '0x1',
+      enabled: true,
+      tlc_expiry_delta: '0x0',
+      tlc_fee_proportional_millionths: '0x0',
+      shutdown_transaction_hash: null,
+    };
+
+    const node = createNodeMock();
+    node.listChannels = vi.fn(async () => ({ channels: [staleChannel] }));
+
+    const fiber = createFiberMock({
+      state: 'running',
+      isRunning: true,
+      node: node as unknown as UseFiberNodeResult['node'],
+      nodeInfo: { pubkey: '0x0123456789abcdef0123456789abcdef' } as UseFiberNodeResult['nodeInfo'],
+    });
+
+    render(<FiberNodeButton fiber={fiber} strategy="passkey" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /0x012345/i }));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Channels' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'pending (1)' })).toBeTruthy();
+    });
+
+    // The stale channel only lists under the pending filter; switching to it
+    // auto-selects the channel and reveals the detail panel.
+    fireEvent.click(screen.getByRole('button', { name: 'pending (1)' }));
+
+    // The close action is labelled for the stale state and disabled — it must
+    // never reach abandonChannel, which would destroy funded channel state.
+    await waitFor(() => {
+      const closeButton = screen.getByRole('button', { name: 'Stale (audit pending)' });
+      expect(closeButton.hasAttribute('disabled')).toBe(true);
+    });
+
+    expect(node.abandonChannel).not.toHaveBeenCalled();
+    expect(node.shutdownChannel).not.toHaveBeenCalled();
+  });
+
   it('creates UDT invoice with udt_type_script when asset is UDT', async () => {
     const node = createNodeMock();
     const fiber = createFiberMock({

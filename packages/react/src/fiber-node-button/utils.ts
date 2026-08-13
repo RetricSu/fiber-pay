@@ -39,6 +39,26 @@ export function isPendingChannelState(state: ChannelState): boolean {
   );
 }
 
+/**
+ * Pending states that may be closed via `abandon_channel` (unfunded channels
+ * that never went live).
+ *
+ * Deliberately narrower than {@link isPendingChannelState}: it excludes Stale.
+ * A Stale channel is already funded and merely awaiting the post-restore
+ * passive audit; upstream `abandon_channel` does not protect Stale, so calling
+ * it would destroy local channel state with funds still inside. Stale channels
+ * must never be routed to abandon — wait for the audit to settle instead.
+ */
+export function isAbandonableChannelState(state: ChannelState): boolean {
+  return (
+    state === ChannelState.NegotiatingFunding ||
+    state === ChannelState.CollaboratingFundingTx ||
+    state === ChannelState.SigningCommitment ||
+    state === ChannelState.AwaitingTxSignatures ||
+    state === ChannelState.AwaitingChannelReady
+  );
+}
+
 export function isClosedChannelState(state: ChannelState): boolean {
   return state === ChannelState.Closed || state === ChannelState.ShuttingDown;
 }

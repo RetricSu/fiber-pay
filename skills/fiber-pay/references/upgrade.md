@@ -74,14 +74,20 @@ Recommended operator sequence:
 ## Programmatic API (`@fiber-pay/node`)
 
 ```typescript
-import { BinaryManager, LegacyMigration, resolveStorePath, storeExists } from '@fiber-pay/node';
+import {
+  BinaryManager,
+  DEFAULT_FIBER_VERSION,
+  LegacyMigration,
+  resolveStorePath,
+  storeExists,
+} from '@fiber-pay/node';
 import * as os from 'os';
 
 const dataDir = `${os.homedir()}/.fiber-pay`;
 const bm = new BinaryManager(`${dataDir}/bin`);
 
 // Download only the fnn binary (no fnn-migrate extracted)
-const info = await bm.download({ version: 'v0.9.0-rc4' });
+const info = await bm.download({ version: DEFAULT_FIBER_VERSION });
 
 // Run legacy migration if needed
 if (storeExists(dataDir)) {

@@ -86,7 +86,7 @@ Nginx, Cloudflare, or Vercel), not only in local dev tooling.
 ### Bundle Size Expectations
 
 The Fiber browser runtime is intentionally heavy. Expect a large WASM-related chunk in production builds
-(roughly ~45.5 MB raw and ~13.4 MB gzip with fiber-js 0.9.0-rc4 in the current React lab). Prefer route-level code splitting and lazy
+(roughly ~14.8 MB raw and ~6.8 MB gzip with fiber-js 0.9.0 in the current React lab, down from ~45.5 MB / ~13.4 MB on 0.9.0-rc4). Prefer route-level code splitting and lazy
 mounting so the chunk loads only when payment/node features are needed.
 
 `@fiber-pay/sdk/browser` also exports `FiberRpcClient` for migration compatibility.
