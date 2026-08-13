@@ -1,5 +1,12 @@
 # @fiber-pay/runtime
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [615e3bf]
+  - @fiber-pay/sdk@0.3.1
+
 ## 0.3.0
 
 ### Patch Changes
