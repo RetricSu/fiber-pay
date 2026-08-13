@@ -3,4 +3,4 @@
  */
 
 /** Default Fiber Network Node binary version used for downloads when no version is specified. */
-export const DEFAULT_FIBER_VERSION = 'v0.9.0-rc7';
+export const DEFAULT_FIBER_VERSION = 'v0.9.0';

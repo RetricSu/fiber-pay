@@ -1,7 +1,7 @@
 # =============================================================================
 # Fiber Network Node (fnn) - Full Configuration Reference
 # =============================================================================
-# Version: v0.9.0-rc7
+# Version: v0.9.0
 #
 # Usage:
 #   fnn --config /path/to/config.yml
@@ -298,12 +298,16 @@ ckb:
 #   expiry_delta_seconds: 3600
 #
 #   # Base fee per cross-chain order, in satoshis
-#   # [default: 0]
-#   base_fee_sats: 0
+#   # [default: 100]
+#   base_fee_sats: 100
 #
 #   # Proportional fee per million satoshis
-#   # [default: 1]
-#   fee_rate_per_million_sats: 1
+#   # [default: 3000]
+#   fee_rate_per_million_sats: 3000
+#
+#   # Max share of the collected fee spendable on outgoing routing fees, in percent
+#   # [default: 80]
+#   max_outgoing_fee_percentage: 80
 #
 #   # Final TLC expiry for BTC network, in seconds
 #   # [default: 36]

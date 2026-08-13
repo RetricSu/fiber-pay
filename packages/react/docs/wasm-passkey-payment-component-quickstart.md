@@ -330,7 +330,7 @@ Use this path when you want to ship a functional payment panel quickly, then pro
 - Treat browser XSS hardening as top priority (CSP, script hygiene, strict dependency review).
 - Avoid exposing privileged backend tokens in browser bundles.
 - For browser multithreaded WASM runtime, keep COOP/COEP settings correctly configured.
-- Expect a large WASM-related bundle chunk (roughly ~45.5 MB raw, ~13.4 MB gzip with fiber-js 0.9.0-rc4 in the current React lab);
+- Expect a large WASM-related bundle chunk (roughly ~14.8 MB raw, ~6.8 MB gzip with fiber-js 0.9.0 in the current React lab, down from ~45.5 MB / ~13.4 MB on 0.9.0-rc4);
   use route-level split/lazy mounting for payment-heavy UI.
 
 ## 8) Reference Paths

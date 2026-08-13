@@ -7,8 +7,8 @@ settings:
 catalogs:
   default:
     '@nervosnetwork/fiber-js':
-      specifier: ~0.9.0-rc4
-      version: 0.9.0-rc4
+      specifier: ~0.9.0
+      version: 0.9.0
 
 overrides:
   rollup@>=4.0.0 <4.59.0: '>=4.59.0'
@@ -61,7 +61,7 @@ importers:
         version: link:../../packages/sdk
       '@nervosnetwork/fiber-js':
         specifier: 'catalog:'
-        version: 0.9.0-rc4
+        version: 0.9.0
     devDependencies:
       playwright:
         specifier: ^1.55.0
@@ -74,7 +74,7 @@ importers:
     dependencies:
       '@nervosnetwork/fiber-js':
         specifier: 'catalog:'
-        version: 0.9.0-rc4
+        version: 0.9.0
     devDependencies:
       playwright:
         specifier: ^1.55.0
@@ -90,7 +90,7 @@ importers:
         version: link:../../packages/sdk
       '@nervosnetwork/fiber-js':
         specifier: 'catalog:'
-        version: 0.9.0-rc4
+        version: 0.9.0
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -142,7 +142,7 @@ importers:
         version: link:../../packages/react
       '@nervosnetwork/fiber-js':
         specifier: 'catalog:'
-        version: 0.9.0-rc4
+        version: 0.9.0
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -191,7 +191,7 @@ importers:
         version: link:../../packages/react
       '@nervosnetwork/fiber-js':
         specifier: 'catalog:'
-        version: 0.9.0-rc4
+        version: 0.9.0
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -321,7 +321,7 @@ importers:
     devDependencies:
       '@nervosnetwork/fiber-js':
         specifier: 'catalog:'
-        version: 0.9.0-rc4
+        version: 0.9.0
       '@testing-library/react':
         specifier: ^16.3.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -348,8 +348,8 @@ importers:
   packages/sdk:
     dependencies:
       '@nervosnetwork/fiber-js':
-        specifier: ~0.9.0-rc4
-        version: 0.9.0-rc4
+        specifier: ~0.9.0
+        version: 0.9.0
       '@noble/hashes':
         specifier: ^2.0.1
         version: 2.0.1
@@ -1017,8 +1017,8 @@ packages:
   '@manypkg/get-packages@1.1.3':
     resolution: {integrity: sha512-fo+QhuU3qE/2TQMQmbVMqaQ6EWbMhi4ABWP+O4AM1NqPBuy0OrApV5LO6BrrgnhtAHS2NH6RrVk9OL181tTi8A==}
 
-  '@nervosnetwork/fiber-js@0.9.0-rc4':
-    resolution: {integrity: sha512-JSM5Qt59UN0likBP+ZMaWlJ5WcATtUriplG9hp/0tLHbm41lF71i5R/cJMbiIgCozN9BMgi9+ReVJH/0YrD85Q==}
+  '@nervosnetwork/fiber-js@0.9.0':
+    resolution: {integrity: sha512-LQ7RtoLSZUY4lMEqDB16l/GemtxXjU/11oewZ2MJqY06r3l5hTNbwC/4xmNA7XjXN5SykdBfZx640eSMRVlNiw==}
 
   '@noble/hashes@2.0.1':
     resolution: {integrity: sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw==}
@@ -3728,7 +3728,7 @@ snapshots:
       globby: 11.1.0
       read-yaml-file: 1.1.0
 
-  '@nervosnetwork/fiber-js@0.9.0-rc4':
+  '@nervosnetwork/fiber-js@0.9.0':
     dependencies:
       async-mutex: 0.5.0
       stream-browserify: 3.0.0

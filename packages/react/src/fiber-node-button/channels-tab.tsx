@@ -76,6 +76,7 @@ export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTa
     selectedCanClose,
     selectedIsClosing,
     selectedPending,
+    selectedStale,
     closeChannel,
   } = state;
 
@@ -297,9 +298,11 @@ export function ChannelsTab({ state, fiber, onLog, renderAction, t }: ChannelsTa
               defaultProps: {
                 id: 'close-channel',
                 channelId: selectedChannel.channel_id,
-                label: selectedPending
-                  ? t('actions.abandonPending', 'Abandon Pending')
-                  : t('actions.closeChannel', 'Close Channel'),
+                label: selectedStale
+                  ? t('actions.staleAuditPending', 'Stale (audit pending)')
+                  : selectedPending
+                    ? t('actions.abandonPending', 'Abandon Pending')
+                    : t('actions.closeChannel', 'Close Channel'),
                 loadingLabel: t('actions.closeChannel.loading', 'Closing...'),
                 disabled: !selectedCanClose || selectedIsClosing,
                 loading: selectedIsClosing,

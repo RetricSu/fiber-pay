@@ -397,6 +397,31 @@ export class FiberRpcClient implements IFiberClient {
   }
 
   // ===========================================================================
+  // Admin Module
+  // ===========================================================================
+
+  /**
+   * Backup the node database (fnn v0.9.0+).
+   *
+   * Writes a backup of the node store to disk on the node host. After a
+   * restore, channels enter the `STALE` state until a passive audit with the
+   * peer completes.
+   *
+   * RPC-client-only capability: writing to the node host's disk is meaningless
+   * for `FiberBrowserNode` (in-browser WASM node), so this method is
+   * deliberately not part of the shared `IFiberClient` interface.
+   *
+   * Known upstream limitation (fnn v0.9.0): the Biscuit auth rule is registered
+   * under the key `backup_now` while the RPC method is named `backup`, so on
+   * nodes with authentication enabled the call is fail-closed rejected with
+   * "no rules for method". Use against a local (unauthenticated) RPC, or wait
+   * for the upstream fix.
+   */
+  async backup(): Promise<void> {
+    return this.call<void>('backup', []);
+  }
+
+  // ===========================================================================
   // Utility Methods
   // ===========================================================================
 

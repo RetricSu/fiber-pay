@@ -106,6 +106,55 @@ describe('PaymentTracker', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
+  it('strips payment_preimage from outgoing_payment_completed alert payloads', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'fiber-payment-tracker-'));
+    const store = new MemoryStore({
+      stateFilePath: join(dir, 'runtime-state.json'),
+      flushIntervalMs: 1000,
+      maxAlertHistory: 100,
+    });
+    store.addTrackedPayment('0xpay-success', 'Inflight');
+
+    const emitted: Alert[] = [];
+    const alerts = new AlertManager({
+      backends: [new CaptureAlertBackend(emitted)],
+      store,
+    });
+
+    const client = {
+      getPayment: async () => ({
+        payment_hash: '0xpay-success',
+        payment_preimage: '0xsecret-preimage',
+        status: 'Success',
+        fee: '0x1',
+        created_at: '0x0',
+        last_updated_at: '0x1',
+      }),
+    };
+
+    const tracker = new PaymentTracker({
+      client: client as unknown as FiberRpcClient,
+      store,
+      alerts,
+      config: {
+        intervalMs: 1000,
+        completedItemTtlSeconds: 60,
+      },
+    });
+
+    await (tracker as unknown as { poll: () => Promise<void> }).poll();
+
+    const completed = emitted.find((item) => item.type === 'outgoing_payment_completed');
+    expect(completed).toBeDefined();
+    expect(JSON.stringify(completed)).not.toContain('0xsecret-preimage');
+    expect(JSON.stringify(completed)).not.toContain('payment_preimage');
+    expect(completed?.data).toMatchObject({
+      paymentHash: '0xpay-success',
+      payment: { payment_hash: '0xpay-success', status: 'Success', fee: '0x1' },
+    });
+    await rm(dir, { recursive: true, force: true });
+  });
+
   it('marks payment as Failed when RPC not-found appears in error data payload', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'fiber-payment-tracker-'));
     const store = new MemoryStore({

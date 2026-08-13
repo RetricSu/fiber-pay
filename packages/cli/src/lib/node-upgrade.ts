@@ -2,7 +2,12 @@
  * Implementation of `fiber-pay node upgrade`.
  */
 
-import { LegacyMigration, resolveStorePath, storeExists } from '@fiber-pay/node';
+import {
+  DEFAULT_FIBER_VERSION,
+  LegacyMigration,
+  resolveStorePath,
+  storeExists,
+} from '@fiber-pay/node';
 import type { ResolvedBinaryPath } from './binary-path.js';
 import { getBinaryManagerInstallDirOrThrow, resolveBinaryPath } from './binary-path.js';
 import type { CliConfig } from './config.js';
@@ -265,7 +270,7 @@ async function runLegacyMigrationIfNeeded(
   }
 
   if (!json) {
-    console.log('🔄 Preparing store for fnn v0.9.0-rc4...');
+    console.log(`🔄 Preparing store for fnn ${DEFAULT_FIBER_VERSION}...`);
   }
 
   const legacy = new LegacyMigration('v0.8.1');

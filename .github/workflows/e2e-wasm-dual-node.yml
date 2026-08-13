@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       fiber_js_version:
-        description: 'Override @nervosnetwork/fiber-js version (e.g. 0.9.0-rc6). Leave empty to use workspace default.'
+        description: 'Override @nervosnetwork/fiber-js version (e.g. 0.9.0). Leave empty to use workspace default.'
         required: false
         default: ''
 

@@ -21,6 +21,7 @@ This document is the single source of truth for project development and maintain
 		- [Notes](#notes)
 		- [Required GitHub secret](#required-github-secret)
 		- [Quick release checklist](#quick-release-checklist)
+	- [Fiber (fnn) version upgrade checklist](#fiber-fnn-version-upgrade-checklist)
 	- [Smoke script (no token consumption)](#smoke-script-no-token-consumption)
 	- [Canonical E2E script (single entry)](#canonical-e2e-script-single-entry)
 
@@ -174,6 +175,41 @@ Workflow file: `.github/workflows/release.yml`
 - create and push tag: `vX.Y.Z` (or `vX.Y.Z-rc.N`)
 - confirm `Release` workflow passes in GitHub Actions
 
+## Fiber (fnn) version upgrade checklist
+
+Version strings are scattered across user-facing text; a plain grep for the old
+version is necessary but not sufficient. When bumping the fnn target, walk this
+list:
+
+1. **Single source**: `packages/node/src/constants.ts` (`DEFAULT_FIBER_VERSION`).
+   Runtime code must interpolate it — never hardcode a version in new messages.
+2. **fiber-js dependency**: catalog entry in `pnpm-workspace.yaml` plus any
+   `peerDependencies` overrides, then re-resolve the lockfile and diff the
+   stable `.d.ts` against the previous rc for WASM API changes.
+3. **CLI user-visible text**: `packages/cli/src/commands/node.ts`,
+   `packages/cli/src/lib/node-start.ts`, `packages/cli/src/lib/node-upgrade.ts`,
+   `packages/cli/src/lib/node-version-policy.ts` — these should all interpolate
+   `DEFAULT_FIBER_VERSION`; grep for hardcoded `v0.` remnants anyway.
+4. **RPC surface delta** (upstream rpc/README diff between versions): new
+   `ChannelState` values → `packages/sdk/src/types/rpc.ts` enum,
+   `packages/cli/src/lib/format.ts` (`stateLabel` / `parseChannelState`), and
+   the React predicates in `packages/react/src/fiber-node-button/utils.ts`
+   (display vs. destructive-operation semantics — a "pending" state that is
+   funded must not route to `abandon_channel`); new RPC methods →
+   `packages/sdk/src/rpc/client.ts` (decide explicitly whether each belongs on
+   the shared `IFiberClient` interface); new response fields → check fan-out
+   sinks (runtime alert payloads are field-whitelisted for this reason).
+5. **Skill docs**: `skills/fiber-pay/SKILL.md` (description, node target, RPC
+   reference link, `Last updated` date) and `skills/fiber-pay/references/*.md`
+   runnable examples — historical migration notes keep old versions on purpose,
+   copy-paste-runnable examples must not.
+6. **Bundle-size notes**: `packages/react/README.md`,
+   `packages/sdk/README.md`,
+   `packages/react/docs/wasm-passkey-payment-component-quickstart.md` — re-measure
+   with the new fiber-js or keep the wording version-agnostic.
+7. **Workflows**: `.github/workflows/*smoke*`, `e2e-*` — confirm they pick the
+   version up from the constant rather than pinning their own.
+
 ## Smoke script (no token consumption)
 
 Use smoke checks for startup/readiness/log health only (no channel open/payment):
@@ -238,7 +274,7 @@ Useful env overrides:
 
 - `SKIP_BUILD=1`
 - `SKIP_BINARY_DOWNLOAD=1`
-- `FIBER_BINARY_VERSION=v0.9.0-rc7`
+- `FIBER_BINARY_VERSION=v0.9.0`
 - `CHANNEL_FUNDING_CKB` (default `200`)
 - `INVOICE_AMOUNT_CKB` (default `1`, keep tiny for long-term reuse)
 - `MIN_FUNDING_BALANCE_CKB`
