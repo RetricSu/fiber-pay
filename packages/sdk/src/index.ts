@@ -18,6 +18,7 @@ export type {
   BiscuitAction,
   BiscuitMethodRule,
   BiscuitPermission,
+  CollectBiscuitPermissionsOptions,
 } from './security/biscuit-policy.js';
 // Security components
 export {
