@@ -1,5 +1,14 @@
 # @fiber-pay/cli
 
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [7e3d322]
+  - @fiber-pay/sdk@0.3.2
+  - @fiber-pay/node@0.3.2
+  - @fiber-pay/runtime@0.3.2
+
 ## 0.3.1
 
 ### Patch Changes

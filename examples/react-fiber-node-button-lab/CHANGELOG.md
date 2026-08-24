@@ -1,5 +1,11 @@
 # react-quick-card
 
+## 0.0.9
+
+### Patch Changes
+
+- @fiber-pay/react@0.3.2
+
 ## 0.0.8
 
 ### Patch Changes
