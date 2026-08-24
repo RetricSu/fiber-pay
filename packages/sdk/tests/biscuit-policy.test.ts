@@ -5,7 +5,9 @@ import {
   renderBiscuitFactsForMethods,
   renderBiscuitPermissionFacts,
 } from '../src/security/biscuit-policy.js';
+import type { BiscuitMethodRule } from '../src/security/biscuit-policy.js';
 import { describe, expect, it } from 'vitest';
+import { FNN_V0_9_0_RULES } from './fixtures/fnn-biscuit-rules.js';
 
 describe('biscuit policy helper', () => {
   it('returns rule for known method', () => {
@@ -75,5 +77,72 @@ describe('biscuit policy helper', () => {
     expect(openRule?.requiresChannelRight).toBe(false);
     expect(submitRule?.permissions).toEqual([{ action: 'write', resource: 'channels' }]);
     expect(submitRule?.requiresChannelRight).toBe(false);
+  });
+
+  it('requires write("cch") for receive_btc (fnn v0.9.0)', () => {
+    const rule = getBiscuitRuleForMethod('receive_btc');
+    expect(rule?.permissions).toEqual([{ action: 'write', resource: 'cch' }]);
+  });
+
+  it('scopes dev methods to write("dev") (fnn v0.9.0)', () => {
+    const devMethods = [
+      'commitment_signed',
+      'add_tlc',
+      'remove_tlc',
+      'check_channel_shutdown',
+      'sign_external_funding_tx',
+      'submit_commitment_transaction',
+    ];
+
+    for (const method of devMethods) {
+      expect(getBiscuitRuleForMethod(method)?.permissions).toEqual([
+        { action: 'write', resource: 'dev' },
+      ]);
+    }
+  });
+
+  it('grants read("cch") alongside write("cch") by default', () => {
+    // fnn v0.9.0: get_cch_order still needs read("cch"), and pre-v0.9.0 nodes
+    // require read("cch") for receive_btc — a write-only cch token is broken
+    // in practice on both.
+    expect(collectBiscuitPermissions(['receive_btc'])).toEqual([
+      { action: 'read', resource: 'cch' },
+      { action: 'write', resource: 'cch' },
+    ]);
+    expect(renderBiscuitFactsForMethods(['send_btc'])).toBe('read("cch");\nwrite("cch");');
+  });
+
+  it('can opt out of the cch read compat grant', () => {
+    expect(collectBiscuitPermissions(['receive_btc'], { cchReadCompat: false })).toEqual([
+      { action: 'write', resource: 'cch' },
+    ]);
+    expect(renderBiscuitFactsForMethods(['send_btc'], { cchReadCompat: false })).toBe(
+      'write("cch");',
+    );
+  });
+
+  it('does not add write("cch") for read-only cch methods', () => {
+    expect(collectBiscuitPermissions(['get_cch_order'])).toEqual([
+      { action: 'read', resource: 'cch' },
+    ]);
+  });
+
+  it('deliberately omits non-mintable or fail-closed upstream methods', () => {
+    // subscribe_store_changes requires the node-internal
+    // internal("store_changes") scope; backup_now is registered upstream
+    // under a rule key that does not match the RPC method name (`backup`).
+    expect(getBiscuitRuleForMethod('subscribe_store_changes')).toBeUndefined();
+    expect(getBiscuitRuleForMethod('backup_now')).toBeUndefined();
+    expect(getBiscuitRuleForMethod('backup')).toBeUndefined();
+  });
+
+  it('RULES mirrors the fnn v0.9.0 upstream rule table', () => {
+    const actual: Record<string, BiscuitMethodRule> = {};
+    for (const method of listSupportedBiscuitMethods()) {
+      const rule = getBiscuitRuleForMethod(method);
+      if (rule) actual[method] = rule;
+    }
+
+    expect(actual).toEqual(FNN_V0_9_0_RULES);
   });
 });

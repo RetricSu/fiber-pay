@@ -3,6 +3,22 @@
  *
  * These helpers model the upstream RPC authorization rules and generate
  * token-side permission facts like `read("peers");` and `write("payments");`.
+ *
+ * The RULES table mirrors fnn v0.9.0 `build_rules()`
+ * (crates/fiber-lib/src/rpc/biscuit.rs @ v0.9.0, also documented in upstream
+ * docs/biscuit-auth.md), with two deliberate omissions:
+ *
+ * - `subscribe_store_changes`: upstream requires `internal("store_changes")`,
+ *   a node-internal scope that user-minted tokens must not carry.
+ * - `backup_now`: upstream registers the rule under the key `backup_now`
+ *   while the RPC method is named `backup`, so authenticated calls are
+ *   fail-closed regardless of token contents ("no rules for method").
+ *
+ * Biscuit `read` and `write` do not imply each other, so
+ * `collectBiscuitPermissions` by default also grants `read("cch")` whenever
+ * `write("cch")` is collected: on fnn v0.9.0 a write-only cch token cannot
+ * call `get_cch_order`, and on pre-v0.9.0 nodes `receive_btc` still requires
+ * `read("cch")`. Pass `{ cchReadCompat: false }` to opt out.
  */
 
 export type BiscuitAction = 'read' | 'write';
@@ -17,6 +33,17 @@ export interface BiscuitMethodRule {
   requiresChannelRight: boolean;
 }
 
+export interface CollectBiscuitPermissionsOptions {
+  /**
+   * Also grant `read("cch")` whenever `write("cch")` is collected.
+   *
+   * Defaults to true so that cch-mutating tokens can still query their own
+   * orders via `get_cch_order` (requires `read("cch")` on every fnn version)
+   * and keep working for `receive_btc` on pre-v0.9.0 nodes.
+   */
+  cchReadCompat?: boolean;
+}
+
 const RULES: Record<string, BiscuitMethodRule> = {
   // Cch
   send_btc: {
@@ -24,13 +51,15 @@ const RULES: Record<string, BiscuitMethodRule> = {
     requiresChannelRight: false,
   },
   receive_btc: {
-    permissions: [{ action: 'read', resource: 'cch' }],
+    permissions: [{ action: 'write', resource: 'cch' }],
     requiresChannelRight: false,
   },
   get_cch_order: {
     permissions: [{ action: 'read', resource: 'cch' }],
     requiresChannelRight: false,
   },
+  // Omitted vs upstream: subscribe_store_changes requires the node-internal
+  // internal("store_changes") scope, which user-minted tokens must not carry.
 
   // Channel
   open_channel: {
@@ -68,23 +97,33 @@ const RULES: Record<string, BiscuitMethodRule> = {
 
   // Dev
   commitment_signed: {
-    permissions: [{ action: 'write', resource: 'messages' }],
+    permissions: [{ action: 'write', resource: 'dev' }],
     requiresChannelRight: false,
   },
   add_tlc: {
-    permissions: [{ action: 'write', resource: 'channels' }],
+    permissions: [{ action: 'write', resource: 'dev' }],
     requiresChannelRight: false,
   },
   remove_tlc: {
-    permissions: [{ action: 'write', resource: 'channels' }],
+    permissions: [{ action: 'write', resource: 'dev' }],
     requiresChannelRight: false,
   },
   check_channel_shutdown: {
-    permissions: [{ action: 'write', resource: 'channels' }],
+    permissions: [{ action: 'write', resource: 'dev' }],
+    requiresChannelRight: false,
+  },
+  sign_external_funding_tx: {
+    permissions: [{ action: 'write', resource: 'dev' }],
     requiresChannelRight: false,
   },
   submit_commitment_transaction: {
-    permissions: [{ action: 'write', resource: 'chain' }],
+    permissions: [{ action: 'write', resource: 'dev' }],
+    requiresChannelRight: false,
+  },
+
+  // Pprof
+  pprof: {
+    permissions: [{ action: 'write', resource: 'pprof' }],
     requiresChannelRight: false,
   },
 
@@ -103,6 +142,9 @@ const RULES: Record<string, BiscuitMethodRule> = {
     permissions: [{ action: 'read', resource: 'node' }],
     requiresChannelRight: false,
   },
+  // Omitted vs upstream: backup_now (write("node")) is registered under a
+  // rule key that does not match the RPC method name (`backup`), so
+  // authenticated calls are fail-closed regardless of token contents.
 
   // Invoice
   new_invoice: {
@@ -132,6 +174,10 @@ const RULES: Record<string, BiscuitMethodRule> = {
     requiresChannelRight: false,
   },
   get_payment: {
+    permissions: [{ action: 'read', resource: 'payments' }],
+    requiresChannelRight: false,
+  },
+  list_payments: {
     permissions: [{ action: 'read', resource: 'payments' }],
     requiresChannelRight: false,
   },
@@ -197,7 +243,11 @@ export function getBiscuitRuleForMethod(method: string): BiscuitMethodRule | und
   return RULES[method];
 }
 
-export function collectBiscuitPermissions(methods: string[]): BiscuitPermission[] {
+export function collectBiscuitPermissions(
+  methods: string[],
+  options: CollectBiscuitPermissionsOptions = {},
+): BiscuitPermission[] {
+  const { cchReadCompat = true } = options;
   const dedup = new Map<string, BiscuitPermission>();
 
   for (const method of methods) {
@@ -212,6 +262,10 @@ export function collectBiscuitPermissions(methods: string[]): BiscuitPermission[
     }
   }
 
+  if (cchReadCompat && dedup.has('write:cch') && !dedup.has('read:cch')) {
+    dedup.set('read:cch', { action: 'read', resource: 'cch' });
+  }
+
   return [...dedup.values()].sort((a, b) => {
     if (a.action === b.action) {
       return a.resource.localeCompare(b.resource);
@@ -224,8 +278,11 @@ export function renderBiscuitPermissionFacts(permissions: BiscuitPermission[]): 
   return permissions.map((p) => `${p.action}("${escapeDatalogString(p.resource)}");`).join('\n');
 }
 
-export function renderBiscuitFactsForMethods(methods: string[]): string {
-  return renderBiscuitPermissionFacts(collectBiscuitPermissions(methods));
+export function renderBiscuitFactsForMethods(
+  methods: string[],
+  options: CollectBiscuitPermissionsOptions = {},
+): string {
+  return renderBiscuitPermissionFacts(collectBiscuitPermissions(methods, options));
 }
 
 export function listSupportedBiscuitMethods(): string[] {

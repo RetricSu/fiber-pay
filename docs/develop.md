@@ -198,7 +198,10 @@ list:
    funded must not route to `abandon_channel`); new RPC methods →
    `packages/sdk/src/rpc/client.ts` (decide explicitly whether each belongs on
    the shared `IFiberClient` interface); new response fields → check fan-out
-   sinks (runtime alert payloads are field-whitelisted for this reason).
+   sinks (runtime alert payloads are field-whitelisted for this reason);
+   Biscuit auth rule changes (upstream `crates/fiber-lib/src/rpc/biscuit.rs`
+   and `docs/biscuit-auth.md`) → `packages/sdk/src/security/biscuit-policy.ts`
+   plus the `packages/sdk/tests/fixtures/fnn-biscuit-rules.ts` snapshot.
 5. **Skill docs**: `skills/fiber-pay/SKILL.md` (description, node target, RPC
    reference link, `Last updated` date) and `skills/fiber-pay/references/*.md`
    runnable examples — historical migration notes keep old versions on purpose,
