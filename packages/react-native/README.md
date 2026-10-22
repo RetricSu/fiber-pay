@@ -19,18 +19,26 @@ Milestone 1 (connect to a remote node):
   until reachable, exposes `nodeInfo`, connection `state`, and a `client`
   (`FiberRpcClient`) for further calls.
 
-Payment/invoice hooks (`useFiberPayment` and friends) land in a later
-milestone.
+Milestone 2 (payment/invoice hooks):
+
+- `useFiberPayment(client)` — takes the `client` from `useFiberNode` and
+  exposes `createInvoice`, `parseInvoice`, and `payInvoice` (parses, sends,
+  and waits for settlement in one call). CKB-only for now, no UDT asset
+  support yet.
+
+Integration into `khie-mobile` and an upstream PR land in a later milestone.
 
 ## Usage
 
 ```tsx
-import { useFiberNode } from '@fiber-pay/react-native';
+import { useFiberNode, useFiberPayment } from '@fiber-pay/react-native';
 
 function App() {
-  const { state, nodeInfo, error } = useFiberNode({
+  const { state, nodeInfo, error, client } = useFiberNode({
     url: 'http://127.0.0.1:8227',
   });
+  const { createInvoice, payInvoice, isPaying, error: paymentError } =
+    useFiberPayment(client);
 
   if (state === 'connecting') return <Text>Connecting…</Text>;
   if (state === 'error') return <Text>Error: {error}</Text>;
