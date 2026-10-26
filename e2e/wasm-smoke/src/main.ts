@@ -57,6 +57,7 @@ async function runSmokeTests() {
     fail('Import @nervosnetwork/fiber-js', e);
     totalFail++;
     log('Cannot proceed without fiber-js. Aborting.', 'err');
+    printSummary(totalPass, totalFail);
     return;
   }
 
@@ -73,6 +74,7 @@ async function runSmokeTests() {
   } catch (e) {
     fail('ConfigBuilder.build', e);
     totalFail++;
+    printSummary(totalPass, totalFail);
     return;
   }
 
@@ -94,6 +96,7 @@ async function runSmokeTests() {
   } catch (e) {
     fail('RawKeyCredentialProvider', e);
     totalFail++;
+    printSummary(totalPass, totalFail);
     return;
   }
 
@@ -194,4 +197,5 @@ function printSummary(passed: number, failed: number) {
 // Run
 runSmokeTests().catch((e) => {
   fail('Unhandled error', e);
+  document.title = 'FAIL: unhandled smoke error';
 });
