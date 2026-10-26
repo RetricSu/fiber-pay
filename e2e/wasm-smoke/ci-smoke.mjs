@@ -40,13 +40,24 @@ async function run() {
 
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
+    page.on('console', (message) => console.log(`[browser:${message.type()}] ${message.text()}`));
+    page.on('pageerror', (error) => console.error('[browser:pageerror]', error));
+    page.on('requestfailed', (request) => {
+      console.error(`[browser:requestfailed] ${request.url()}: ${request.failure()?.errorText}`);
+    });
     await page.goto(URL, { waitUntil: 'domcontentloaded' });
 
-    await page.waitForFunction(
-      () => document.title.startsWith('PASS:') || document.title.startsWith('FAIL:'),
-      undefined,
-      { timeout: TITLE_TIMEOUT_MS },
-    );
+    try {
+      await page.waitForFunction(
+        () => document.title.startsWith('PASS:') || document.title.startsWith('FAIL:'),
+        undefined,
+        { timeout: TITLE_TIMEOUT_MS },
+      );
+    } catch (error) {
+      console.error(`WASM smoke title: ${await page.title()}`);
+      console.error(`WASM smoke log:\n${await page.locator('#log').innerText()}`);
+      throw error;
+    }
 
     const title = await page.title();
     console.log(`WASM smoke title: ${title}`);
