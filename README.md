@@ -2,7 +2,7 @@
 
 AI-friendly toolchain for CKB Lightning on Fiber Network.
 
-Fiber target: `v0.9.0`
+Fiber target: `v0.9.1`
 
 https://retricsu.github.io/fiber-pay/
 
