@@ -52,9 +52,9 @@ set these headers on your web server or CDN (for example Nginx, Cloudflare, Verc
 
 ## Bundle Size Notes
 
-Browser Fiber WASM artifacts are large by nature. With `fiber-js` 0.9.0, the current
-`react-fiber-node-button-lab` production build includes an additional ~14.8 MB JS chunk
-(~6.8 MB gzip) for WASM/runtime assets (down from ~45.5 MB raw / ~13.4 MB gzip on 0.9.0-rc4).
+Browser Fiber WASM artifacts are large by nature. Production builds include a large
+additional chunk for WASM/runtime assets; its size depends on the fiber-js version
+and bundler configuration. Measure your production build when setting bundle budgets.
 
 Recommended integration strategy:
 

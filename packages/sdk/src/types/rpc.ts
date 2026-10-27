@@ -1,8 +1,8 @@
 /**
- * Fiber Network Node RPC Types (Fiber v0.9.0)
+ * Fiber Network Node RPC Types (Fiber v0.9.1)
  *
  * The types in this file are intended to align with the upstream RPC spec:
- * https://github.com/nervosnetwork/fiber/blob/v0.9.0/crates/fiber-lib/src/rpc/README.md
+ * https://github.com/nervosnetwork/fiber/blob/v0.9.1/crates/fiber-lib/src/rpc/README.md
  */
 
 // =============================================================================

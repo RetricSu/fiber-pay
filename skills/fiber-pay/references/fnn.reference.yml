@@ -1,7 +1,7 @@
 # =============================================================================
 # Fiber Network Node (fnn) - Full Configuration Reference
 # =============================================================================
-# Version: v0.9.0
+# Version: v0.9.1
 #
 # Usage:
 #   fnn --config /path/to/config.yml
@@ -9,7 +9,7 @@
 #   Default config location: ~/.fiber-node/config.yml
 #   Default base directory:  ~/.fiber-node/
 #
-# All options can be overridden by:
+# Unless marked YAML-only, options can be overridden by:
 #   1. CLI flags:  --fiber-listening-addr "/ip4/0.0.0.0/tcp/8228"
 #   2. Env vars:   FIBER_LISTENING_ADDR="/ip4/0.0.0.0/tcp/8228"
 #   3. This YAML config file (lowest priority)
@@ -105,6 +105,24 @@ fiber:
   # Min outbound peer connections to maintain
   # [default: 8]
   # min_outbound_peers: 8
+
+  # -- Peer Message Policy (v0.9.1+, YAML-only) --
+  # Partial overrides retain defaults for omitted fields. No CLI/env overrides.
+  # Set either interval/burst to 0 to disable the per-peer message limit;
+  # either byte rate/burst to 0 to disable the per-peer byte limit.
+  # Set violation_ban_threshold to 0 to disable bans; either global in-flight
+  # limit to 0 makes the global ingress budget unlimited.
+  # max_tracked_peers is clamped to at least 1.
+  # peer_message_policy:
+  #   peer_message_interval_ms: 5
+  #   peer_message_burst: 400
+  #   peer_message_rate_bytes_per_sec: 1048576
+  #   peer_message_burst_bytes: 4194304
+  #   violation_ban_threshold: 20
+  #   ban_duration_ms: 600000
+  #   max_tracked_peers: 50000
+  #   max_in_flight_messages: 4096
+  #   max_in_flight_bytes: 33554432
 
   # -- Gossip --
 

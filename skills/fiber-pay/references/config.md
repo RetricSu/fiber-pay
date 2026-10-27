@@ -1,4 +1,4 @@
-# FNN Config Reference (v0.9.0)
+# FNN Config Reference (v0.9.1)
 
 - Structured reference for `config.yml` used by the Fiber Network Node (`fnn`). 
 - All values are set via `fiber-pay config set <path> <value>`.
@@ -54,6 +54,28 @@
 |-----|------|---------|-------------|
 | `fiber.max_inbound_peers` | number | `16` | Max inbound connections |
 | `fiber.min_outbound_peers` | number | `8` | Min outbound connections to maintain |
+
+### Peer Message Policy (v0.9.1+)
+
+`fiber.peer_message_policy` is configurable in YAML only, with partial overrides
+using upstream defaults for omitted fields. It has no CLI flags or environment overrides.
+
+| Key (under `fiber.peer_message_policy`) | Type | Default | Description |
+|-----|------|---------|-------------|
+| `peer_message_interval_ms` | number | `5` | Per-peer message refill interval (ms) |
+| `peer_message_burst` | number | `400` | Per-peer message burst capacity |
+| `peer_message_rate_bytes_per_sec` | number | `1048576` | Sustained per-peer byte rate |
+| `peer_message_burst_bytes` | number | `4194304` | Per-peer byte burst capacity |
+| `violation_ban_threshold` | number | `20` | Repeated violations before a temporary ban |
+| `ban_duration_ms` | number | `600000` | Temporary ban duration (ms) |
+| `max_tracked_peers` | number | `50000` | Tracked peer capacity (minimum 1) |
+| `max_in_flight_messages` | number | `4096` | Global inbound message budget |
+| `max_in_flight_bytes` | number | `33554432` | Global inbound byte budget |
+
+Setting either message interval or burst to `0` disables the per-peer message
+limit; either byte rate or burst to `0` disables the per-peer byte limit.
+`violation_ban_threshold: 0` disables temporary bans. Setting either global
+in-flight limit to `0` makes the global ingress budget unlimited.
 
 ### Gossip
 
@@ -154,6 +176,8 @@ For `fnn` runtime resolution (not fiber-pay CLI global flags), effective value p
 1. `fnn` CLI flags (for example `--fiber-listening-addr ...`)
 2. Environment variables (for example `FIBER_LISTENING_ADDR=...`)
 3. `config.yml` (lowest priority)
+
+`fiber.peer_message_policy` is YAML-only and does not follow CLI/environment precedence.
 
 ## CLI config operations
 
