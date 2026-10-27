@@ -1,5 +1,15 @@
 # @fiber-pay/cli
 
+## 0.3.3
+
+### Patch Changes
+
+- 4ff8b3e: Upgrade the default Fiber target to fnn v0.9.1 and align the fiber-js catalog and peer dependency ranges to `~0.9.1`. New managed nodes and `fiber-pay node upgrade` now use v0.9.1 by default. Refresh target references and document the new YAML-only peer message rate-limit configuration.
+- Updated dependencies [4ff8b3e]
+  - @fiber-pay/node@0.3.3
+  - @fiber-pay/sdk@0.3.3
+  - @fiber-pay/runtime@0.3.3
+
 ## 0.3.2
 
 ### Patch Changes

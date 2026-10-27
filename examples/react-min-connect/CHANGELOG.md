@@ -1,5 +1,12 @@
 # react-min-connect
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [4ff8b3e]
+  - @fiber-pay/react@0.3.3
+
 ## 0.0.9
 
 ### Patch Changes
