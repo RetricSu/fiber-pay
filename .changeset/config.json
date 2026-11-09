@@ -6,6 +6,7 @@
     [
       "@fiber-pay/sdk",
       "@fiber-pay/react",
+      "@fiber-pay/react-native",
       "@fiber-pay/node",
       "@fiber-pay/runtime",
       "@fiber-pay/cli",
