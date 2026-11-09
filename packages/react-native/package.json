@@ -1,6 +1,6 @@
 {
   "name": "@fiber-pay/react-native",
-  "version": "0.1.0",
+  "version": "0.3.3",
   "description": "React Native hooks for Fiber payments, connecting to a remote fnn node",
   "type": "module",
   "main": "./dist/index.js",
@@ -32,7 +32,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13.0"
   },
   "sideEffects": false,
   "dependencies": {
@@ -40,11 +40,12 @@
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
-    "react-native": "*"
+    "react-native": ">=0.76.0"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.0",
     "@types/react": "^18.0.0 || ^19.0.0",
-    "jsdom": "^26.1.0"
+    "jsdom": "^26.1.0",
+    "react-native": "0.88.0"
   }
 }
