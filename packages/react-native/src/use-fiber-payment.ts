@@ -7,7 +7,7 @@ import type {
   NewInvoiceResult,
   ParseInvoiceResult,
 } from '@fiber-pay/sdk';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export interface UseFiberPaymentOptions {
   /**
@@ -78,13 +78,18 @@ export function useFiberPayment(
 
   const isMountedRef = useRef(true);
   const clientGenerationRef = useRef(0);
-  const payInFlightRef = useRef(false);
+  const inFlightClientsRef = useRef<WeakSet<FiberRpcClient>>(new WeakSet());
 
   // A response for a client that has since been swapped out (or a
   // component that has unmounted) must never land in this run's state.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: client is a deliberate re-run trigger to bump the generation, not read in the body.
-  useEffect(() => {
+  // Advance generation and reset payment state on client change in
+  // useLayoutEffect to keep render phase pure and resilient to abandoned renders.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: client is a deliberate re-run trigger to bump generation and reset payment state, not read in the body.
+  useLayoutEffect(() => {
     clientGenerationRef.current += 1;
+    setIsPaying(false);
+    setPaymentResult(null);
+    setError(null);
   }, [client]);
 
   useEffect(() => {
@@ -134,15 +139,15 @@ export function useFiberPayment(
 
   const payInvoice = useCallback(
     async (invoice: string) => {
-      if (payInFlightRef.current) {
+      const activeClient = ensureClient();
+      if (inFlightClientsRef.current.has(activeClient)) {
         throw new Error('A payment is already in progress on this client');
       }
 
       const generation = clientGenerationRef.current;
-      const activeClient = ensureClient();
       const normalizedInvoice = invoice.trim();
 
-      payInFlightRef.current = true;
+      inFlightClientsRef.current.add(activeClient);
       if (canCommit(generation)) {
         setIsPaying(true);
         setError(null);
@@ -166,7 +171,7 @@ export function useFiberPayment(
         if (canCommit(generation)) setError(asErrorMessage(payError));
         throw payError;
       } finally {
-        payInFlightRef.current = false;
+        inFlightClientsRef.current.delete(activeClient);
         if (canCommit(generation)) setIsPaying(false);
       }
     },

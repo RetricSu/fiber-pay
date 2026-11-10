@@ -25,6 +25,31 @@ function stubFetchAlwaysFailing() {
   return fetchMock;
 }
 
+function stubFetchDelayedWithAbort(delayMs: number, result: unknown) {
+  const fetchMock = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ jsonrpc: '2.0', id: 1, result }),
+        });
+      }, delayMs);
+
+      if (init?.signal) {
+        init.signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          const err = new Error('The operation was aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      }
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
 /** Fetch mock keyed by URL, resolved on demand via the returned `resolvers` map. */
 function stubFetchByUrl() {
   const resolvers = new Map<string, (result: unknown) => void>();
@@ -106,5 +131,72 @@ describe('useFiberNode', () => {
 
     expect(result.current.nodeInfo?.version).toBe('B');
     expect(result.current.state).toBe('ready');
+  });
+
+  it('succeeds on delayed response when timeout is omitted (default SDK timeout preserved)', async () => {
+    stubFetchDelayedWithAbort(30, { version: '0.9.0' });
+
+    const { result } = renderHook(() =>
+      useFiberNode({ url: 'http://127.0.0.1:8227', maxRetries: 1 }),
+    );
+
+    expect(result.current.state).toBe('connecting');
+    await waitFor(() => expect(result.current.state).toBe('ready'));
+    expect(result.current.nodeInfo?.version).toBe('0.9.0');
+  });
+
+  it('aborts and reports error when response exceeds explicit timeout', async () => {
+    stubFetchDelayedWithAbort(50, { version: '0.9.0' });
+
+    const { result } = renderHook(() =>
+      useFiberNode({ url: 'http://127.0.0.1:8227', timeout: 10, maxRetries: 1 }),
+    );
+
+    await waitFor(() => expect(result.current.state).toBe('error'));
+    expect(result.current.error).toBe('Request timeout');
+  });
+
+  it('does not recreate client or reconnect when inline headers have identical content', async () => {
+    const fetchMock = stubFetchOnce({ jsonrpc: '2.0', id: 1, result: { version: '0.9.0' } });
+
+    const { result, rerender } = renderHook(
+      ({ headers }: { headers: Record<string, string> }) =>
+        useFiberNode({ url: 'http://127.0.0.1:8227', headers }),
+      { initialProps: { headers: { Authorization: 'Bearer token-1' } } },
+    );
+
+    await waitFor(() => expect(result.current.state).toBe('ready'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstClient = result.current.client;
+
+    // Re-render with a new object instance but identical content
+    rerender({ headers: { Authorization: 'Bearer token-1' } });
+
+    expect(result.current.client).toBe(firstClient);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reconnects and creates a new client when header values change', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ jsonrpc: '2.0', id: 1, result: { version: '0.9.0' } }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result, rerender } = renderHook(
+      ({ headers }: { headers: Record<string, string> }) =>
+        useFiberNode({ url: 'http://127.0.0.1:8227', headers }),
+      { initialProps: { headers: { Authorization: 'Bearer token-1' } } },
+    );
+
+    await waitFor(() => expect(result.current.state).toBe('ready'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstClient = result.current.client;
+
+    rerender({ headers: { Authorization: 'Bearer token-2' } });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(result.current.client).not.toBe(firstClient);
   });
 });

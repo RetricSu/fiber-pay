@@ -34,6 +34,26 @@ function asErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function getHeadersKey(headers?: Record<string, string>): string {
+  if (!headers) return '';
+  return Object.keys(headers)
+    .sort()
+    .map((k) => `${k}:${headers[k]}`)
+    .join('\n');
+}
+
+function parseHeadersKey(key: string): Record<string, string> | undefined {
+  if (!key) return undefined;
+  const result: Record<string, string> = {};
+  for (const line of key.split('\n')) {
+    const idx = line.indexOf(':');
+    if (idx !== -1) {
+      result[line.slice(0, idx)] = line.slice(idx + 1);
+    }
+  }
+  return result;
+}
+
 /**
  * Connects to a remote Fiber node (`fnn`) over its JSON-RPC endpoint.
  *
@@ -59,10 +79,16 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
   const [error, setError] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
 
-  const client = useMemo(
-    () => new FiberRpcClient({ url, timeout, headers, biscuitToken }),
-    [url, timeout, headers, biscuitToken],
-  );
+  const headersKey = getHeadersKey(headers);
+  const stableHeaders = useMemo(() => parseHeadersKey(headersKey), [headersKey]);
+
+  const client = useMemo(() => {
+    const config: RemoteNodeConfig = { url };
+    if (timeout !== undefined) config.timeout = timeout;
+    if (stableHeaders !== undefined) config.headers = stableHeaders;
+    if (biscuitToken !== undefined) config.biscuitToken = biscuitToken;
+    return new FiberRpcClient(config);
+  }, [url, timeout, stableHeaders, biscuitToken]);
 
   // Bumped on every effect run (mount, url/config change, reconnect) and
   // again on cleanup, so a response that arrives after the effect that
