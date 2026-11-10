@@ -112,8 +112,8 @@ export class FiberRpcClient implements IFiberClient {
 
   constructor(config: RpcClientConfig) {
     this.config = {
-      timeout: 30000,
       ...config,
+      timeout: config.timeout ?? 30000,
     };
   }
 

@@ -78,14 +78,20 @@ export function useFiberPayment(
 
   const isMountedRef = useRef(true);
   const clientGenerationRef = useRef(0);
-  const payInFlightRef = useRef(false);
+  const activePayGenerationRef = useRef<number | null>(null);
 
   // A response for a client that has since been swapped out (or a
   // component that has unmounted) must never land in this run's state.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: client is a deliberate re-run trigger to bump the generation, not read in the body.
-  useEffect(() => {
+  // When the client changes, advance the generation and clear in-flight
+  // payment state so the new client starts with a clean slate.
+  const [prevClient, setPrevClient] = useState(client);
+  if (client !== prevClient) {
+    setPrevClient(client);
     clientGenerationRef.current += 1;
-  }, [client]);
+    setIsPaying(false);
+    setPaymentResult(null);
+    setError(null);
+  }
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -134,15 +140,15 @@ export function useFiberPayment(
 
   const payInvoice = useCallback(
     async (invoice: string) => {
-      if (payInFlightRef.current) {
+      const generation = clientGenerationRef.current;
+      if (activePayGenerationRef.current === generation) {
         throw new Error('A payment is already in progress on this client');
       }
 
-      const generation = clientGenerationRef.current;
       const activeClient = ensureClient();
       const normalizedInvoice = invoice.trim();
 
-      payInFlightRef.current = true;
+      activePayGenerationRef.current = generation;
       if (canCommit(generation)) {
         setIsPaying(true);
         setError(null);
@@ -166,7 +172,9 @@ export function useFiberPayment(
         if (canCommit(generation)) setError(asErrorMessage(payError));
         throw payError;
       } finally {
-        payInFlightRef.current = false;
+        if (activePayGenerationRef.current === generation) {
+          activePayGenerationRef.current = null;
+        }
         if (canCommit(generation)) setIsPaying(false);
       }
     },

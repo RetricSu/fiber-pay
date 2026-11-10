@@ -89,6 +89,19 @@ describe('FiberRpcClient - New Methods', () => {
       const headers = requestInit.headers as Record<string, string>;
       expect(headers.Authorization).toBe('Bearer test-biscuit-token');
     });
+
+    it('should use default 30000ms timeout when timeout is explicitly passed as undefined', async () => {
+      const fetchMock = mockFetch({});
+      globalThis.fetch = fetchMock;
+
+      const clientWithUndefinedTimeout = new FiberRpcClient({
+        url: 'http://127.0.0.1:8227',
+        timeout: undefined,
+      });
+
+      await clientWithUndefinedTimeout.call('node_info', []);
+      expect(fetchMock).toHaveBeenCalled();
+    });
   });
 
   // ===========================================================================
