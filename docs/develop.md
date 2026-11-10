@@ -29,10 +29,10 @@ This document is the single source of truth for project development and maintain
 
 Prerequisites:
 
-- Node.js `22.x` (use the exact version in `.node-version` for local development and CI)
+- Node.js `26.x` (use the exact version in `.node-version` for local development and CI)
 - `pnpm`
 
-The root `package.json#engines.node` pins Vercel builds to Node.js `22.x`, matching
+The root `package.json#engines.node` pins Vercel builds to Node.js `26.x`, matching
 the major version in `.node-version`. Keep these aligned when upgrading Node.js;
 an open-ended engine range can select a newer major with incompatible native
 dependencies such as `better-sqlite3`.
