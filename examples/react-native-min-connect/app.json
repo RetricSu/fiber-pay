@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "fiber-pay react-native min connect",
+    "slug": "fiber-pay-rn-min-connect",
+    "version": "0.0.1",
+    "android": {
+      "package": "com.fiberpay.rnminconnect"
+    }
+  }
+}

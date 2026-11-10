@@ -13,17 +13,20 @@ https://retricsu.github.io/fiber-pay/
 - `@fiber-pay/cli`: operations and automation for humans and agents (profiles, node/channel/payment lifecycle, runtime jobs, L402 proxy, `agent serve` / `agent call`)
 - `@fiber-pay/sdk`: application-facing typed APIs (universal + node + browser entrypoints)
 - `@fiber-pay/react`: the higher-level React layer built on top of `@fiber-pay/sdk/browser`, intended for fast browser UI integration.
+- `@fiber-pay/react-native`: React Native hooks (`useFiberNode`, `useFiberPayment`) that connect to a remote `fnn` node over JSON-RPC, for mobile apps.
 
 Package maturity note:
 
 - `@fiber-pay/agent` is currently experimental and not recommended for production use yet (limited validation coverage and ongoing hardening).
+- `@fiber-pay/react-native` is currently experimental: the node-connection and invoice-creation paths are smoke-tested against a live node, but `payInvoice` hasn't been run end to end against two funded nodes yet.
 
 ## Quickstart by Goal
 
 1. Operate Fiber locally (manual workflow): [packages/cli/docs/human-quickstart.md](packages/cli/docs/human-quickstart.md)
 2. Build backend/services with SDK: [packages/sdk/README.md](packages/sdk/README.md)
 3. Build browser passkey payment UI (React): [packages/react/docs/wasm-passkey-payment-component-quickstart.md](packages/react/docs/wasm-passkey-payment-component-quickstart.md)
-4. Expose paid AI endpoints (`agent serve`):
+4. Build a React Native mobile app: [packages/react-native/README.md](packages/react-native/README.md)
+5. Expose paid AI endpoints (`agent serve`):
    - [packages/cli/docs/l402-agent-guide.md](packages/cli/docs/l402-agent-guide.md)
    - [packages/cli/docs/agent-serve-frontend-integration.md](packages/cli/docs/agent-serve-frontend-integration.md)
    - [packages/cli/docs/agent-serve-backend-setup.md](packages/cli/docs/agent-serve-backend-setup.md)
@@ -36,6 +39,7 @@ Package maturity note:
 | `@fiber-pay/cli` | Stable operator interface and automation-first command surface |
 | `@fiber-pay/sdk` | Typed protocol/client primitives for app integration |
 | `@fiber-pay/react` | React hooks/components for browser WASM + passkey payment flows (`ConnectButton`, `FiberNodeButton`, `FiberPayQuickCard`, `NodeInfoPanel`, `useFiberNode`, `useFiberPayment`) |
+| `@fiber-pay/react-native` | React Native hooks (`useFiberNode`, `useFiberPayment`) connecting to a remote `fnn` node. Experimental. |
 | `@fiber-pay/runtime` | Runtime orchestration (jobs, monitoring, retry loops) |
 | `@fiber-pay/node` | Local `fnn` binary lifecycle management |
 | `@fiber-pay/agent` | Experimental package, not recommended for production yet |
@@ -65,6 +69,7 @@ The canonical demos are now organized by integration layer under `examples/`:
 2. React component layer (FiberNodeButton): [examples/react-fiber-node-button-lab](examples/react-fiber-node-button-lab)
 3. Browser SDK layer (`@fiber-pay/sdk/browser`): [examples/browser-sdk-playground](examples/browser-sdk-playground)
 4. Universal SDK layer (`@fiber-pay/sdk` Node recipes): [examples/sdk-node-recipes](examples/sdk-node-recipes)
+5. React Native integration layer (minimal): [examples/react-native-min-connect](examples/react-native-min-connect)
 
 ## Development
 

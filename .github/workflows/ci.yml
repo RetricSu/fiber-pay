@@ -46,3 +46,6 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: React Native Metro bundle smoke
+        run: pnpm --filter example-react-native-min-connect typecheck && pnpm --filter example-react-native-min-connect smoke
