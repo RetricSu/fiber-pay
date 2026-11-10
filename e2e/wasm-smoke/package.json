@@ -11,7 +11,7 @@
     "@nervosnetwork/fiber-js": "catalog:"
   },
   "devDependencies": {
-    "playwright": "^1.55.0",
+    "playwright": "^1.65.0",
     "vite": "^6.4.4"
   }
 }
