@@ -385,4 +385,70 @@ describe('useFiberPayment', () => {
     expect(result.current.paymentResult).toBeNull();
     expect(result.current.error).toBeNull();
   });
+
+  it('prevents initiating duplicate payment when switching A -> B -> A while A is still in flight', async () => {
+    const ctrl = stubFetchController();
+    const clientA = new FiberRpcClient({ url: 'http://node-a' });
+    const clientB = new FiberRpcClient({ url: 'http://node-b' });
+
+    const { result, rerender } = renderHook(
+      ({ client }: { client: FiberRpcClient | null }) => useFiberPayment(client),
+      { initialProps: { client: clientA as FiberRpcClient | null } },
+    );
+
+    let payA1: Promise<unknown>;
+    act(() => {
+      payA1 = result.current.payInvoice('fibt1-a1...');
+    });
+    await waitFor(() => expect(result.current.isPaying).toBe(true));
+
+    // Switch to client B
+    rerender({ client: clientB });
+    expect(result.current.isPaying).toBe(false);
+
+    // Switch back to client A while A's first payment is still in flight
+    rerender({ client: clientA });
+
+    // Client A should reject initiating a second payment
+    await expect(result.current.payInvoice('fibt1-a2...')).rejects.toThrow(
+      'A payment is already in progress on this client',
+    );
+
+    // Complete client A's first payment
+    await act(async () => {
+      ctrl.respond('http://node-a', 'parse_invoice', { invoice: ckbInvoice('Fibt', PAYMENT_HASH) });
+      await flushMicrotasks();
+      ctrl.respond('http://node-a', 'send_payment', { payment_hash: PAYMENT_HASH, status: 'Inflight' });
+      await flushMicrotasks();
+      ctrl.respond('http://node-a', 'get_payment', {
+        payment_hash: PAYMENT_HASH,
+        status: 'Success',
+        fee: '0x0',
+      });
+      await payA1;
+    });
+
+    // Now that A's in-flight payment finished, A can pay again
+    let payA2: Promise<unknown>;
+    act(() => {
+      payA2 = result.current.payInvoice('fibt1-a2...');
+    });
+    await waitFor(() => expect(result.current.isPaying).toBe(true));
+
+    await act(async () => {
+      ctrl.respond('http://node-a', 'parse_invoice', { invoice: ckbInvoice('Fibt', PAYMENT_HASH_B) });
+      await flushMicrotasks();
+      ctrl.respond('http://node-a', 'send_payment', { payment_hash: PAYMENT_HASH_B, status: 'Inflight' });
+      await flushMicrotasks();
+      ctrl.respond('http://node-a', 'get_payment', {
+        payment_hash: PAYMENT_HASH_B,
+        status: 'Success',
+        fee: '0x0',
+      });
+      await payA2;
+    });
+
+    expect(result.current.isPaying).toBe(false);
+    expect(result.current.paymentResult?.status).toBe('Success');
+  });
 });

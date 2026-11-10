@@ -34,18 +34,24 @@ function asErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function areHeadersEqual(prev?: Record<string, string>, next?: Record<string, string>): boolean {
-  if (prev === next) return true;
-  if (!prev || !next) return false;
-  const prevKeys = Object.keys(prev);
-  const nextKeys = Object.keys(next);
-  if (prevKeys.length !== nextKeys.length) return false;
-  for (const key of prevKeys) {
-    if (!Object.hasOwn(next, key) || prev[key] !== next[key]) {
-      return false;
+function getHeadersKey(headers?: Record<string, string>): string {
+  if (!headers) return '';
+  return Object.keys(headers)
+    .sort()
+    .map((k) => `${k}:${headers[k]}`)
+    .join('\n');
+}
+
+function parseHeadersKey(key: string): Record<string, string> | undefined {
+  if (!key) return undefined;
+  const result: Record<string, string> = {};
+  for (const line of key.split('\n')) {
+    const idx = line.indexOf(':');
+    if (idx !== -1) {
+      result[line.slice(0, idx)] = line.slice(idx + 1);
     }
   }
-  return true;
+  return result;
 }
 
 /**
@@ -73,11 +79,8 @@ export function useFiberNode(options: UseFiberNodeOptions): UseFiberNodeResult {
   const [error, setError] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
 
-  const headersRef = useRef(headers);
-  if (!areHeadersEqual(headersRef.current, headers)) {
-    headersRef.current = headers;
-  }
-  const stableHeaders = headersRef.current;
+  const headersKey = getHeadersKey(headers);
+  const stableHeaders = useMemo(() => parseHeadersKey(headersKey), [headersKey]);
 
   const client = useMemo(() => {
     const config: RemoteNodeConfig = { url };

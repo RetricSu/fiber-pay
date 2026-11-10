@@ -7,7 +7,7 @@ import type {
   NewInvoiceResult,
   ParseInvoiceResult,
 } from '@fiber-pay/sdk';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export interface UseFiberPaymentOptions {
   /**
@@ -78,20 +78,19 @@ export function useFiberPayment(
 
   const isMountedRef = useRef(true);
   const clientGenerationRef = useRef(0);
-  const activePayGenerationRef = useRef<number | null>(null);
+  const inFlightClientsRef = useRef<WeakSet<FiberRpcClient>>(new WeakSet());
 
   // A response for a client that has since been swapped out (or a
   // component that has unmounted) must never land in this run's state.
-  // When the client changes, advance the generation and clear in-flight
-  // payment state so the new client starts with a clean slate.
-  const [prevClient, setPrevClient] = useState(client);
-  if (client !== prevClient) {
-    setPrevClient(client);
+  // Advance generation and reset payment state on client change in
+  // useLayoutEffect to keep render phase pure and resilient to abandoned renders.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: client is a deliberate re-run trigger to bump generation and reset payment state, not read in the body.
+  useLayoutEffect(() => {
     clientGenerationRef.current += 1;
     setIsPaying(false);
     setPaymentResult(null);
     setError(null);
-  }
+  }, [client]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -140,15 +139,15 @@ export function useFiberPayment(
 
   const payInvoice = useCallback(
     async (invoice: string) => {
-      const generation = clientGenerationRef.current;
-      if (activePayGenerationRef.current === generation) {
+      const activeClient = ensureClient();
+      if (inFlightClientsRef.current.has(activeClient)) {
         throw new Error('A payment is already in progress on this client');
       }
 
-      const activeClient = ensureClient();
+      const generation = clientGenerationRef.current;
       const normalizedInvoice = invoice.trim();
 
-      activePayGenerationRef.current = generation;
+      inFlightClientsRef.current.add(activeClient);
       if (canCommit(generation)) {
         setIsPaying(true);
         setError(null);
@@ -172,9 +171,7 @@ export function useFiberPayment(
         if (canCommit(generation)) setError(asErrorMessage(payError));
         throw payError;
       } finally {
-        if (activePayGenerationRef.current === generation) {
-          activePayGenerationRef.current = null;
-        }
+        inFlightClientsRef.current.delete(activeClient);
         if (canCommit(generation)) setIsPaying(false);
       }
     },

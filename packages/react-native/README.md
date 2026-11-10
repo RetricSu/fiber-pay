@@ -148,8 +148,8 @@ browser version returns `Promise<void>` and swallows errors into its
 `error` state; this one resolves with the settled `GetPaymentResult` and
 rethrows on failure (in addition to still setting `error`), so a caller can
 `await` it directly — e.g. to navigate on success. Only one `payInvoice`
-call may be in flight per hook instance; a second call while one is
-pending rejects immediately rather than racing it.
+call may be in flight per client at a time; a second call on the same client
+while one is pending rejects immediately rather than racing it.
 
 ## Security
 
