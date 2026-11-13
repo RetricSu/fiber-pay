@@ -1,7 +1,7 @@
 # =============================================================================
 # Fiber Network Node (fnn) - Full Configuration Reference
 # =============================================================================
-# Version: v0.9.1
+# Version: v0.10.0
 #
 # Usage:
 #   fnn --config /path/to/config.yml
@@ -37,6 +37,10 @@ fiber:
   # P2P listening address in multiaddr format
   # [default: "/ip4/0.0.0.0/tcp/0" (random port)]
   listening_addr: "/ip4/0.0.0.0/tcp/8228"
+
+  # Additional listening addresses are appended to listening_addr (v0.10.0+)
+  # listening_addrs:
+  #   - "/ip6/::/tcp/8228"
 
   # Network: "mainnet", "testnet", or path to custom chain spec file
   # (required)
@@ -79,8 +83,8 @@ fiber:
 
   # CKB amount the acceptor funds when auto-accepting a channel, in shannons
   # Set to 0 to disable auto-accept for CKB channels
-  # [default: 9900000000 (99 CKB = 98 CKB reserved capacity + 1 CKB shutdown fee)]
-  # auto_accept_channel_ckb_funding_amount: 9900000000
+  # [default: 10000000000 (100 CKB)]
+  # auto_accept_channel_ckb_funding_amount: 10000000000
 
   # -- TLC (Time-Locked Contract) Defaults --
 
@@ -123,6 +127,14 @@ fiber:
   #   max_tracked_peers: 50000
   #   max_in_flight_messages: 4096
   #   max_in_flight_bytes: 33554432
+
+  # -- Store durability (v0.10.0+) --
+
+  # Wait for every store write to reach disk before returning.
+  # Slower, but power loss cannot lose recent channel state.
+  # Enable this on a node that holds others' funds.
+  # [default: false]
+  # store_sync_writes: false
 
   # -- Gossip --
 

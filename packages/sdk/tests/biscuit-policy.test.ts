@@ -7,7 +7,7 @@ import {
 } from '../src/security/biscuit-policy.js';
 import type { BiscuitMethodRule } from '../src/security/biscuit-policy.js';
 import { describe, expect, it } from 'vitest';
-import { FNN_V0_9_0_RULES } from './fixtures/fnn-biscuit-rules.js';
+import { FNN_V0_10_0_RULES } from './fixtures/fnn-biscuit-rules.js';
 
 describe('biscuit policy helper', () => {
   it('returns rule for known method', () => {
@@ -127,22 +127,26 @@ describe('biscuit policy helper', () => {
     ]);
   });
 
-  it('deliberately omits non-mintable or fail-closed upstream methods', () => {
+  it('deliberately omits non-mintable upstream methods', () => {
     // subscribe_store_changes requires the node-internal
-    // internal("store_changes") scope; backup_now is registered upstream
-    // under a rule key that does not match the RPC method name (`backup`).
+    // internal("store_changes") scope.
     expect(getBiscuitRuleForMethod('subscribe_store_changes')).toBeUndefined();
     expect(getBiscuitRuleForMethod('backup_now')).toBeUndefined();
-    expect(getBiscuitRuleForMethod('backup')).toBeUndefined();
   });
 
-  it('RULES mirrors the fnn v0.9.0 upstream rule table', () => {
+  it('authorizes backup with write("node") on fnn v0.10.0', () => {
+    expect(collectBiscuitPermissions(['backup'])).toEqual([
+      { action: 'write', resource: 'node' },
+    ]);
+  });
+
+  it('RULES mirrors the fnn v0.10.0 upstream rule table', () => {
     const actual: Record<string, BiscuitMethodRule> = {};
     for (const method of listSupportedBiscuitMethods()) {
       const rule = getBiscuitRuleForMethod(method);
       if (rule) actual[method] = rule;
     }
 
-    expect(actual).toEqual(FNN_V0_9_0_RULES);
+    expect(actual).toEqual(FNN_V0_10_0_RULES);
   });
 });

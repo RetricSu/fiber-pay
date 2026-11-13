@@ -43,6 +43,10 @@ export interface BrowserNodeConfig {
   announceListeningAddr?: boolean;
   /** Custom P2P listening address (optional, defaults to /ip4/127.0.0.1/tcp/8228) */
   p2pListeningAddr?: string;
+  /** Additional P2P listening addresses appended to p2pListeningAddr (fnn v0.10.0+) */
+  p2pListeningAddrs?: string[];
+  /** Flush every store write to disk before returning (fnn v0.10.0+) */
+  storeSyncWrites?: boolean;
   /** Custom RPC listening address (optional, defaults to 127.0.0.1:8227) */
   rpcListeningAddr?: string;
 }
@@ -164,6 +168,10 @@ export class ConfigBuilder {
     const configObj: Record<string, unknown> = {
       fiber: {
         listening_addr: config.p2pListeningAddr ?? '/ip4/127.0.0.1/tcp/8228',
+        ...(config.p2pListeningAddrs ? { listening_addrs: config.p2pListeningAddrs } : {}),
+        ...(config.storeSyncWrites !== undefined
+          ? { store_sync_writes: config.storeSyncWrites }
+          : {}),
         bootnode_addrs: bootnodes,
         announce_listening_addr: config.announceListeningAddr ?? false,
         chain: config.network,

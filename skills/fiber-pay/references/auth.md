@@ -4,8 +4,8 @@ This guide documents how `fiber-pay` works with Fiber RPC Biscuit authentication
 
 Upstream reference:
 
-- Fiber Biscuit auth doc: [docs/biscuit-auth.md](https://github.com/nervosnetwork/fiber/blob/v0.9.1/docs/biscuit-auth.md)
-- Fiber RPC reference: [crates/fiber-lib/src/rpc/README.md](https://github.com/nervosnetwork/fiber/blob/v0.9.1/crates/fiber-lib/src/rpc/README.md)
+- Fiber Biscuit auth doc: [docs/biscuit-auth.md](https://github.com/nervosnetwork/fiber/blob/v0.10.0/docs/biscuit-auth.md)
+- Fiber RPC reference: [crates/fiber-lib/src/rpc/README.md](https://github.com/nervosnetwork/fiber/blob/v0.10.0/crates/fiber-lib/src/rpc/README.md)
 
 ## Scope
 
@@ -95,3 +95,5 @@ This output can be used as input content for signing Biscuit tokens (e.g. in `pe
 - Prefer short-lived tokens and least privilege permissions.
 - Avoid embedding privileged long-lived tokens into browser bundles.
 - For public RPC listening addresses, ensure Biscuit auth is enabled.
+- On fnn v0.10.0+, `backup` requires `write("node")`. Earlier releases used the
+  incorrect `backup_now` rule key and rejected every authenticated backup call.

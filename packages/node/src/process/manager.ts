@@ -22,6 +22,8 @@ export interface FiberNodeConfig {
   configFilePath?: string;
   /** Fiber P2P listening address */
   fiberListeningAddr?: string;
+  /** Additional Fiber P2P listening addresses appended to fiberListeningAddr (fnn v0.10.0+). */
+  fiberListeningAddrs?: string[];
   /** Fiber node name */
   nodeName?: string;
   /** Bootstrap node addresses */
@@ -51,6 +53,8 @@ export interface FiberNodeConfig {
   pendingChannelsNumberLimit?: number;
   /** Gossip policy configuration (fnn v0.9.0-rc4+). Passed through as-is. */
   gossipPolicy?: Record<string, unknown>;
+  /** Flush every store write to disk before returning (fnn v0.10.0+). */
+  storeSyncWrites?: boolean;
 }
 
 export interface ProcessManagerEvents {
@@ -428,6 +432,14 @@ export class ProcessManager extends EventEmitter {
 
     if (this.config.gossipPolicy) {
       (config.fiber as Record<string, unknown>).gossip_policy = this.config.gossipPolicy;
+    }
+
+    if (this.config.fiberListeningAddrs?.length) {
+      (config.fiber as Record<string, unknown>).listening_addrs = this.config.fiberListeningAddrs;
+    }
+
+    if (this.config.storeSyncWrites !== undefined) {
+      (config.fiber as Record<string, unknown>).store_sync_writes = this.config.storeSyncWrites;
     }
 
     const configDir = dirname(this.configPath);

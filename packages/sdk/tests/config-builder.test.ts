@@ -83,6 +83,18 @@ describe('ConfigBuilder', () => {
 			);
 		});
 
+		it('should support v0.10.0 listening addresses and store sync writes', () => {
+			const yaml = ConfigBuilder.build({
+				network: 'testnet',
+				p2pListeningAddrs: ['/ip6/::/tcp/8228'],
+				storeSyncWrites: true,
+			});
+
+			expect(yaml).toContain('listening_addrs:');
+			expect(yaml).toContain('/ip6/::/tcp/8228');
+			expect(yaml).toContain('store_sync_writes: true');
+		});
+
 		it('should support custom UDT whitelist', () => {
 			const yaml = ConfigBuilder.build({
 				network: 'testnet',
