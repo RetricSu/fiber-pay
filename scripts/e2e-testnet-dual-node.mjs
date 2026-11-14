@@ -242,6 +242,22 @@ async function waitForNodeReady(nodeName, timeoutSec) {
   fail(`Node ${nodeName} not ready within ${timeoutSec}s`)
 }
 
+function normalizeVersion(version) {
+  return typeof version === 'string' ? version.trim().replace(/^v/, '') : ''
+}
+
+function assertNodeVersion(status, nodeName) {
+  const expected = normalizeVersion(FIBER_BINARY_VERSION)
+  const binaryVersion = normalizeVersion(status?.checks?.binary?.version)
+  const rpcVersion = normalizeVersion(status?.version)
+  if (!expected || binaryVersion !== expected || rpcVersion !== expected) {
+    fail(
+      `Node ${nodeName} version mismatch: expected=${expected || 'unknown'} binary=${binaryVersion || 'unknown'} rpc=${rpcVersion || 'unknown'}`,
+    )
+  }
+  log(`Node ${nodeName} version verified`, `binary=${binaryVersion} rpc=${rpcVersion}`)
+}
+
 function listChannels(nodeName, { includeClosed = true } = {}) {
   const args = ['channel', 'list']
   if (includeClosed) args.push('--include-closed')
@@ -249,9 +265,13 @@ function listChannels(nodeName, { includeClosed = true } = {}) {
   return Array.isArray(parsed?.data?.channels) ? parsed.data.channels : []
 }
 
+function channelPeerId(channel) {
+  return channel?.pubkey ?? channel?.peer_id
+}
+
 function findLatestChannel(channels, peerId, { stateName, includeClosed = true } = {}) {
   const candidates = channels.filter((channel) => {
-    if (channel?.peer_id !== peerId) return false
+    if (channelPeerId(channel) !== peerId) return false
     const channelState = extractStateName(channel?.state)
     if (!includeClosed && isClosedState(channelState)) return false
     if (stateName && channelState !== stateName) return false
@@ -306,7 +326,7 @@ async function waitForReadyChannel(peerId, timeoutSec) {
 async function closeActiveChannels(peerId) {
   const channels = listChannels('A', { includeClosed: true })
   const active = channels.filter((channel) => {
-    if (channel?.peer_id !== peerId) return false
+    if (channelPeerId(channel) !== peerId) return false
     const stateName = extractStateName(channel?.state)
     return stateName !== '' && !isClosedState(stateName)
   })
@@ -325,7 +345,7 @@ async function closeActiveChannels(peerId) {
   while (nowSec() < deadline) {
     const snapshot = listChannels('A', { includeClosed: true })
     const stillActive = snapshot.some((channel) => {
-      if (channel?.peer_id !== peerId) return false
+      if (channelPeerId(channel) !== peerId) return false
       const stateName = extractStateName(channel?.state)
       return stateName !== '' && !isClosedState(stateName)
     })
@@ -400,7 +420,7 @@ const NODE_B_P2P_PORT = envInt('NODE_B_P2P_PORT', 8828)
 
 const NETWORK = env('NETWORK', 'testnet')
 const KEY_PASSWORD = env('FIBER_KEY_PASSWORD', 'fiber-pay-e2e-key')
-const FIBER_BINARY_VERSION = env('FIBER_BINARY_VERSION', 'v0.8.1')
+const FIBER_BINARY_VERSION = env('FIBER_BINARY_VERSION', 'v0.10.0')
 
 const FIXED_NODE_A_FIBER_SK_HEX = normalizeHex32(
   env('FIXED_NODE_A_FIBER_SK_HEX', '0000000000000000000000000000000000000000000000000000000000000001'),
@@ -493,11 +513,14 @@ async function main() {
   writeArtifact('node-a.status.json', statusA)
   writeArtifact('node-b.status.json', statusB)
 
+  assertNodeVersion(statusA, 'A')
+  assertNodeVersion(statusB, 'B')
+
   checkFundingBalance(statusA, 'A')
   checkFundingBalance(statusB, 'B')
 
-  const peerA = statusA?.peerId
-  const peerB = statusB?.peerId
+  const peerA = statusA?.nodeId ?? statusA?.peerId
+  const peerB = statusB?.nodeId ?? statusB?.peerId
   const multiaddrA = statusA?.multiaddr
   const multiaddrB = statusB?.multiaddr
 

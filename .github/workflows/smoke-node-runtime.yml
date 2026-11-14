@@ -23,6 +23,9 @@ jobs:
           - ubuntu-latest
           - macos-latest
 
+    env:
+      EXPECTED_FIBER_VERSION: 0.10.0
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

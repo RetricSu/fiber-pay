@@ -42,7 +42,7 @@ jobs:
           CHANNEL_FUNDING_CKB: '200'
           INVOICE_AMOUNT_CKB: '1'
           STOP_NODES_ON_EXIT: '1'
-          FIBER_BINARY_VERSION: ${{ github.event.inputs.fiber_binary_version != '' && github.event.inputs.fiber_binary_version || 'v0.8.1' }}
+          FIBER_BINARY_VERSION: ${{ github.event.inputs.fiber_binary_version != '' && github.event.inputs.fiber_binary_version || 'v0.10.0' }}
         run: pnpm e2e
 
       - name: Upload E2E artifacts
