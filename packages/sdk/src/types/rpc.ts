@@ -1,8 +1,8 @@
 /**
- * Fiber Network Node RPC Types (Fiber v0.9.1)
+ * Fiber Network Node RPC Types (Fiber v0.10.1)
  *
  * The types in this file are intended to align with the upstream RPC spec:
- * https://github.com/nervosnetwork/fiber/blob/v0.9.1/crates/fiber-lib/src/rpc/README.md
+ * https://github.com/nervosnetwork/fiber/blob/v0.10.1/crates/fiber-lib/src/rpc/README.md
  */
 
 // =============================================================================
@@ -158,6 +158,9 @@ export interface Htlc {
   status: TlcStatus;
 }
 
+/** Channel version feature bitmap (Legacy V1 or V2 with full payment hashes). */
+export type ChannelFeatures = '0x0' | '0x1';
+
 export interface Channel {
   channel_id: ChannelId;
   is_public: boolean;
@@ -197,6 +200,10 @@ export interface PeerInfo {
 // Payment Types
 // =============================================================================
 
+/**
+ * Payment session status. `Success` means a payment TLC was claimed. With
+ * multipart payments, other attempts may still be pending (fnn v0.10.0+).
+ */
 export type PaymentStatus = 'Created' | 'Inflight' | 'Success' | 'Failed';
 
 /**
@@ -651,6 +658,19 @@ export interface RevocationData {
   aggregated_signature: HexString;
   output: CellOutput;
   output_data: HexString;
+}
+
+/** Parameters for registering a channel with a watchtower (fnn v0.10.0+). */
+export interface CreateWatchChannelParams {
+  channel_id: ChannelId;
+  funding_udt_type_script?: Script | null;
+  local_settlement_key: Privkey;
+  remote_settlement_key: Pubkey;
+  local_funding_pubkey: Pubkey;
+  remote_funding_pubkey: Pubkey;
+  settlement_data: SettlementData;
+  /** Defaults to 0x0 upstream when omitted. Use 0x1 for Channel V2. */
+  channel_features?: ChannelFeatures;
 }
 
 // --- Info Module ---

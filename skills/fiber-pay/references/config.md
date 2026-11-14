@@ -1,4 +1,4 @@
-# FNN Config Reference (v0.9.1)
+# FNN Config Reference (v0.10.1)
 
 - Structured reference for `config.yml` used by the Fiber Network Node (`fnn`). 
 - All values are set via `fiber-pay config set <path> <value>`.
@@ -18,7 +18,8 @@
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `fiber.listening_addr` | string | `"/ip4/0.0.0.0/tcp/0"` | P2P listen address (multiaddr format) |
+| `fiber.listening_addr` | string | `"/ip4/0.0.0.0/tcp/0"` | Primary P2P listen address (multiaddr format) |
+| `fiber.listening_addrs` | string[] | `[]` | Additional P2P listen addresses appended to the primary address (v0.10.0+) |
 | `fiber.chain` | string | *required* | `"testnet"`, `"mainnet"`, or path to chain spec |
 | `fiber.bootnode_addrs` | string[] | `[]` | Bootstrap peer multiaddrs |
 
@@ -38,7 +39,7 @@
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `fiber.open_channel_auto_accept_min_ckb_funding_amount` | number | `10000000000` (100 CKB) | Min opener funding to trigger auto-accept (shannons) |
-| `fiber.auto_accept_channel_ckb_funding_amount` | number | `9900000000` (99 CKB) | Acceptor funds on auto-accept. **Set 0 to disable** |
+| `fiber.auto_accept_channel_ckb_funding_amount` | number | `10000000000` (100 CKB) | Acceptor funds on auto-accept. **Set 0 to disable** |
 
 ### TLC Defaults
 
@@ -76,6 +77,12 @@ Setting either message interval or burst to `0` disables the per-peer message
 limit; either byte rate or burst to `0` disables the per-peer byte limit.
 `violation_ban_threshold: 0` disables temporary bans. Setting either global
 in-flight limit to `0` makes the global ingress budget unlimited.
+
+### Store durability (v0.10.0+)
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `fiber.store_sync_writes` | bool | `false` | Wait for every store write to reach disk. Slower, but protects recent channel state across power loss; enable on nodes holding others' funds |
 
 ### Gossip
 

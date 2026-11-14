@@ -24,8 +24,8 @@ it at anything other than your own development node.
 
 ## Supported versions
 
-Tested against: React 19.3.x, React Native 0.88.x, Expo SDK 58, Node
->=22.13.0 (required by React Native 0.88's own tooling). Other combinations
+Tested against: fnn v0.10.1, React 19.3.x, React Native 0.88.x, Expo SDK 58,
+Node >=22.13.0 (required by React Native 0.88's own tooling). Other combinations
 may work but aren't part of this package's CI.
 
 ## Install

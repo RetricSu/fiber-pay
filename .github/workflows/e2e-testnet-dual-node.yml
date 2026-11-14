@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       fiber_binary_version:
-        description: 'Override Fiber binary version (e.g. v0.9.1). Leave empty to use default.'
+        description: 'Override Fiber binary version (e.g. v0.10.1). Leave empty to use default.'
         required: false
         default: ''
 
@@ -33,6 +33,15 @@ jobs:
       - name: Build workspace
         run: pnpm build
 
+      - name: Resolve target Fiber version
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.fiber_binary_version }}"
+          if [[ -z "$VERSION" ]]; then
+            VERSION="$(node -p "require('./packages/node/src/fiber-version.json').fnn")"
+          fi
+          echo "FIBER_BINARY_VERSION=$VERSION" >> "$GITHUB_ENV"
+
       - name: Run dual-node testnet E2E
         env:
           SKIP_BUILD: '1'
@@ -42,7 +51,6 @@ jobs:
           CHANNEL_FUNDING_CKB: '200'
           INVOICE_AMOUNT_CKB: '1'
           STOP_NODES_ON_EXIT: '1'
-          FIBER_BINARY_VERSION: ${{ github.event.inputs.fiber_binary_version != '' && github.event.inputs.fiber_binary_version || 'v0.8.1' }}
         run: pnpm e2e
 
       - name: Upload E2E artifacts

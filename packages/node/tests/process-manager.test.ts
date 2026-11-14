@@ -3,6 +3,8 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ProcessManager } from '../src/process/manager.js';
+import { parse } from 'yaml';
+import { FIBER_SCRIPTS_BY_NETWORK } from '@fiber-pay/sdk';
 
 function makeTempDir(prefix: string): string {
   const dir = join(tmpdir(), `fiber-pay-test-${prefix}-${Date.now()}`);
@@ -28,7 +30,7 @@ describe('ProcessManager spawn', () => {
 });
 
 describe('ProcessManager config generation', () => {
-  it('includes new v0.9.0-rc4 fiber fields when provided', async () => {
+  it('includes v0.9.0-rc4 and v0.10.0 fiber fields when provided', async () => {
     const dataDir = makeTempDir('process-manager-config');
     const manager = new ProcessManager({
       binaryPath: '/tmp/fake-fnn',
@@ -36,6 +38,8 @@ describe('ProcessManager config generation', () => {
       enablePeerReconnectBackoff: true,
       pendingChannelsNumberLimit: 50,
       gossipPolicy: { default_strategy: 'prefer_newer' },
+      fiberListeningAddrs: ['/ip6/::/tcp/8228'],
+      storeSyncWrites: true,
     });
 
     // Trigger config generation via start() will fail because fake binary
@@ -48,6 +52,11 @@ describe('ProcessManager config generation', () => {
     expect(content).toContain('enable_peer_reconnect_backoff: true');
     expect(content).toContain('pending_channels_number_limit: 50');
     expect(content).toContain('gossip_policy:');
+    expect(content).toContain('listening_addrs:');
+    expect(content).toContain('/ip6/::/tcp/8228');
+    expect(content).toContain('store_sync_writes: true');
+    const document = parse(content, { schema: 'failsafe' }) as { fiber: { scripts: unknown } };
+    expect(document.fiber.scripts).toEqual(FIBER_SCRIPTS_BY_NETWORK.testnet);
 
     rmSync(dataDir, { recursive: true, force: true });
   });

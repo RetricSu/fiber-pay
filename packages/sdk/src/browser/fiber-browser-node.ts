@@ -390,7 +390,8 @@ export class FiberBrowserNode implements IFiberClient {
   // ===========================================================================
 
   /**
-   * Wait for a payment to reach a terminal state (Success or Failed).
+   * Wait until the payment reports Success or Failed. Success may be returned
+   * while other multipart payment attempts are still pending.
    */
   async waitForPayment(
     paymentHash: PaymentHash,

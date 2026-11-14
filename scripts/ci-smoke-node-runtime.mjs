@@ -109,13 +109,18 @@ async function runFiberPay(args, { timeoutMs = 120_000, allowFailure = false } =
   });
 }
 
-async function waitForNodeRunning(maxAttempts = 60) {
+async function waitForNodeRunning(maxAttempts = 60, requireRpc = false) {
   let lastResult;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const result = await runFiberPay(['node', 'status', '--json'], { allowFailure: true });
     lastResult = result;
 
-    if (result.code === 0 && result.json?.success === true && result.json?.data?.running === true) {
+    if (
+      result.code === 0 &&
+      result.json?.success === true &&
+      result.json?.data?.running === true &&
+      (!requireRpc || result.json?.data?.rpcResponsive === true)
+    ) {
       return result.json.data;
     }
 
@@ -143,6 +148,10 @@ async function waitForRuntimeRunning(maxAttempts = 30) {
   throw new Error(
     `Runtime did not report running status in time. Last stdout:\n${lastResult?.stdout ?? ''}\nLast stderr:\n${lastResult?.stderr ?? ''}`,
   );
+}
+
+function normalizeVersion(version) {
+  return typeof version === 'string' ? version.trim().replace(/^v/, '') : '';
 }
 
 function assertJsonSuccess(result, label) {
@@ -297,8 +306,21 @@ async function main() {
 
     await waitForGeneratedKeys(baseDir);
 
-    const nodeStatus = await waitForNodeRunning();
-    console.log(`[smoke] node running: pid=${nodeStatus.pid ?? 'n/a'} rpcResponsive=${nodeStatus.rpcResponsive}`);
+    const expectedVersion = normalizeVersion(process.env.EXPECTED_FIBER_VERSION);
+    const nodeStatus = await waitForNodeRunning(60, Boolean(expectedVersion));
+    const binaryVersion = normalizeVersion(nodeStatus.checks?.binary?.version);
+    const rpcVersion = normalizeVersion(nodeStatus.version);
+    console.log(
+      `[smoke] node running: pid=${nodeStatus.pid ?? 'n/a'} rpcResponsive=${nodeStatus.rpcResponsive} binaryVersion=${binaryVersion || 'unknown'} rpcVersion=${rpcVersion || 'unknown'}`,
+    );
+    if (
+      expectedVersion &&
+      (binaryVersion !== expectedVersion || rpcVersion !== expectedVersion)
+    ) {
+      throw new Error(
+        `fnn version mismatch: expected=${expectedVersion} binary=${binaryVersion || 'unknown'} rpc=${rpcVersion || 'unknown'}`,
+      );
+    }
 
     // On Windows, the foreground node-start (no --daemon) starts the runtime
     // service embedded in-process, so we just wait for it to appear.

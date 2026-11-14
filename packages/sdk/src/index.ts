@@ -8,6 +8,8 @@
 export type { Script } from './address.js';
 // Address encoding
 export { scriptToAddress } from './address.js';
+export type { FiberNetwork } from './config/fiber-deployments.js';
+export { FIBER_SCRIPTS_BY_NETWORK } from './config/fiber-deployments.js';
 export type { LiquidityReport } from './funds/liquidity-analyzer.js';
 // Funds management
 export { LiquidityAnalyzer } from './funds/liquidity-analyzer.js';

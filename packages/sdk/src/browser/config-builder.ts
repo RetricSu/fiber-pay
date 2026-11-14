@@ -6,6 +6,7 @@
  * for testnet and mainnet.
  */
 
+import { FIBER_SCRIPTS_BY_NETWORK } from '../config/fiber-deployments.js';
 import type { Script } from '../types/rpc.js';
 import { stringify } from './yaml.js';
 
@@ -43,6 +44,8 @@ export interface BrowserNodeConfig {
   announceListeningAddr?: boolean;
   /** Custom P2P listening address (optional, defaults to /ip4/127.0.0.1/tcp/8228) */
   p2pListeningAddr?: string;
+  /** Additional P2P listening addresses appended to p2pListeningAddr (fnn v0.10.0+) */
+  p2pListeningAddrs?: string[];
   /** Custom RPC listening address (optional, defaults to 127.0.0.1:8227) */
   rpcListeningAddr?: string;
 }
@@ -63,65 +66,6 @@ const MAINNET_BOOTNODES = [
 
 const TESTNET_CKB_RPC = 'https://testnet.ckbapp.dev/';
 const MAINNET_CKB_RPC = 'https://mainnet.ckbapp.dev/';
-
-/**
- * Fiber on-chain scripts — these are the same for both testnet and mainnet
- * as of v0.8.0. They define FundingLock and CommitmentLock contracts.
- */
-const FIBER_SCRIPTS = [
-  {
-    name: 'FundingLock',
-    script: {
-      code_hash: '0x6c67887fe201ee0c7853f1682c0b77c0e6214044c156c7558269390a8afa6d7c',
-      hash_type: 'type',
-      args: '0x',
-    },
-    cell_deps: [
-      {
-        type_id: {
-          code_hash: '0x00000000000000000000000000000000000000000000000000545950455f4944',
-          hash_type: 'type',
-          args: '0x3cb7c0304fe53f75bb5727e2484d0beae4bd99d979813c6fc97c3cca569f10f6',
-        },
-      },
-      {
-        cell_dep: {
-          out_point: {
-            tx_hash: '0x5a5288769cecde6451cb5d301416c297a6da43dc3ac2f3253542b4082478b19b',
-            index: '0x0',
-          },
-          dep_type: 'code',
-        },
-      },
-    ],
-  },
-  {
-    name: 'CommitmentLock',
-    script: {
-      code_hash: '0x740dee83f87c6f309824d8fd3fbdd3c8380ee6fc9acc90b1a748438afcdf81d8',
-      hash_type: 'type',
-      args: '0x',
-    },
-    cell_deps: [
-      {
-        type_id: {
-          code_hash: '0x00000000000000000000000000000000000000000000000000545950455f4944',
-          hash_type: 'type',
-          args: '0xf7e458887495cf70dd30d1543cad47dc1dfe9d874177bf19291e4db478d5751b',
-        },
-      },
-      {
-        cell_dep: {
-          out_point: {
-            tx_hash: '0x5a5288769cecde6451cb5d301416c297a6da43dc3ac2f3253542b4082478b19b',
-            index: '0x0',
-          },
-          dep_type: 'code',
-        },
-      },
-    ],
-  },
-] as const;
 
 const TESTNET_RUSD_UDT = {
   name: 'RUSD',
@@ -164,10 +108,11 @@ export class ConfigBuilder {
     const configObj: Record<string, unknown> = {
       fiber: {
         listening_addr: config.p2pListeningAddr ?? '/ip4/127.0.0.1/tcp/8228',
+        ...(config.p2pListeningAddrs ? { listening_addrs: config.p2pListeningAddrs } : {}),
         bootnode_addrs: bootnodes,
         announce_listening_addr: config.announceListeningAddr ?? false,
         chain: config.network,
-        scripts: [...FIBER_SCRIPTS],
+        scripts: [...FIBER_SCRIPTS_BY_NETWORK[config.network]],
       },
       rpc: {
         listening_addr: config.rpcListeningAddr ?? '127.0.0.1:8227',
@@ -197,7 +142,7 @@ export class ConfigBuilder {
     return {
       bootnodes: network === 'testnet' ? TESTNET_BOOTNODES : MAINNET_BOOTNODES,
       ckbRpcUrl: network === 'testnet' ? TESTNET_CKB_RPC : MAINNET_CKB_RPC,
-      scripts: FIBER_SCRIPTS,
+      scripts: FIBER_SCRIPTS_BY_NETWORK[network],
     };
   }
 

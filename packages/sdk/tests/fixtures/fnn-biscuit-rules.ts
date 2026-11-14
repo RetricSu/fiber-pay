@@ -1,14 +1,11 @@
 /**
- * Expected SDK Biscuit rule table, transcribed from fnn v0.9.0
- * `build_rules()` (crates/fiber-lib/src/rpc/biscuit.rs @ v0.9.0, also
+ * Expected SDK Biscuit rule table, transcribed from fnn v0.10.1
+ * `build_rules()` (crates/fiber-lib/src/rpc/biscuit.rs @ v0.10.1, also
  * documented in upstream docs/biscuit-auth.md).
  *
- * Deliberate omissions vs the upstream table:
+ * Deliberate omission vs the upstream table:
  * - `subscribe_store_changes` — upstream requires `internal("store_changes")`,
  *   a node-internal scope that user-minted tokens must not carry.
- * - `backup_now` — upstream registers the rule under the key `backup_now`
- *   while the RPC method is named `backup`, so authenticated calls are
- *   fail-closed regardless of token contents ("no rules for method").
  *
  * `requiresChannelRight` is SDK-side modeling (upstream tracks a related but
  * different `require_rpc_context` flag for server-side node_id injection);
@@ -27,7 +24,7 @@ function rule(
   return { permissions: [{ action, resource }], requiresChannelRight };
 }
 
-export const FNN_V0_9_0_RULES: Record<string, BiscuitMethodRule> = {
+export const FNN_V0_10_1_RULES: Record<string, BiscuitMethodRule> = {
   // Cch
   send_btc: rule('write', 'cch'),
   receive_btc: rule('write', 'cch'),
@@ -60,6 +57,7 @@ export const FNN_V0_9_0_RULES: Record<string, BiscuitMethodRule> = {
 
   // Info
   node_info: rule('read', 'node'),
+  backup: rule('write', 'node'),
 
   // Invoice
   new_invoice: rule('write', 'invoices'),

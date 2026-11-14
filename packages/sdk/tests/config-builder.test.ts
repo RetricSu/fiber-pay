@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 import { ConfigBuilder } from '../src/browser/config-builder.js';
+import { FIBER_SCRIPTS_BY_NETWORK } from '../src/config/fiber-deployments.js';
 
 describe('ConfigBuilder', () => {
 	describe('build', () => {
@@ -82,6 +84,27 @@ describe('ConfigBuilder', () => {
 				'0x740dee83f87c6f309824d8fd3fbdd3c8380ee6fc9acc90b1a748438afcdf81d8',
 			);
 		});
+
+		it('should support v0.10.0 additional listening addresses', () => {
+			const yaml = ConfigBuilder.build({
+				network: 'testnet',
+				p2pListeningAddrs: ['/ip6/::/tcp/8228'],
+			});
+
+			expect(yaml).toContain('listening_addrs:');
+			expect(yaml).toContain('/ip6/::/tcp/8228');
+		});
+
+		it.each(['testnet', 'mainnet'] as const)(
+			'should use the shared fnn v0.10.1 contracts for %s',
+			(network) => {
+				const document = parse(ConfigBuilder.build({ network }), { schema: 'failsafe' });
+				expect(document.fiber.scripts).toEqual(FIBER_SCRIPTS_BY_NETWORK[network]);
+				expect(ConfigBuilder.getDefaults(network).scripts).toBe(
+					FIBER_SCRIPTS_BY_NETWORK[network],
+				);
+			},
+		);
 
 		it('should support custom UDT whitelist', () => {
 			const yaml = ConfigBuilder.build({

@@ -37,6 +37,9 @@ jobs:
         with:
           version: 10.28.2
 
+      - name: Resolve target Fiber version
+        run: echo "EXPECTED_FIBER_VERSION=$(node -p "require('./packages/node/src/fiber-version.json').fnn")" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

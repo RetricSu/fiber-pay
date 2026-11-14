@@ -11,6 +11,14 @@ Fiber's database schema may change between versions. Starting with `fnn v0.9.0-r
 - Managed binary mode (default profile-managed path): download/replace `fnn` when needed, then run the legacy migration step if the store exists.
 - Custom binary mode (`--binary-path` or profile `binaryPath`): skip binary download and run the legacy migration step only.
 
+## Channel V2 compatibility (v0.10.0+)
+
+fnn v0.10.0 enables Channel V2 for new channels. Existing V1 channels keep
+working, but a v0.10.0 node cannot open new channels with a node running an
+older version. Upgrade both peers before opening new channels, and settle V1
+channels when practical because upstream plans to remove V1 in the next major
+release.
+
 ## Upgrade flow
 
 ```bash
@@ -18,8 +26,8 @@ Fiber's database schema may change between versions. Starting with `fnn v0.9.0-r
 fiber-pay node stop
 
 # 2. Upgrade binary + prepare store
-fiber-pay node upgrade                    # latest version
-fiber-pay node upgrade --version v0.9.1   # specific version
+fiber-pay node upgrade                    # bundled default version
+fiber-pay node upgrade --version v0.10.1   # specific version
 
 # custom binary path: migration-only (no auto-download)
 fiber-pay --binary-path /opt/fiber/custom/fnn node upgrade

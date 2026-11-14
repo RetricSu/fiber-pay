@@ -38,5 +38,8 @@
   },
   "dependencies": {
     "@fiber-pay/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "yaml": "^2.8.3"
   }
 }

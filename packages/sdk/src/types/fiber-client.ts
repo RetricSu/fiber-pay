@@ -174,7 +174,7 @@ export interface IFiberClient {
   // Polling Helpers
   // ---------------------------------------------------------------------------
 
-  /** Wait for a payment to reach a terminal state (Success or Failed). */
+  /** Wait until Success or Failed; Success may leave other MPP attempts pending. */
   waitForPayment(
     paymentHash: PaymentHash,
     options?: { timeout?: number; interval?: number },

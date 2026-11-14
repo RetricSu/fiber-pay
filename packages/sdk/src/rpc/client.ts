@@ -411,11 +411,8 @@ export class FiberRpcClient implements IFiberClient {
    * for `FiberBrowserNode` (in-browser WASM node), so this method is
    * deliberately not part of the shared `IFiberClient` interface.
    *
-   * Known upstream limitation (fnn v0.9.0): the Biscuit auth rule is registered
-   * under the key `backup_now` while the RPC method is named `backup`, so on
-   * nodes with authentication enabled the call is fail-closed rejected with
-   * "no rules for method". Use against a local (unauthenticated) RPC, or wait
-   * for the upstream fix.
+   * fnn v0.10.0+ authorizes this method with `write("node")`. Earlier releases
+   * registered the rule as `backup_now`, making authenticated calls fail closed.
    */
   async backup(): Promise<void> {
     return this.call<void>('backup', []);
@@ -459,10 +456,11 @@ export class FiberRpcClient implements IFiberClient {
   // ===========================================================================
 
   /**
-   * Wait for a payment to reach a terminal state (Success or Failed)
+   * Wait until the payment reports Success or Failed. With multipart payments,
+   * Success means one TLC was claimed; other attempts may still be pending.
    * Polls get_payment at the specified interval.
    *
-   * @returns The final payment result
+   * @returns The first successful or failed payment result
    * @throws FiberRpcError on timeout
    */
   async waitForPayment(

@@ -4,15 +4,15 @@
  * These helpers model the upstream RPC authorization rules and generate
  * token-side permission facts like `read("peers");` and `write("payments");`.
  *
- * The RULES table mirrors fnn v0.9.0 `build_rules()`
- * (crates/fiber-lib/src/rpc/biscuit.rs @ v0.9.0, also documented in upstream
- * docs/biscuit-auth.md), with two deliberate omissions:
+ * The RULES table mirrors fnn v0.10.1 `build_rules()`
+ * (crates/fiber-lib/src/rpc/biscuit.rs @ v0.10.1, also documented in upstream
+ * docs/biscuit-auth.md), with one deliberate omission:
  *
  * - `subscribe_store_changes`: upstream requires `internal("store_changes")`,
  *   a node-internal scope that user-minted tokens must not carry.
- * - `backup_now`: upstream registers the rule under the key `backup_now`
- *   while the RPC method is named `backup`, so authenticated calls are
- *   fail-closed regardless of token contents ("no rules for method").
+ *
+ * fnn v0.10.0 fixed the backup rule key (`backup_now` to `backup`), so
+ * authenticated backups now require `write("node")`.
  *
  * Biscuit `read` and `write` do not imply each other, so
  * `collectBiscuitPermissions` by default also grants `read("cch")` whenever
@@ -142,9 +142,10 @@ const RULES: Record<string, BiscuitMethodRule> = {
     permissions: [{ action: 'read', resource: 'node' }],
     requiresChannelRight: false,
   },
-  // Omitted vs upstream: backup_now (write("node")) is registered under a
-  // rule key that does not match the RPC method name (`backup`), so
-  // authenticated calls are fail-closed regardless of token contents.
+  backup: {
+    permissions: [{ action: 'write', resource: 'node' }],
+    requiresChannelRight: false,
+  },
 
   // Invoice
   new_invoice: {
