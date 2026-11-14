@@ -298,7 +298,11 @@ async function main() {
     await waitForGeneratedKeys(baseDir);
 
     const nodeStatus = await waitForNodeRunning();
-    console.log(`[smoke] node running: pid=${nodeStatus.pid ?? 'n/a'} rpcResponsive=${nodeStatus.rpcResponsive}`);
+    const binaryVersion = nodeStatus.checks?.binary?.version ?? 'unknown';
+    const rpcVersion = nodeStatus.version ?? 'unknown';
+    console.log(
+      `[smoke] node running: pid=${nodeStatus.pid ?? 'n/a'} rpcResponsive=${nodeStatus.rpcResponsive} binaryVersion=${binaryVersion} rpcVersion=${rpcVersion}`,
+    );
 
     // On Windows, the foreground node-start (no --daemon) starts the runtime
     // service embedded in-process, so we just wait for it to appear.
