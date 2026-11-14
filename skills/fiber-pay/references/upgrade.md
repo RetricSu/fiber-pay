@@ -27,7 +27,7 @@ fiber-pay node stop
 
 # 2. Upgrade binary + prepare store
 fiber-pay node upgrade                    # bundled default version
-fiber-pay node upgrade --version v0.10.0   # specific version
+fiber-pay node upgrade --version v0.10.1   # specific version
 
 # custom binary path: migration-only (no auto-download)
 fiber-pay --binary-path /opt/fiber/custom/fnn node upgrade

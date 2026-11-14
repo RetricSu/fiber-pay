@@ -456,10 +456,11 @@ export class FiberRpcClient implements IFiberClient {
   // ===========================================================================
 
   /**
-   * Wait for a payment to reach a terminal state (Success or Failed)
+   * Wait until the payment reports Success or Failed. With multipart payments,
+   * Success means one TLC was claimed; other attempts may still be pending.
    * Polls get_payment at the specified interval.
    *
-   * @returns The final payment result
+   * @returns The first successful or failed payment result
    * @throws FiberRpcError on timeout
    */
   async waitForPayment(

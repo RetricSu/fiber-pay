@@ -7,7 +7,7 @@ import {
 } from '../src/security/biscuit-policy.js';
 import type { BiscuitMethodRule } from '../src/security/biscuit-policy.js';
 import { describe, expect, it } from 'vitest';
-import { FNN_V0_10_0_RULES } from './fixtures/fnn-biscuit-rules.js';
+import { FNN_V0_10_1_RULES } from './fixtures/fnn-biscuit-rules.js';
 
 describe('biscuit policy helper', () => {
   it('returns rule for known method', () => {
@@ -140,13 +140,13 @@ describe('biscuit policy helper', () => {
     ]);
   });
 
-  it('RULES mirrors the fnn v0.10.0 upstream rule table', () => {
+  it('RULES mirrors the fnn v0.10.1 upstream rule table', () => {
     const actual: Record<string, BiscuitMethodRule> = {};
     for (const method of listSupportedBiscuitMethods()) {
       const rule = getBiscuitRuleForMethod(method);
       if (rule) actual[method] = rule;
     }
 
-    expect(actual).toEqual(FNN_V0_10_0_RULES);
+    expect(actual).toEqual(FNN_V0_10_1_RULES);
   });
 });

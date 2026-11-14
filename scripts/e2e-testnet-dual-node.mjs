@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -420,7 +420,10 @@ const NODE_B_P2P_PORT = envInt('NODE_B_P2P_PORT', 8828)
 
 const NETWORK = env('NETWORK', 'testnet')
 const KEY_PASSWORD = env('FIBER_KEY_PASSWORD', 'fiber-pay-e2e-key')
-const FIBER_BINARY_VERSION = env('FIBER_BINARY_VERSION', 'v0.10.0')
+const DEFAULT_FIBER_BINARY_VERSION = JSON.parse(
+  readFileSync(join(ROOT_DIR, 'packages', 'node', 'src', 'fiber-version.json'), 'utf8'),
+).fnn
+const FIBER_BINARY_VERSION = env('FIBER_BINARY_VERSION', DEFAULT_FIBER_BINARY_VERSION)
 
 const FIXED_NODE_A_FIBER_SK_HEX = normalizeHex32(
   env('FIXED_NODE_A_FIBER_SK_HEX', '0000000000000000000000000000000000000000000000000000000000000001'),

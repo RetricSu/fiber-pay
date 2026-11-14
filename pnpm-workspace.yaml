@@ -4,7 +4,7 @@ packages:
   - "e2e/*"
 
 catalog:
-  "@nervosnetwork/fiber-js": "~0.10.0"
+  "@nervosnetwork/fiber-js": "~0.10.1"
 
 onlyBuiltDependencies:
   - "better-sqlite3"

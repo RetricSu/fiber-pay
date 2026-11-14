@@ -43,8 +43,8 @@ describe('node version policy', () => {
 
     const decision = resolveManagedUpgradeVersion(manager);
 
-    expect(decision.targetTag).toBe('v0.10.0');
-    expect(decision.targetVersion).toBe('0.10.0');
+    expect(decision.targetTag).toBe('v0.10.1');
+    expect(decision.targetVersion).toBe('0.10.1');
     expect(decision.source).toBe('default');
   });
 });

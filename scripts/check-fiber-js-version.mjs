@@ -24,9 +24,13 @@ function ok(message) {
   console.log(`[check-fiber-js-version] ${message}`);
 }
 
+const targetFiberJs = readJson('packages/node/src/fiber-version.json').fiberJs;
 const sdkPeer = readJson('packages/sdk/package.json').peerDependencies?.['@nervosnetwork/fiber-js'];
 if (!sdkPeer) {
   fail('packages/sdk/package.json is missing @nervosnetwork/fiber-js peerDependency');
+}
+if (sdkPeer !== targetFiberJs) {
+  fail(`SDK peerDependency (${sdkPeer}) does not match fiber-version.json (${targetFiberJs})`);
 }
 ok(`SDK peerDependency: ${sdkPeer}`);
 

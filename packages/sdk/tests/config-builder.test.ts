@@ -1,39 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 import { ConfigBuilder } from '../src/browser/config-builder.js';
-
-const TYPE_ID_CODE_HASH =
-	'0x00000000000000000000000000000000000000000000000000545950455f4944';
-
-const EXPECTED_SCRIPTS = {
-	testnet: [
-		{
-			name: 'FundingLock',
-			codeHash: '0x6c67887fe201ee0c7853f1682c0b77c0e6214044c156c7558269390a8afa6d7c',
-			typeIdArgs: '0x3cb7c0304fe53f75bb5727e2484d0beae4bd99d979813c6fc97c3cca569f10f6',
-			ckbAuthTxHash: '0x12c569a258dd9c5bd99f632bb8314b1263b90921ba31496467580d6b79dd14a7',
-		},
-		{
-			name: 'CommitmentLock',
-			codeHash: '0x740dee83f87c6f309824d8fd3fbdd3c8380ee6fc9acc90b1a748438afcdf81d8',
-			typeIdArgs: '0xf7e458887495cf70dd30d1543cad47dc1dfe9d874177bf19291e4db478d5751b',
-			ckbAuthTxHash: '0x12c569a258dd9c5bd99f632bb8314b1263b90921ba31496467580d6b79dd14a7',
-		},
-	],
-	mainnet: [
-		{
-			name: 'FundingLock',
-			codeHash: '0xe45b1f8f21bff23137035a3ab751d75b36a981deec3e7820194b9c042967f4f1',
-			typeIdArgs: '0x64818d82a372312fb007c480391e1b9759d21b2c7f7959b9c177d72cdc243394',
-			ckbAuthTxHash: '0x95006eee7b4c0c8ad66e0514c88ed0ae43fc8db27793427de86a348ec720b9d6',
-		},
-		{
-			name: 'CommitmentLock',
-			codeHash: '0x2d45c4d3ed3e942f1945386ee82a5d1b7e4bb16d7fe1ab015421174ab747406c',
-			typeIdArgs: '0xdb16e6dcb17f670e5fb7c556d81e522ec5edb069ad2fa3e898e7ccea6c26a39f',
-			ckbAuthTxHash: '0x95006eee7b4c0c8ad66e0514c88ed0ae43fc8db27793427de86a348ec720b9d6',
-		},
-	],
-} as const;
+import { FIBER_SCRIPTS_BY_NETWORK } from '../src/config/fiber-deployments.js';
 
 describe('ConfigBuilder', () => {
 	describe('build', () => {
@@ -128,39 +96,13 @@ describe('ConfigBuilder', () => {
 		});
 
 		it.each(['testnet', 'mainnet'] as const)(
-			'should use the exact fnn v0.10.0 contracts for %s',
+			'should use the shared fnn v0.10.1 contracts for %s',
 			(network) => {
-				const scripts = ConfigBuilder.getDefaults(network).scripts;
-				const yaml = ConfigBuilder.build({ network });
-				expect(scripts).toHaveLength(2);
-
-				for (const [index, expected] of EXPECTED_SCRIPTS[network].entries()) {
-					const script = scripts[index];
-					expect(script.name).toBe(expected.name);
-					expect(script.script).toEqual({
-						code_hash: expected.codeHash,
-						hash_type: 'type',
-						args: '0x',
-					});
-					expect(script.cell_deps).toEqual([
-						{
-							type_id: {
-								code_hash: TYPE_ID_CODE_HASH,
-								hash_type: 'type',
-								args: expected.typeIdArgs,
-							},
-						},
-						{
-							cell_dep: {
-								out_point: { tx_hash: expected.ckbAuthTxHash, index: '0x0' },
-								dep_type: 'code',
-							},
-						},
-					]);
-					expect(yaml).toContain(expected.codeHash);
-					expect(yaml).toContain(expected.typeIdArgs);
-					expect(yaml).toContain(expected.ckbAuthTxHash);
-				}
+				const document = parse(ConfigBuilder.build({ network }), { schema: 'failsafe' });
+				expect(document.fiber.scripts).toEqual(FIBER_SCRIPTS_BY_NETWORK[network]);
+				expect(ConfigBuilder.getDefaults(network).scripts).toBe(
+					FIBER_SCRIPTS_BY_NETWORK[network],
+				);
 			},
 		);
 

@@ -7,6 +7,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { FIBER_SCRIPTS_BY_NETWORK } from '@fiber-pay/sdk';
 import * as yaml from './yaml.js';
 
 // =============================================================================
@@ -76,60 +77,7 @@ const DEFAULT_TESTNET_FIBER_CONFIG = {
   ],
   announce_listening_addr: true,
   chain: 'testnet',
-  scripts: [
-    {
-      name: 'FundingLock',
-      script: {
-        code_hash: '0x6c67887fe201ee0c7853f1682c0b77c0e6214044c156c7558269390a8afa6d7c',
-        hash_type: 'type',
-        args: '0x',
-      },
-      cell_deps: [
-        {
-          type_id: {
-            code_hash: '0x00000000000000000000000000000000000000000000000000545950455f4944',
-            hash_type: 'type',
-            args: '0x3cb7c0304fe53f75bb5727e2484d0beae4bd99d979813c6fc97c3cca569f10f6',
-          },
-        },
-        {
-          cell_dep: {
-            out_point: {
-              tx_hash: '0x12c569a258dd9c5bd99f632bb8314b1263b90921ba31496467580d6b79dd14a7',
-              index: '0x0',
-            },
-            dep_type: 'code',
-          },
-        },
-      ],
-    },
-    {
-      name: 'CommitmentLock',
-      script: {
-        code_hash: '0x740dee83f87c6f309824d8fd3fbdd3c8380ee6fc9acc90b1a748438afcdf81d8',
-        hash_type: 'type',
-        args: '0x',
-      },
-      cell_deps: [
-        {
-          type_id: {
-            code_hash: '0x00000000000000000000000000000000000000000000000000545950455f4944',
-            hash_type: 'type',
-            args: '0xf7e458887495cf70dd30d1543cad47dc1dfe9d874177bf19291e4db478d5751b',
-          },
-        },
-        {
-          cell_dep: {
-            out_point: {
-              tx_hash: '0x12c569a258dd9c5bd99f632bb8314b1263b90921ba31496467580d6b79dd14a7',
-              index: '0x0',
-            },
-            dep_type: 'code',
-          },
-        },
-      ],
-    },
-  ],
+  scripts: FIBER_SCRIPTS_BY_NETWORK.testnet,
 } as const;
 
 // =============================================================================

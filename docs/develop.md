@@ -186,8 +186,11 @@ Version strings are scattered across user-facing text; a plain grep for the old
 version is necessary but not sufficient. When bumping the fnn target, walk this
 list:
 
-1. **Single source**: `packages/node/src/constants.ts` (`DEFAULT_FIBER_VERSION`).
-   Runtime code must interpolate it — never hardcode a version in new messages.
+1. **Single source**: `packages/node/src/fiber-version.json` (`fnn` and `fiberJs`).
+   `packages/node/src/constants.ts` imports this JSON, while E2E scripts and CI
+   read it directly. Runtime code must interpolate `DEFAULT_FIBER_VERSION` —
+   never hardcode a version in new messages. `check:fiber-js-version` verifies
+   the package ranges against the same JSON.
 2. **fiber-js dependency**: catalog entry in `pnpm-workspace.yaml` plus any
    `peerDependencies` overrides, then re-resolve the lockfile and diff the
    stable `.d.ts` against the previous rc for WASM API changes.
@@ -215,8 +218,9 @@ list:
    `packages/sdk/README.md`,
    `packages/react/docs/wasm-passkey-payment-component-quickstart.md` — re-measure
    with the new fiber-js or keep the wording version-agnostic.
-7. **Workflows**: `.github/workflows/*smoke*`, `e2e-*` — confirm they pick the
-   version up from the constant rather than pinning their own.
+7. **Workflows**: `.github/workflows/*smoke*`, `e2e-*` — confirm they read the
+   target version from `packages/node/src/fiber-version.json` (with an explicit
+   workflow-dispatch override where supported) rather than pinning their own.
 
 ## Smoke script (no token consumption)
 
@@ -282,7 +286,7 @@ Useful env overrides:
 
 - `SKIP_BUILD=1`
 - `SKIP_BINARY_DOWNLOAD=1`
-- `FIBER_BINARY_VERSION=v0.10.0`
+- `FIBER_BINARY_VERSION=v0.10.1`
 - `CHANNEL_FUNDING_CKB` (default `200`)
 - `INVOICE_AMOUNT_CKB` (default `1`, keep tiny for long-term reuse)
 - `MIN_FUNDING_BALANCE_CKB`

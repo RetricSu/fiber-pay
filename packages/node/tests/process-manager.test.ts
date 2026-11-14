@@ -3,6 +3,8 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ProcessManager } from '../src/process/manager.js';
+import { parse } from 'yaml';
+import { FIBER_SCRIPTS_BY_NETWORK } from '@fiber-pay/sdk';
 
 function makeTempDir(prefix: string): string {
   const dir = join(tmpdir(), `fiber-pay-test-${prefix}-${Date.now()}`);
@@ -53,6 +55,8 @@ describe('ProcessManager config generation', () => {
     expect(content).toContain('listening_addrs:');
     expect(content).toContain('/ip6/::/tcp/8228');
     expect(content).toContain('store_sync_writes: true');
+    const document = parse(content, { schema: 'failsafe' }) as { fiber: { scripts: unknown } };
+    expect(document.fiber.scripts).toEqual(FIBER_SCRIPTS_BY_NETWORK.testnet);
 
     rmSync(dataDir, { recursive: true, force: true });
   });

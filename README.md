@@ -2,7 +2,7 @@
 
 AI-friendly toolchain for CKB Lightning on Fiber Network.
 
-Fiber target: `v0.10.0`
+Fiber target: `v0.10.1`
 
 > fnn v0.10.0 introduces Channel V2. Existing V1 channels continue to operate, but new channels cannot be opened between v0.10.0 and older nodes. Upgrade both peers before opening new channels.
 

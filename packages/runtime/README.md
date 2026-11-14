@@ -1,6 +1,6 @@
 # @fiber-pay/runtime
 
-Runtime monitor + job orchestration for Fiber (`fnn v0.10.0`).
+Runtime monitor + job orchestration for Fiber (`fnn v0.10.1`).
 
 ## Quick start
 

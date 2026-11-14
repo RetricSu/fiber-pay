@@ -1,6 +1,6 @@
 /**
- * Expected SDK Biscuit rule table, transcribed from fnn v0.10.0
- * `build_rules()` (crates/fiber-lib/src/rpc/biscuit.rs @ v0.10.0, also
+ * Expected SDK Biscuit rule table, transcribed from fnn v0.10.1
+ * `build_rules()` (crates/fiber-lib/src/rpc/biscuit.rs @ v0.10.1, also
  * documented in upstream docs/biscuit-auth.md).
  *
  * Deliberate omission vs the upstream table:
@@ -24,7 +24,7 @@ function rule(
   return { permissions: [{ action, resource }], requiresChannelRight };
 }
 
-export const FNN_V0_10_0_RULES: Record<string, BiscuitMethodRule> = {
+export const FNN_V0_10_1_RULES: Record<string, BiscuitMethodRule> = {
   // Cch
   send_btc: rule('write', 'cch'),
   receive_btc: rule('write', 'cch'),

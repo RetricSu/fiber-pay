@@ -4,8 +4,8 @@
  * These helpers model the upstream RPC authorization rules and generate
  * token-side permission facts like `read("peers");` and `write("payments");`.
  *
- * The RULES table mirrors fnn v0.10.0 `build_rules()`
- * (crates/fiber-lib/src/rpc/biscuit.rs @ v0.10.0, also documented in upstream
+ * The RULES table mirrors fnn v0.10.1 `build_rules()`
+ * (crates/fiber-lib/src/rpc/biscuit.rs @ v0.10.1, also documented in upstream
  * docs/biscuit-auth.md), with one deliberate omission:
  *
  * - `subscribe_store_changes`: upstream requires `internal("store_changes")`,
